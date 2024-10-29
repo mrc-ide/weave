@@ -4,6 +4,9 @@
 <url><loc>/LICENSE.html</loc></url>
 <url><loc>/authors.html</loc></url>
 <url><loc>/index.html</loc></url>
+<url><loc>/reference/exponential_kernel.html</loc></url>
 <url><loc>/reference/index.html</loc></url>
+<url><loc>/reference/periodic_kernel.html</loc></url>
+<url><loc>/reference/rbf_kernel.html</loc></url>
 </urlset>
 
