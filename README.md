@@ -1,7 +1,7 @@
 
 <!-- README.md is generated from README.Rmd. Please edit that file -->
 
-# weave
+# weave <img src="man/figures/Weave.png" align="right" width=30% height=30% />
 
 <!-- badges: start -->
 

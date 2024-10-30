@@ -20,7 +20,7 @@ quick_mvnorm <- function(space, time){
 
   # We need to reorder 'z' so that times vary faster than sites
   z_matrix <- matrix(z, nrow = n_sites, ncol = n_times)
-  z_reordered <- as.vector(z_matrix)
+  z_reordered <- as.vector(t(z_matrix))
 
   # Add the mean
   z <- as.vector(z_reordered)

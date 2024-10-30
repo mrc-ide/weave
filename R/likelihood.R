@@ -1,10 +1,7 @@
-# Modified log-likelihood function
 log_likelihood <- function(z, mu, space_inv, time_inv, y, n_sites, n_times) {
-  # Reshape (z - mu) into a matrix Z
+  # Reshape (z - mu) into matrix Z and compute Z %*% time_inv %*% t(Z)
   Z <- matrix(z - mu, nrow = n_sites, ncol = n_times, byrow = TRUE)
-
-  # Compute the quadratic term using the correct order
-  quad_term <- -0.5 * sum(diag(space_inv %*% Z %*% time_inv %*% t(Z)))
+  quad_term <- -0.5 * sum((space_inv %*% Z) * (Z %*% time_inv))  # Optimised using element-wise multiplication
 
   # Poisson term
   w <- !is.na(y)
@@ -14,18 +11,16 @@ log_likelihood <- function(z, mu, space_inv, time_inv, y, n_sites, n_times) {
 }
 
 log_likelihood_gradient <- function(z, mu, space_inv, time_inv, y, n_sites, n_times) {
-  # Reshape (z - mu) into a matrix Z
+  # Reshape (z - mu) into matrix Z
   Z <- matrix(z - mu, nrow = n_sites, ncol = n_times, byrow = TRUE)
 
-  # Compute the gradient of the quadratic term
+  # Compute the gradient of the quadratic term using matrix operations
   grad_quad_term_matrix <- -2 * space_inv %*% Z %*% time_inv
-
-  # Flatten the gradient matrix
   grad_quad_term <- as.vector(t(grad_quad_term_matrix))
 
-  # Poisson term
+  # Poisson term (only for non-missing indices)
+  grad_poisson_term <- numeric(length(y))
   w <- !is.na(y)
-  grad_poisson_term <- rep(0, length(y))
   grad_poisson_term[w] <- y[w] - exp(z[w])
 
   as.numeric(grad_quad_term + grad_poisson_term)

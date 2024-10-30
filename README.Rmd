@@ -13,7 +13,7 @@ knitr::opts_chunk$set(
 )
 ```
 
-# weave
+# weave <img src="man/figures/Weave.png" align="right" width=30% height=30% />
 
 <!-- badges: start -->
 [![R-CMD-check](https://github.com/mrc-ide/weave/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/mrc-ide/weave/actions/workflows/R-CMD-check.yaml)
