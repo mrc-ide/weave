@@ -4,14 +4,14 @@
 \alias{exponential_kernel}
 \title{Exponential kernel function}
 \usage{
-exponential_kernel(x, x_prime, sigma)
+exponential_kernel(distance, sigma)
 }
 \arguments{
+\item{sigma}{The length scale parameter, controlling the rate of decay}
+
 \item{x}{A scalar representing the first input point}
 
 \item{x_prime}{A scalar or vector representing the second input point(s)}
-
-\item{sigma}{The length scale parameter, controlling the rate of decay}
 }
 \description{
 Exponential kernel function

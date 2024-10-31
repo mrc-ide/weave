@@ -4,14 +4,14 @@
 \alias{rbf_kernel}
 \title{RBF kernel function}
 \usage{
-rbf_kernel(x, x_prime, sigma)
+rbf_kernel(distance, sigma)
 }
 \arguments{
+\item{sigma}{The length scale parameter, controlling the smoothness of the kernel}
+
 \item{x}{A scalar representing the first input point}
 
 \item{x_prime}{A scalar or vector representing the second input point(s)}
-
-\item{sigma}{The length scale parameter, controlling the smoothness of the kernel}
 }
 \description{
 RBF kernel function
