@@ -1,4 +1,5 @@
-create_time_matrix <- function(times, periodic_scale, long_term_scale, period, epsilon = 0.01){
+create_time_matrix <- function(data, periodic_scale, long_term_scale, period, epsilon = 0.01){
+  times <- unique(data$t)
   time_distance <- outer(times,  times, "-")
   time <- time_distance |>
     periodic_kernel(periodic_scale, long_term_scale, period)
@@ -19,20 +20,25 @@ create_time_matrix <- function(times, periodic_scale, long_term_scale, period, e
   )
 }
 
-create_spatial_matrix <- function(coords, sigma_sq, space_sigma, epsilon = 0.01){
-  spatial_distance <- coords |>
+create_spatial_matrix <- function(data, space_sigma, epsilon = 0.01){
+  coordinates <- data |>
+    dplyr::select(lat, lon) |>
+    dplyr::distinct()
+
+  spatial_distance <- coordinates |>
     dist() |>
     as.matrix()
+
   space <- spatial_distance |>
     rbf_kernel(space_sigma)
 
   # Create D_space
-  d_space <- diag(sqrt(sigma_sq))
+  d_space <- diag(sqrt(unique(data$observed_sigmasq)))
   # Compute Sigma_space
   space <- d_space %*% space %*% d_space
   space <- Matrix::nearPD(space)
   space <- as.matrix(space$mat)
-  space_reg <- space + epsilon * diag(nrow(coords))
+  space_reg <- space + epsilon * diag(nrow(coordinates))
   space_inv_reg <- MASS::ginv(space_reg)
   space_chol <- chol(space)
 
