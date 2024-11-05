@@ -1,33 +1,32 @@
-simulate_data <- function(n_sites, max_weeks, mu, sd, space_sigma, periodic_scale, long_term_scale, period){
+simulate_data <- function(n_sites, max_t, mu, sd, space_sigma, periodic_scale, long_term_scale, period){
 
   df_site_pos <- data.frame(
-    site_index = 1:n_sites,
+    id = 1:n_sites,
     lon = 1:n_sites,
     lat = 1:n_sites
   )
 
   output_df <- tidyr::expand_grid(
-    site_index = 1:n_sites,
-    week = 1:max_weeks
+    id = 1:n_sites,
+    t = 1:max_t
   ) |>
     dplyr::left_join(
-      df_site_pos, by = "site_index"
+      df_site_pos, by = "id"
     )
 
-  output_df$lambda_mean <- mu[output_df$site_index]
-  output_df$lambda_sd <- sd[output_df$site_index]
+  output_df$lambda_mean <- mu[output_df$id]
+  output_df$lambda_sd <- sd[output_df$id]
   sigma_sq <- log((sd / mu)^2 + 1)
-  output_df$sigmasq <- sigma_sq[output_df$site_index]
-  output_df$mu <- log(output_df$lambda_mean) - output_df$sigmasq / 2
+  output_df$observed_sigmasq <- sigma_sq[output_df$id]
+  output_df$mu <- log(output_df$lambda_mean) - output_df$observed_sigmasq / 2
 
   space_matrix <- create_spatial_matrix(
-    coords = df_site_pos[, c("lat", "lon")],
-    sigma_sq = sigma_sq,
+    output_df,
     space_sigma = space_sigma
     )
 
   time_matrix <- create_time_matrix(
-    times = 1:max_weeks,
+    output_df,
     periodic_scale = periodic_scale,
     long_term_scale = long_term_scale,
     period = period
@@ -38,6 +37,9 @@ simulate_data <- function(n_sites, max_weeks, mu, sd, space_sigma, periodic_scal
 
   output_df$lambda <- exp(output_df$z)
   output_df$n <- rpois(nrow(output_df), output_df$lambda)
+
+  output_df <- output_df |>
+    dplyr::rename("site_index" = id)
 
   return(output_df)
 }

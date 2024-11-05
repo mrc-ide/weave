@@ -45,15 +45,17 @@ data_missing <- function(data, ...){
     dplyr::distinct()
 
 
-  cat("Sites dropped as all data missing, or all counts = 0: ")
-  knitr::kable(sites_to_drop, format = "pipe", align = "c") |>
-    print()
+  if(nrow(sites_to_drop) > 0){
+    cat("Sites dropped as all data missing, or all counts = 0: ")
+    knitr::kable(sites_to_drop, format = "pipe", align = "c") |>
+      print()
 
-  data <- data |>
-    dplyr::anti_join(
-      sites_to_drop,
-      by = dplyr::join_by(...)
-    )
+    data <- data |>
+      dplyr::anti_join(
+        sites_to_drop,
+        by = dplyr::join_by(...)
+      )
+  }
 
   return(data)
 }
