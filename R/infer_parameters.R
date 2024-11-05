@@ -1,6 +1,10 @@
+cor_translate <- function(x){
+  (x + 1) / 2
+}
+
 infer_space_kernel_params <- function(data, spatial_distance){
   space_cor <- expand.grid(id1 = unique(data$id), id2 = unique(data$id), t = unique(data$t)) |>
-    dplyr::filter(id1 < id2) |>
+    dplyr::filter(as.numeric(id1) < as.numeric(id2)) |>
     dplyr::left_join(dplyr::select(data, id, t, n), by = c("id1" = "id", "t" = "t")) |>
     dplyr::left_join(dplyr::select(data, id, t, n), by = c("id2" = "id", "t" = "t")) |>
     dplyr::filter(!is.na(n.x), !is.na(n.y)) |>
@@ -9,6 +13,7 @@ infer_space_kernel_params <- function(data, spatial_distance){
       .by = c("id1", "id2")
     ) |>
     dplyr::mutate(
+      cor = cor_translate(cor),
       distance = purrr::map2_dbl(id1, id2, ~ spatial_distance[.x, .y])
     )
 
@@ -29,7 +34,7 @@ infer_space_kernel_params <- function(data, spatial_distance){
 
 infer_time_kernel_params <- function(data, period){
   time_cor <- expand.grid(t1 = unique(data$t), t2 = unique(data$t), id = unique(data$id)) |>
-    dplyr::filter(t2 < t1) |>
+    dplyr::filter(t1 < t2) |>
     dplyr::left_join(dplyr::select(data, id, t, n), by = c("t1" = "t", "id" = "id")) |>
     dplyr::left_join(dplyr::select(data, id, t, n), by = c("t2" = "t", "id" = "id")) |>
     dplyr::filter(!is.na(n.x), !is.na(n.y)) |>
@@ -38,6 +43,7 @@ infer_time_kernel_params <- function(data, period){
       .by = c("t1", "t2")
     ) |>
     dplyr::mutate(
+      cor = cor_translate(cor),
       time_distance = t2 - t1
     )
 
@@ -47,7 +53,8 @@ infer_time_kernel_params <- function(data, period){
       time_cor$time_distance,
       periodic_scale = params[1],
       long_term_scale = params[2],
-      period = period)
+      period = period
+    )
     sum((predicted_correlations - time_cor$cor)^2)
   }
 
@@ -57,7 +64,7 @@ infer_time_kernel_params <- function(data, period){
     fn = fit_sigma,
     method = "L-BFGS-B",
     lower = c(0.01, 0.01),
-    period = 12
+    period = period
   )
 
   return(

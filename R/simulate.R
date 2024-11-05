@@ -1,9 +1,9 @@
-simulate_data <- function(n_sites, max_t, mu, sd, space_sigma, periodic_scale, long_term_scale, period){
+simulate_data <- function(n_sites, max_t, mu, sd, space_sigma, periodic_scale, long_term_scale, period, nugget = 0){
 
   df_site_pos <- data.frame(
     id = 1:n_sites,
-    lon = 1:n_sites,
-    lat = 1:n_sites
+    lat = 1:n_sites,
+    lon = 1:n_sites
   )
 
   output_df <- tidyr::expand_grid(
@@ -20,9 +20,11 @@ simulate_data <- function(n_sites, max_t, mu, sd, space_sigma, periodic_scale, l
   output_df$observed_sigmasq <- sigma_sq[output_df$id]
   output_df$mu <- log(output_df$lambda_mean) - output_df$observed_sigmasq / 2
 
+  #browser()
   space_matrix <- create_spatial_matrix(
     output_df,
-    space_sigma = space_sigma
+    space_sigma = space_sigma,
+    nugget = nugget
     )
 
   time_matrix <- create_time_matrix(
@@ -34,7 +36,6 @@ simulate_data <- function(n_sites, max_t, mu, sd, space_sigma, periodic_scale, l
 
   # Todo: put chol in directly
   output_df$z <- quick_mvnorm(space_matrix$space, time_matrix$time) + output_df$mu
-
   output_df$lambda <- exp(output_df$z)
   output_df$n <- rpois(nrow(output_df), output_df$lambda)
 

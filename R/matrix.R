@@ -3,7 +3,9 @@ create_time_matrix <- function(data, periodic_scale, long_term_scale, period, ep
   time_distance <- outer(times,  times, "-")
   time <- time_distance |>
     periodic_kernel(periodic_scale, long_term_scale, period)
-  time <- time * (1 - nugget)
+  time_nugget <- matrix(sqrt(nugget), nrow = nrow(time), ncol = ncol(time))
+  diag(time_nugget) <- 0
+  time <- time * (1 - time_nugget)
   time <- Matrix::nearPD(time)
   time <- as.matrix(time$mat)
   time_chol <- chol(time)
@@ -24,7 +26,8 @@ create_time_matrix <- function(data, periodic_scale, long_term_scale, period, ep
 create_spatial_matrix <- function(data, space_sigma, epsilon = 0.01, nugget = 0){
   coordinates <- data |>
     dplyr::select(id, lat, lon) |>
-    dplyr::distinct()
+    dplyr::distinct() |>
+    dplyr::select(lat, lon)
 
   sigmasq <- data |>
     dplyr::select(id, observed_sigmasq) |>
@@ -37,12 +40,19 @@ create_spatial_matrix <- function(data, space_sigma, epsilon = 0.01, nugget = 0)
   space <- spatial_distance |>
     rbf_kernel(space_sigma)
 
-  spcae <- space * (1 - nugget)
+  sigmasq_matrix <- tidyr::expand_grid(id1 = sigmasq$id, id2 = sigmasq$id) |>
+    dplyr::left_join(sigmasq, by = c("id1" = "id")) |>
+    dplyr::left_join(sigmasq, by = c("id2" = "id")) |>
+    dplyr::mutate(
+      sigmasq = ifelse(id1 == id2, 1, sqrt(observed_sigmasq.x *  observed_sigmasq.y) * (1 - sqrt(nugget)))
+    )
+  sigmasq_matrix <- matrix(sigmasq_matrix$sigmasq, ncol = nrow(sigmasq), byrow = TRUE)
 
   # Create D_space
-  d_space <- diag(sqrt(sigmasq$observed_sigmasq))
+  #d_space <- diag(sqrt(sigmasq$observed_sigmasq))
   # Compute Sigma_space
-  space <- d_space %*% space %*% d_space
+  #space <- d_space %*% space %*% d_space
+  space <- space * sigmasq_matrix
   space <- Matrix::nearPD(space)
   space <- as.matrix(space$mat)
   space_reg <- space + epsilon * diag(nrow(coordinates))

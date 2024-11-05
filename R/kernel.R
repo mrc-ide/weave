@@ -33,10 +33,10 @@ periodic_kernel <- function(distance, periodic_scale, long_term_scale, period) {
 #' @export
 rbf_kernel <- function(distance, sigma) {
   # Squared distance between x and x_prime
-  distance_squared <- (distance)^2
+  #distance_squared <- (distance)^2
 
   # Apply the RBF kernel formula
-  kernel_value <- exp(-distance_squared / (2 * sigma^2))
+  kernel_value <- exp(-distance / (2 * sigma^2))
 
   return(kernel_value)
 }

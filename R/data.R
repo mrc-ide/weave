@@ -97,7 +97,10 @@ data_order_index <- function(data, ...){
       t
     ) |>
     dplyr::group_by(!!!site_names)|>
-    dplyr::mutate(id = dplyr::cur_group_id()) |>
+    dplyr::mutate(#
+      id = dplyr::cur_group_id(),
+      id = factor(id)
+      ) |>
     dplyr::ungroup()
 
   return(data)
