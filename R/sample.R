@@ -12,6 +12,7 @@ quick_mvnorm <- function(space, time){
   # Generate a matrix of i.i.d. standard normal variables
   W <- matrix(rnorm(n_sites * n_times), nrow = n_sites, ncol = n_times)
 
+  browser()
   # Construct the sample matrix
   Z <- L_s %*% W %*% L_t
 
