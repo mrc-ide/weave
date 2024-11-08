@@ -1,4 +1,7 @@
-simulate_data <- function(n_sites, max_t, site_mean, site_sd, theta = 0.1, periodic_scale = 0.65, long_term_scale = 500, period = 52){
+simulate_data <- function(
+    n_sites, max_t, site_means,
+    site_sds, theta = 0.1, periodic_scale = 0.65,
+    long_term_scale = 500, period = 52){
 
   df_site_pos <- data.frame(
     id = 1:n_sites,
@@ -14,8 +17,8 @@ simulate_data <- function(n_sites, max_t, site_mean, site_sd, theta = 0.1, perio
       df_site_pos, by = "id"
     )
 
-  sigmasq <- log((site_sd / site_mean)^2 + 1)
-  mu <- log(site_mean) - sigmasq / 2
+  sigmasq <- log((site_sds / site_means)^2 + 1)
+  mu <- log(site_means) - sigmasq / 2
 
   space <- create_spatial_matrix(df_site_pos[,c("lat", "lon")], sigmasq, theta = theta)
   time <- create_time_matrix(1:max_t, periodic_scale = periodic_scale, long_term_scale = long_term_scale, period = period)

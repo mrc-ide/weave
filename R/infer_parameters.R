@@ -2,7 +2,10 @@ cor_translate <- function(x){
   (x + 1) / 2
 }
 
-infer_space_kernel_params <- function(data, spatial_distance){
+infer_space_kernel_params <- function(data){
+
+  spatial_distance <- get_spatial_distance(data)
+
   space_cor <- expand.grid(id1 = unique(data$id), id2 = unique(data$id), t = unique(data$t)) |>
     dplyr::filter(as.numeric(id1) < as.numeric(id2)) |>
     dplyr::left_join(dplyr::select(data, id, t, n), by = c("id1" = "id", "t" = "t")) |>
@@ -13,42 +16,44 @@ infer_space_kernel_params <- function(data, spatial_distance){
       .by = c("id1", "id2")
     ) |>
     dplyr::mutate(
-      cor = cor_translate(cor),
+      cor = ifelse(cor < 0, 0, cor),
       distance = purrr::map2_dbl(id1, id2, ~ spatial_distance[.x, .y])
     )
 
-  # Fitting sigma to empirical correlations
-  fit_sigma <- function(sigma) {
-    predicted_correlations <- rbf_kernel(space_cor$distance, sigma)
+  # Fitting theta to empirical correlations
+  fit_sigma <- function(theta, space_cor) {
+    predicted_correlations <- rbf_kernel(space_cor$distance, theta)
     sum((predicted_correlations - space_cor$cor)^2)
   }
 
-  # Optimise sigma to minimise the difference between empirical and predicted correlations
-  optimal_sigma <- optimise(f = fit_sigma, interval = c(0, 100))$minimum
+  # Optimise theta to minimise the difference between empirical and predicted correlations
+  optimal_theta <- optimise(f = fit_sigma, interval = c(0, 100), space_cor = space_cor)$minimum
+
   return(
     list(
-      sigma = optimal_sigma
+      theta = optimal_theta
     )
   )
 }
 
 infer_time_kernel_params <- function(data, period){
   time_cor <- expand.grid(t1 = unique(data$t), t2 = unique(data$t), id = unique(data$id)) |>
-    dplyr::filter(t1 < t2) |>
+    #dplyr::filter(t1 < t2) |>
     dplyr::left_join(dplyr::select(data, id, t, n), by = c("t1" = "t", "id" = "id")) |>
     dplyr::left_join(dplyr::select(data, id, t, n), by = c("t2" = "t", "id" = "id")) |>
     dplyr::filter(!is.na(n.x), !is.na(n.y)) |>
+    dplyr::filter(dplyr::n() > 5, .by = c(t1, t2)) |>
     dplyr::summarise(
       cor = cor(n.x, n.y),
       .by = c("t1", "t2")
     ) |>
     dplyr::mutate(
-      cor = cor_translate(cor),
-      time_distance = t2 - t1
+      #cor = ifelse(cor < 0, 0, cor),
+      time_distance = abs(t2 - t1)
     )
 
   # Fitting sigma to empirical correlations,
-  fit_sigma <- function(params, period) {
+  fit_sigma <- function(params, period, time_cor) {
     predicted_correlations <- periodic_kernel(
       time_cor$time_distance,
       periodic_scale = params[1],
@@ -64,7 +69,8 @@ infer_time_kernel_params <- function(data, period){
     fn = fit_sigma,
     method = "L-BFGS-B",
     lower = c(0.01, 0.01),
-    period = period
+    period = period,
+    time_cor = time_cor
   )
 
   return(

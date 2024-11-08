@@ -26,3 +26,7 @@ create_spatial_matrix <- function(coordinates, sigma2, theta){
 
   return(space)
 }
+
+regularise <- function(x, lambda = 1e-5) {
+  x + lambda * diag(nrow(x))
+}

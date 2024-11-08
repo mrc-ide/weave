@@ -28,4 +28,14 @@ rbf_kernel <- function(distance, theta) {
   return(kernel_value)
 }
 
+get_spatial_distance <- function(data) {
+  data |>
+    dplyr::select(id, lat, lon) |>
+    dplyr::distinct() |>
+    dplyr::arrange(id) |>
+    dplyr::select(-id) |>
+    dist() |>
+    as.matrix()
+}
+
 
