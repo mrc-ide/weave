@@ -2,7 +2,7 @@ cor_translate <- function(x){
   (x + 1) / 2
 }
 
-infer_space_kernel_params <- function(data){
+infer_space_kernel_params <- function(data, plot = FALSE){
 
   spatial_distance <- get_spatial_distance(data)
 
@@ -29,6 +29,23 @@ infer_space_kernel_params <- function(data){
   # Optimise theta to minimise the difference between empirical and predicted correlations
   optimal_theta <- optimise(f = fit_sigma, interval = c(0, 100), space_cor = space_cor)$minimum
 
+  if(plot){
+    pred <- data.frame(
+      distance = seq(0, max(space_cor$distance), length.out = 100)
+    ) |>
+      dplyr::mutate(
+        y = rbf_kernel(distance, optimal_theta)
+      )
+
+    cor_plot <- ggplot() +
+      geom_point(data = space_cor, aes(x = distance, y = cor), alpha = 0.5) +
+      geom_line(data = pred, aes(x = distance, y = y), col = "deeppink") +
+      xlab("Spatial distance") +
+      ylab("") +
+      theme_bw()
+    print(cor_plot)
+  }
+
   return(
     list(
       theta = optimal_theta
@@ -36,15 +53,15 @@ infer_space_kernel_params <- function(data){
   )
 }
 
-infer_time_kernel_params <- function(data, period){
+infer_time_kernel_params <- function(data, period, plot = FALSE){
   time_cor <- expand.grid(t1 = unique(data$t), t2 = unique(data$t), id = unique(data$id)) |>
     #dplyr::filter(t1 < t2) |>
-    dplyr::left_join(dplyr::select(data, id, t, n), by = c("t1" = "t", "id" = "id")) |>
-    dplyr::left_join(dplyr::select(data, id, t, n), by = c("t2" = "t", "id" = "id")) |>
-    dplyr::filter(!is.na(n.x), !is.na(n.y)) |>
+    dplyr::left_join(dplyr::select(data, id, t, z), by = c("t1" = "t", "id" = "id")) |>
+    dplyr::left_join(dplyr::select(data, id, t, z), by = c("t2" = "t", "id" = "id")) |>
+    dplyr::filter(!is.na(z.x), !is.na(z.y)) |>
     dplyr::filter(dplyr::n() > 5, .by = c(t1, t2)) |>
     dplyr::summarise(
-      cor = cor(n.x, n.y),
+      cor = cor(z.x, z.y),
       .by = c("t1", "t2")
     ) |>
     dplyr::mutate(
@@ -72,6 +89,28 @@ infer_time_kernel_params <- function(data, period){
     period = period,
     time_cor = time_cor
   )
+
+  if(plot){
+    pred <- data.frame(
+      distance = seq(0, max(time_cor$time_distance), length.out = 100)
+    ) |>
+      dplyr::mutate(
+        y = periodic_kernel(
+          distance,
+          periodic_scale = optim_result_time$par[1],
+          long_term_scale = optim_result_time$par[2],
+          period = period
+        )
+      )
+
+    cor_plot <- ggplot() +
+      geom_point(data = time_cor, aes(x = time_distance, y = cor), alpha = 0.5) +
+      geom_line(data = pred, aes(x = distance, y = y), col = "deeppink") +
+      xlab("Temporal distance") +
+      ylab("") +
+      theme_bw()
+    print(cor_plot)
+  }
 
   return(
     list(

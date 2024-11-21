@@ -6,7 +6,8 @@ quick_mvnorm <- function(space, time){
   n_sites <- nrow(space)
   n_times <- nrow(time)
 
-  L_s <- chol(space)
+  # TODO - is this correct!
+  L_s <- t(chol(space))
   L_t <- chol(time)
 
   # Generate a matrix of i.i.d. standard normal variables

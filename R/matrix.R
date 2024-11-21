@@ -10,10 +10,11 @@ create_time_matrix <- function(times, periodic_scale, long_term_scale, period){
 }
 
 create_spatial_matrix <- function(coordinates, sigma2, theta){
-
-  spatial_kernel <- coordinates |>
+  spatial_kernel_dist <- coordinates |>
     dist() |>
-    as.matrix() |>
+    as.matrix()
+
+  spatial_kernel <- spatial_kernel_dist|>
     rbf_kernel(
       theta = theta
     )
