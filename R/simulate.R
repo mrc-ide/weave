@@ -1,7 +1,8 @@
 simulate_data <- function(
     n_sites, max_t, site_means,
     site_sds, theta = 0.1, periodic_scale = 0.65,
-    long_term_scale = 500, period = 52){
+    long_term_scale = 500, period = 52,
+    dist = "poisson", size = NULL){
 
   df_site_pos <- data.frame(
     id = 1:n_sites,
@@ -27,7 +28,16 @@ simulate_data <- function(
   output_df$sigmasq <- sigmasq[output_df$id]
   output_df$z <- quick_mvnorm(space, time) + output_df$mu
   output_df$lambda <- exp(output_df$z)
-  output_df$n <- rpois(nrow(output_df), output_df$lambda)
+  if (dist == "poisson") {
+    output_df$n <- rpois(nrow(output_df), output_df$lambda)
+  } else if (dist == "nbinom") {
+    if (is.null(size)) {
+      stop("Size parameter must be provided for negative binomial distribution.")
+    }
+    output_df$n <- rnbinom(nrow(output_df), mu = output_df$lambda, size = size)
+  } else {
+    stop("Unsupported distribution")
+  }
 
   output_df <- output_df |>
     dplyr::rename("site_index" = id)

@@ -4,11 +4,14 @@ cor_translate <- function(x){
 
 infer_space_kernel_params <- function(data, plot = FALSE){
 
-  data$z_t_hat = log(data$n + 1)# - data$observed_mu
+  data$z_t_hat = log(data$n + 1)
 
-    spatial_distance <- get_spatial_distance(data)
+  spatial_distance <- get_spatial_distance(data)
 
-  space_cor <- expand.grid(id1 = unique(data$id), id2 = unique(data$id), t = unique(data$t)) |>
+  ids <- unique(data$id)
+  times <- unique(data$t)
+
+  space_cor <- expand.grid(id1 = ids, id2 = ids, t = times) |>
     dplyr::filter(as.numeric(id1) < as.numeric(id2)) |>
     dplyr::left_join(dplyr::select(data, id, t, z_t_hat), by = c("id1" = "id", "t" = "t")) |>
     dplyr::left_join(dplyr::select(data, id, t, z_t_hat), by = c("id2" = "id", "t" = "t")) |>
