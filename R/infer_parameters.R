@@ -1,12 +1,8 @@
-cor_translate <- function(x){
-  (x + 1) / 2
-}
-
 infer_space_kernel_params <- function(data, plot = FALSE){
 
-  data$z_t_hat = log(data$n + 1)
+  data$z_t_hat = log(data$y + 1)
 
-  spatial_distance <- get_spatial_distance(data)
+  spatial_distance <- get_spatial_distance(unique(data[,c("lon", "lat")]))
 
   ids <- unique(data$id)
   times <- unique(data$t)
@@ -63,7 +59,7 @@ infer_space_kernel_params <- function(data, plot = FALSE){
 
 infer_time_kernel_params <- function(data, period, plot = FALSE){
 
-  data$z_t_hat = log(data$n + 1)# - data$observed_mu
+  data$z_t_hat = log(data$y + 1)
 
   time_cor <- expand.grid(t1 = unique(data$t), t2 = unique(data$t), id = unique(data$id)) |>
     dplyr::filter(t1 < t2) |>
@@ -81,12 +77,8 @@ infer_time_kernel_params <- function(data, period, plot = FALSE){
 
   # Fitting sigma to empirical correlations,
   fit_sigma <- function(params, period, time_cor) {
-    predicted_correlations <- periodic_kernel(
-      time_cor$time_distance,
-      periodic_scale = params[1],
-      long_term_scale = params[2],
-      period = period
-    )
+    predicted_correlations <- periodic_kernel(x = time_cor$time_distance, alpha = params[1], period = period) *
+      rbf_kernel(x = time_cor$time_distance, theta = params[2])
     sum((predicted_correlations - time_cor$cor)^2)
   }
 
@@ -100,18 +92,13 @@ infer_time_kernel_params <- function(data, period, plot = FALSE){
     period = period,
     time_cor = time_cor
   )
-
   if(plot){
     pred <- data.frame(
       distance = seq(0, max(time_cor$time_distance), length.out = 100)
     ) |>
       dplyr::mutate(
-        y = periodic_kernel(
-          distance,
-          periodic_scale = optim_result_time$par[1],
-          long_term_scale = optim_result_time$par[2],
-          period = period
-        )
+        y = periodic_kernel(x = distance, alpha = optim_result_time$par[1], period = period) *
+          rbf_kernel(x =distance, theta = optim_result_time$par[2])
       )
 
     cor_plot <- ggplot() +
@@ -125,8 +112,8 @@ infer_time_kernel_params <- function(data, period, plot = FALSE){
 
   return(
     list(
-      periodic_scale = optim_result_time$par[1],
-      long_term_scale = optim_result_time$par[2],
+      alpha = optim_result_time$par[1],
+      beta = optim_result_time$par[2],
       period = period
     )
   )

@@ -1,46 +1,50 @@
+#' Simulate data from the model
+#' Case counts:
+#'  y_st ~ Pois(λ_st)
+#' Cases mean:
+#'  λ_st = exp(z_st)
+#' Cases mean (log scale):
+#'  z_st = µ_s + f_st
+#' Where we have a site specific intercept:
+#'  µ_s
+#' and a latent GP:
+#'  f_st ~ MVN(0,Σ)
+#' Spatiotemporal covariance:
+#'  Σ = dist_k ⊗ time_k
 simulate_data <- function(
-    n_sites, max_t, site_means,
-    site_sds, theta = 0.1, periodic_scale = 0.65,
-    long_term_scale = 500, period = 52,
-    dist = "poisson", size = NULL){
+    n, nt, site_means,
+    theta = 0.1, alpha = 0.65,
+    beta = 500, period = 52, p_one = 0, p_switch = 0){
 
-  df_site_pos <- data.frame(
-    id = 1:n_sites,
-    lat = 1:n_sites,
-    lon = 1:n_sites
+  coordinates <- data.frame(
+    id = factor(1:n),
+    lat = 1:n,
+    lon = 1:n,
+    mu = log(site_means)
   )
 
+  dist_k <- space_kernel(coordinates, theta = theta)
+  time_k <- time_kernel(times = 1:nt, alpha = alpha, beta = beta)
+
   output_df <- tidyr::expand_grid(
-    id = 1:n_sites,
-    t = 1:max_t
+    id = factor(1:n),
+    t = 1:nt
   ) |>
     dplyr::left_join(
-      df_site_pos, by = "id"
-    )
-
-  sigmasq <- log((site_sds / site_means)^2 + 1)
-  mu <- log(site_means) - sigmasq / 2
-
-  space <- create_spatial_matrix(df_site_pos[,c("lat", "lon")], sigmasq, theta = theta)
-  time <- create_time_matrix(1:max_t, periodic_scale = periodic_scale, long_term_scale = long_term_scale, period = period)
-
-  output_df$mu <- mu[output_df$id]
-  output_df$sigmasq <- sigmasq[output_df$id]
-  output_df$z <- quick_mvnorm(space, time) + output_df$mu
-  output_df$lambda <- exp(output_df$z)
-  if (dist == "poisson") {
-    output_df$n <- rpois(nrow(output_df), output_df$lambda)
-  } else if (dist == "nbinom") {
-    if (is.null(size)) {
-      stop("Size parameter must be provided for negative binomial distribution.")
-    }
-    output_df$n <- rnbinom(nrow(output_df), mu = output_df$lambda, size = size)
-  } else {
-    stop("Unsupported distribution")
-  }
-
-  output_df <- output_df |>
-    dplyr::rename("site_index" = id)
+      coordinates, by = "id"
+    ) |>
+    dplyr::mutate(
+      f = quick_mvnorm(dist_k, time_k),
+      z = mu + f,
+      lambda = exp(z),
+      y = rpois(n * nt, lambda)
+    ) |>
+    dplyr::mutate(
+      true_y = y,
+      missing = generate_clustered_binary(dplyr::n(), p_one, p_switch),
+      y = ifelse(missing == 1, NA, y)
+    ) |>
+    dplyr::select(- missing)
 
   return(output_df)
 }
