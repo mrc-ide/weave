@@ -12,19 +12,9 @@
 #' Spatiotemporal covariance:
 #'  Σ = dist_k ⊗ time_k
 simulate_data <- function(
-    n, nt, site_means,
-    theta = 0.1, alpha = 0.65,
-    beta = 500, period = 52, p_one = 0, p_switch = 0){
-
-  coordinates <- data.frame(
-    id = factor(1:n),
-    lat = 1:n,
-    lon = 1:n,
-    mu = log(site_means)
-  )
-
-  dist_k <- space_kernel(coordinates, theta = theta)
-  time_k <- time_kernel(times = 1:nt, alpha = alpha, beta = beta)
+    n, nt,
+    coordinates,
+    space_k, time_k){
 
   output_df <- tidyr::expand_grid(
     id = factor(1:n),
@@ -34,17 +24,29 @@ simulate_data <- function(
       coordinates, by = "id"
     ) |>
     dplyr::mutate(
-      f = quick_mvnorm(dist_k, time_k),
+      f = quick_mvnorm(space_k, time_k),
       z = mu + f,
       lambda = exp(z),
       y = rpois(n * nt, lambda)
-    ) |>
-    dplyr::mutate(
-      true_y = y,
-      missing = generate_clustered_binary(dplyr::n(), p_one, p_switch),
-      y = ifelse(missing == 1, NA, y)
-    ) |>
-    dplyr::select(- missing)
+    )
 
   return(output_df)
+}
+
+observed_data <- function(data, p_one, p_switch){
+  data |>
+    dplyr::mutate(
+      y_obs = y,
+      missing = generate_clustered_binary(dplyr::n(), p_one, p_switch),
+      y_obs = ifelse(missing == 1, NA, y_obs)
+    ) |>
+    dplyr::mutate(
+      mu_infer = log(mean(y_obs, na.rm = TRUE)),
+      .by = (id)
+    ) |>
+    dplyr::mutate(
+      z_infer = ifelse(is.na(y_obs), mu_infer, log(y_obs + 1)),
+      f_infer = z_infer - mu_infer
+    ) |>
+    dplyr::select(id, t, lat, lon, y_obs, mu_infer, z_infer, f_infer)
 }
