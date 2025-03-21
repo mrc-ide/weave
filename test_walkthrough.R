@@ -212,6 +212,7 @@ for(i in 1:n){
   obs_index <- which(!is.na(sub_d$y_obs))
 
   y_obs <- log(sub_d$y_obs + 0.0001)[obs_index]
+  y_obs <- y_obs - sub_d$mu_infer[obs_index]
 
   # 2) Subset into blocks for observed and missing
   K_obs_obs   <- K_spacetime[obs_index, obs_index]
@@ -229,7 +230,7 @@ for(i in 1:n){
 
   # Posterior mean for missing points
   post_mean <- K_miss_obs %*% alpha
-
+  post_mean <- post_mean + sub_d$mu_infer
   # opt <- optim(
   #   par = sub_d$f_infer,
   #   fn = log_likelihood,
