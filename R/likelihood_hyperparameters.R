@@ -1,46 +1,23 @@
-log_likelihood_hyperparameters <- function(par, f, dist_matrix, time_matrix, n, nt, dist_nugget, time_nugget) {
+log_likelihood_hyperparameters <- function(pars, f, n, nt, coordinates) {
+  space_k <- space_kernel(coordinates, length_scale = pars[1])
+  time_k <- time_kernel(times = 1:nt, periodic_scale = pars[2], long_term_scale = pars[3])
 
-  dist_theta <- par[1]
-  periodic_scale <- par[2]
-  time_theta <- par[3]
+  reg_space <- regularise(space_k)
+  reg_time <- regularise(time_k)
 
-  dist_k <- rbf_kernel(dist_matrix, theta = dist_theta) + diag(x = dist_nugget, nrow = n)
-  period_k <- periodic_kernel(time_matrix, periodic_scale = periodic_scale)
-  long_term_k <- rbf_kernel(time_matrix, theta = time_theta)
-  time_k <- period_k + long_term_k + diag(x = t_nugget, nrow = nt)
-  full_k <- kronecker(dist_k, time_k)
+  space_inv_reg <- solve(reg_space)
+  time_inv_reg <- solve(reg_time)
 
-  mvtnorm::dmvnorm(f, rep(0, n * nt), full_k, log = TRUE)
-}
+  f_mat <- matrix(f, nrow = n, ncol = nt, byrow = TRUE)
+  quad_term <- -0.5 * sum((space_inv_reg %*% f_mat) * (f_mat %*% time_inv_reg))
 
-log_likelihood_hyperparameters_fast <- function(par, f, dist_matrix, time_matrix, n, nt, dist_nugget, time_nugget) {
+  # Compute log-determinants of the regularised space and time kernels
+  log_det_space <- as.numeric(determinant(reg_space, logarithm = TRUE)$modulus)
+  log_det_time  <- as.numeric(determinant(reg_time, logarithm = TRUE)$modulus)
 
-  dist_theta    <- par[1]
-  periodic_scale <- par[2]
-  time_theta    <- par[3]
+  # Log-determinant term: accounts for the normalization of the Gaussian density
+  log_det_term <- -0.5 * (nt * log_det_space + n * log_det_time)
 
-  dist_k <- rbf_kernel(dist_matrix, theta = dist_theta) + diag(x = dist_nugget, nrow = n)
-  period_k <- periodic_kernel(time_matrix, periodic_scale = periodic_scale)
-  long_term_k <- rbf_kernel(time_matrix, theta = time_theta)
-  time_k <- period_k + long_term_k + diag(x = t_nugget, nrow = nt)
-
-  # Cholesky + log det
-  dist_chol   <- chol(dist_k)
-  time_chol   <- chol(time_k)
-  logdet_dist <- 2 * sum(log(diag(dist_chol)))
-  logdet_time <- 2 * sum(log(diag(time_chol)))
-  logdet_full <- nt * logdet_dist + n * logdet_time
-
-  # Inverse pieces
-  dist_inv <- chol2inv(dist_chol)  # n x n
-  time_k_inv <- chol2inv(time_chol)  # nt x nt
-
-  # Quad form: reshape f into X (nt x n)
-  X <- matrix(f, nrow = nt, ncol = n)
-  # f^T Sigma^{-1} f = trace( dist_inv %*% (X^T time_k_inv X) )
-  quad_form <- sum( dist_inv * (t(X) %*% time_k_inv %*% X) )
-
-  # final log-likelihood
-  loglik <- -0.5 * (quad_form + logdet_full + n * nt * log(2 * pi))
-  return(loglik)
+  # Return the sum of the terms
+  quad_term + log_det_term
 }
