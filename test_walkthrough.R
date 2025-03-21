@@ -7,7 +7,7 @@ library(tidyr)
 # True parameters --------------------------------------------------------------
 set.seed(321)
 # Number of sites
-n = 64
+n = 16
 # Number of timesteps
 nt = 52 * 3
 # Site mean case count
@@ -249,6 +249,27 @@ for(i in 1:n){
   # )
 
   pars[obs_data$id == i] <- post_mean[sub_d$id == i]
+
+  # calculate Hessian at the ML value
+  llh <- function(f, dist_k_inv, time_k_inv) {
+    # Hessian of the quadratic term
+    # The Hessian is -Sigma_inv, represented using the Kronecker product
+    Hess_quad <- -kronecker(dist_k_inv, time_k_inv)
+
+    # Initialize the Hessian of the likelihood term
+    Hess_likelihood <- matrix(0, nrow = length(f), ncol = length(f))
+
+    # Poisson distribution
+    mu <- exp(f)  # Mean parameter
+    tmp <- -mu  # Second derivative of Poisson log-likelihood
+    Hess_likelihood <- diag(tmp)
+
+    # Total Hessian
+    Hess <- Hess_quad + Hess_likelihood
+
+    # Return the Hessian matrix
+    return(Hess)
+  }
 
   # calculate Hessian at the ML value
   hess <- llh(
