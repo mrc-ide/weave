@@ -7,7 +7,7 @@ library(tidyr)
 # True parameters --------------------------------------------------------------
 set.seed(321)
 # Number of sites
-n = 16
+n = 160
 # Number of timesteps
 nt = 52 * 3
 # Site mean case count
@@ -29,7 +29,7 @@ period = 52
 # p_one: probability that a new cluster begins with a missing value.
 #   - higher p_one: more missing data overall.
 #   - lower p_one: less missing data overall.
-p_one = 0.2
+p_one = 0.5
 # p_switch: probability of switching between missing and observed states.
 #   - lower p_switch: longer sequences (clusters) of missingness or non-missingness.
 #   - higher p_switch: shorter clusters, more frequent switching between states.
@@ -165,7 +165,7 @@ hyperparmameters <- c(3, 1, 200)
 # ------------------------------------------------------------------------------
 
 # Fit --------------------------------------------------------------------------
-sub_n <- 4
+sub_n <- 8
 
 time_matrix <- time_kernel(
   1:nt,
@@ -292,24 +292,41 @@ for(i in 1:n){
   tausq[obs_data$id == i] <- sub_tausq[sub_d$id == i]
 }
 
+mean_lambda <- mean(exp(pars))
+var_y <- var(obs_data$y_obs, na.rm = TRUE)
+overdispersion <- (mean_lambda^2) / (var_y - mean_lambda)
+
 fit_data <- obs_data |>
   dplyr::mutate(
+
+    # Estimate of z, conditioned on observations
     z_est = pars,
+    # Posterior variance of z
     tausq = tausq,
+
+    # Compute the 95% confidence interval for z
     z_min = z_est - 1.96 * sqrt(tausq),
     z_max = z_est + 1.96 * sqrt(tausq),
+
+    # Convert this uncertainty to the count scale. We cannot simply exponentiate
+    # z_min and z_max because exponentiation is nonlinear, and normal confidence
+    # intervals don’t transform correctly.
+    # Instead, we compute quantiles of the corresponding lognormal distribution.
     lambda_est = qlnorm(0.5, meanlog = z_est, sdlog = sqrt(tausq)),
     lambda_min = qlnorm(0.025, meanlog = z_est, sdlog = sqrt(tausq)),
     lambda_max = qlnorm(0.975, meanlog = z_est, sdlog = sqrt(tausq)),
-    lognormal_mean = exp(z_est + tausq / 2),
-    lognormal_var = (exp(tausq) - 1)*exp(2 * z_est + tausq),
-    gamma_shape = lognormal_mean^2 / lognormal_var,
-    gamma_rate = lognormal_mean / lognormal_var,
-    pred_Q2.5 = qnbinom(p = 0.025, size = gamma_shape, prob = gamma_rate / (1 + gamma_rate)),
-    pred_Q25 = qnbinom(p = 0.25, size = gamma_shape, prob = gamma_rate / (1 + gamma_rate)),
-    data_Q50 = qnbinom(p = 0.5, size = gamma_shape, prob = gamma_rate / (1 + gamma_rate)),
-    pred_Q75 = qnbinom(p = 0.75, size = gamma_shape, prob = gamma_rate / (1 + gamma_rate)),
-    pred_Q97.5 = qnbinom(p = 0.975, size = gamma_shape, prob = gamma_rate / (1 + gamma_rate))
+
+    # Prediction intervals assuming Negative Binomially distributed data.
+    # The Negative Binomial accounts for overdispersion beyond Poisson variability.
+    negbin_size = lambda_est / overdispersion,  # Size parameter for NB
+    negbin_prob = negbin_size / (negbin_size + lambda_est), # NB probability
+
+    # Compute quantiles of the Negative Binomial distribution as prediction intervals.
+    pred_Q2.5 = qnbinom(0.025, size = negbin_size, prob = negbin_prob),
+    pred_Q25 = qnbinom(0.25, size = negbin_size, prob = negbin_prob),
+    data_Q50 = qnbinom(0.5, size = negbin_size, prob = negbin_prob),
+    pred_Q75 = qnbinom(0.75, size = negbin_size, prob = negbin_prob),
+    pred_Q97.5 = qnbinom(0.975, size = negbin_size, prob = negbin_prob)
   )
 
 sim_data +
