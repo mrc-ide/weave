@@ -1,7 +1,5 @@
 infer_space_kernel_params <- function(data, plot = FALSE){
 
-  data$z_t_hat = log(data$y + 1)
-
   spatial_distance <- get_spatial_distance(unique(data[,c("lon", "lat")]))
 
   ids <- unique(data$id)
@@ -9,12 +7,12 @@ infer_space_kernel_params <- function(data, plot = FALSE){
 
   space_cor <- expand.grid(id1 = ids, id2 = ids, t = times) |>
     dplyr::filter(as.numeric(id1) < as.numeric(id2)) |>
-    dplyr::left_join(dplyr::select(data, id, t, z_t_hat), by = c("id1" = "id", "t" = "t")) |>
-    dplyr::left_join(dplyr::select(data, id, t, z_t_hat), by = c("id2" = "id", "t" = "t")) |>
-    dplyr::filter(!is.na(z_t_hat.x), !is.na(z_t_hat.y)) |>
+    dplyr::left_join(dplyr::select(data, id, t, z_infer), by = c("id1" = "id", "t" = "t")) |>
+    dplyr::left_join(dplyr::select(data, id, t, z_infer), by = c("id2" = "id", "t" = "t")) |>
+    dplyr::filter(!is.na(z_infer.x), !is.na(z_infer.y)) |>
     dplyr::filter(dplyr::n() > 5, .by = c(id1, id2)) |>
     dplyr::summarise(
-      cor = cor(z_t_hat.x, z_t_hat.y),
+      cor = cor(z_infer.x, z_infer.y),
       .by = c("id1", "id2")
     ) |>
     dplyr::mutate(
@@ -52,23 +50,21 @@ infer_space_kernel_params <- function(data, plot = FALSE){
 
   return(
     list(
-      theta = optimal_theta
+      length_scale = optimal_theta
     )
   )
 }
 
 infer_time_kernel_params <- function(data, period, plot = FALSE){
 
-  data$z_t_hat = log(data$y + 1)
-
   time_cor <- expand.grid(t1 = unique(data$t), t2 = unique(data$t), id = unique(data$id)) |>
     dplyr::filter(t1 < t2) |>
-    dplyr::left_join(dplyr::select(data, id, t, z_t_hat), by = c("t1" = "t", "id" = "id")) |>
-    dplyr::left_join(dplyr::select(data, id, t, z_t_hat), by = c("t2" = "t", "id" = "id")) |>
-    dplyr::filter(!is.na(z_t_hat.x), !is.na(z_t_hat.y)) |>
+    dplyr::left_join(dplyr::select(data, id, t, z_infer), by = c("t1" = "t", "id" = "id")) |>
+    dplyr::left_join(dplyr::select(data, id, t, z_infer), by = c("t2" = "t", "id" = "id")) |>
+    dplyr::filter(!is.na(z_infer.x), !is.na(z_infer.y)) |>
     dplyr::filter(dplyr::n() > 5, .by = c(t1, t2)) |>
     dplyr::summarise(
-      cor = cor(z_t_hat.x, z_t_hat.y),
+      cor = cor(z_infer.x, z_infer.y),
       .by = c("t1", "t2")
     ) |>
     dplyr::mutate(
@@ -79,6 +75,8 @@ infer_time_kernel_params <- function(data, period, plot = FALSE){
   fit_sigma <- function(params, period, time_cor) {
     predicted_correlations <- periodic_kernel(x = time_cor$time_distance, alpha = params[1], period = period) *
       rbf_kernel(x = time_cor$time_distance, theta = params[2])
+
+
     sum((predicted_correlations - time_cor$cor)^2)
   }
 
@@ -112,8 +110,8 @@ infer_time_kernel_params <- function(data, period, plot = FALSE){
 
   return(
     list(
-      alpha = optim_result_time$par[1],
-      beta = optim_result_time$par[2],
+      periodic_scale = optim_result_time$par[1],
+      long_term_scale = optim_result_time$par[2],
       period = period
     )
   )

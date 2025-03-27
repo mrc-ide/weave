@@ -7,9 +7,9 @@ library(tidyr)
 # True parameters --------------------------------------------------------------
 set.seed(321)
 # Number of sites
-n = 160
+n = 16
 # Number of timesteps
-nt = 52 * 3
+nt = 52 * 10
 # Site mean case count
 site_means = round(runif(n, 10, 100))
 # length_scale: determines how quickly correlation decays with distance
@@ -29,11 +29,11 @@ period = 52
 # p_one: probability that a new cluster begins with a missing value.
 #   - higher p_one: more missing data overall.
 #   - lower p_one: less missing data overall.
-p_one = 0.5
+p_one = 0.6
 # p_switch: probability of switching between missing and observed states.
 #   - lower p_switch: longer sequences (clusters) of missingness or non-missingness.
 #   - higher p_switch: shorter clusters, more frequent switching between states.
-p_switch = 0.2
+p_switch = 0.3
 # ------------------------------------------------------------------------------
 
 # Simulated data ---------------------------------------------------------------
@@ -64,7 +64,7 @@ true_data <- simulate_data(
   time_k = time_k
 )
 
-obs_data <- observed_data(
+obs_data <- observed_data2(
   data = true_data,
   p_one = p_one,
   p_switch = p_switch
@@ -117,55 +117,18 @@ sim_data <- ggplot() +
 # ------------------------------------------------------------------------------
 
 # Infer kernel hyper-parameters ------------------------------------------------
-# opt <- optim(
-#   par = c(20, 1, 200),
-#   fn = log_likelihood_hyperparameters,
-#   f = obs_data$f_infer,
-#   n = n,
-#   nt = nt,
-#   coordinates = coordinates,
-#   method = "L-BFGS-B",
-#   lower = c(5, 0.95, 199),
-#   upper = c(100, 1.05, 201),
-#   control = list(
-#     fnscale = -1
-#   )
-# )
-#
-# hyperparmameters <- opt$par
-#
-# space_pd_infer <- data.frame(
-#   distance = 1:100
-# ) |>
-#   mutate(
-#     k = rbf_kernel(distance, theta = hyperparmameters[1]),
-#     group = "Inferred"
-#   )
-#
-# space_plot +
-#   geom_line(data = space_pd_infer, aes(x = distance, y = k, colour = group))
-#
-# time_pd_infer <- data.frame(
-#   week = 1:(nt)
-# ) |>
-#   mutate(
-#     k = periodic_kernel(x = week, alpha = hyperparmameters[2], period = period) *
-#       rbf_kernel(x = week, theta = hyperparmameters[3]),
-#     group = "Inferred"
-#   )
-#
-# time_plot +
-#   geom_line(data = time_pd_infer, aes(x = week, y = k, colour = group))
+infer_space <- infer_space_kernel_params(obs_data, TRUE)
+infer_time <- infer_time_kernel_params(obs_data, 52, TRUE)
 
-
-hyperparmameters <- c(3, 1, 200)
+hyperparmameters <- c(infer_space$length_scale, infer_time$periodic_scale, infer_time$long_term_scale)
+#hyperparmameters <- c(3, 1, 200)
 ## Options
 # Fix these conservatively - simulated sensitvity analyses?
 # Fit Bayesian with priors
 # ------------------------------------------------------------------------------
 
 # Fit --------------------------------------------------------------------------
-sub_n <- 8
+sub_n <- 4
 
 time_matrix <- time_kernel(
   1:nt,
