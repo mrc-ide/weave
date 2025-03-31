@@ -2,25 +2,17 @@ infer_space_kernel_params <- function(data, plot = FALSE){
 
   spatial_distance <- get_spatial_distance(unique(data[,c("lon", "lat")]))
 
-  ids <- unique(data$id)
-  times <- unique(data$t)
+  zmat <- matrix(obs_data$z_infer, nrow = nt, ncol = n, byrow = FALSE)
 
-  space_cor <- expand.grid(id1 = ids, id2 = ids, t = times) |>
-    dplyr::filter(as.numeric(id1) < as.numeric(id2)) |>
-    dplyr::left_join(dplyr::select(data, id, t, z_infer), by = c("id1" = "id", "t" = "t")) |>
-    dplyr::left_join(dplyr::select(data, id, t, z_infer), by = c("id2" = "id", "t" = "t")) |>
-    dplyr::filter(!is.na(z_infer.x), !is.na(z_infer.y)) |>
-    dplyr::filter(dplyr::n() > 5, .by = c(id1, id2)) |>
-    dplyr::summarise(
-      cor = cor(z_infer.x, z_infer.y),
-      .by = c("id1", "id2")
-    ) |>
-    dplyr::mutate(
-      cor = ifelse(cor < 0, 0, cor),
-      distance = purrr::map2_dbl(id1, id2, ~ spatial_distance[.x, .y])
-    ) |>
-    dplyr::filter(!is.na(cor))
+  # Step 2: compute correlation between sites across time
+  # Each site is a row, time across columns
+  site_cor_mat <- cor(zmat, use = "pairwise.complete.obs")
+  cov_mat <- cov(zmat, use = "pairwise.complete.obs")
+  corr_mat <- cov2cor(cov_mat)
+  corr_mat[corr_mat<0] <- 0
 
+  dist_mat <- get_spatial_distance(coordinates)
+  space_cor <- data.frame(distance = as.vector(dist_mat), cor = as.vector(corr_mat))
 
   # Fitting theta to empirical correlations
   fit_sigma <- function(theta, space_cor) {
@@ -57,26 +49,24 @@ infer_space_kernel_params <- function(data, plot = FALSE){
 
 infer_time_kernel_params <- function(data, period, plot = FALSE){
 
-  time_cor <- expand.grid(t1 = unique(data$t), t2 = unique(data$t), id = unique(data$id)) |>
-    dplyr::filter(t1 < t2) |>
-    dplyr::left_join(dplyr::select(data, id, t, z_infer), by = c("t1" = "t", "id" = "id")) |>
-    dplyr::left_join(dplyr::select(data, id, t, z_infer), by = c("t2" = "t", "id" = "id")) |>
-    dplyr::filter(!is.na(z_infer.x), !is.na(z_infer.y)) |>
-    dplyr::filter(dplyr::n() > 5, .by = c(t1, t2)) |>
-    dplyr::summarise(
-      cor = cor(z_infer.x, z_infer.y),
-      .by = c("t1", "t2")
-    ) |>
-    dplyr::mutate(
-      time_distance = abs(t2 - t1)
-    )
+  fmat <- t(matrix(data$z_infer, nrow = nt, ncol = n, byrow = FALSE))
+  cov_mat <- cov(fmat, use = "pairwise.complete.obs")
+  corr_mat <- cov2cor(cov_mat)
+  lags <- 0:(nt - 1)
+  mean_corr_by_lag <- numeric(length(lags))
+  # For each lag h, compute mean correlation of all pairs (i, i+h)
+  for (h in lags) {
+    idx_i <- 1:(nt - h)
+    idx_j <- idx_i + h
+    correlations <- mapply(function(i, j) corr_mat[i, j], idx_i, idx_j)
+    mean_corr_by_lag[h + 1] <- mean(correlations, na.rm = TRUE)
+  }
+  time_cor <- data.frame(time_distance = 1:nt, cor = mean_corr_by_lag)
 
   # Fitting sigma to empirical correlations,
   fit_sigma <- function(params, period, time_cor) {
     predicted_correlations <- periodic_kernel(x = time_cor$time_distance, alpha = params[1], period = period) *
       rbf_kernel(x = time_cor$time_distance, theta = params[2])
-
-
     sum((predicted_correlations - time_cor$cor)^2)
   }
 

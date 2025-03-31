@@ -7,15 +7,15 @@ library(tidyr)
 # True parameters --------------------------------------------------------------
 set.seed(321)
 # Number of sites
-n = 16
+n = 100
 # Number of timesteps
-nt = 52 * 10
+nt = 52 * 8
 # Site mean case count
 site_means = round(runif(n, 10, 100))
 # length_scale: determines how quickly correlation decays with distance
 #   - higher length_scale: correlation persists over longer distances (smoother spatial variation)
 #   - lower length_scale: correlation decays rapidly, indicating localised variation
-length_scale <- 3
+length_scale <- 30
 # periodic_scale: strength of repeating (seasonal or cyclical) patterns
 #   - higher periodic_scale: stronger seasonal patterns
 #   - lower periodic_scale: weaker seasonal patterns
@@ -23,7 +23,7 @@ periodic_scale = 1
 # long_term_scale: scale controlling decay rate of long-term temporal correlation
 #   - higher long_term_scale: smoother long-term trends (correlation persists longer)
 #   - lower long_term_scale: rapid loss of correlation, short-term variation dominates
-long_term_scale = 200
+long_term_scale = 300
 # period: duration of the repeating cycle (e.g., 52 weeks for annual seasonality)
 period = 52
 # p_one: probability that a new cluster begins with a missing value.
@@ -128,169 +128,142 @@ hyperparmameters <- c(infer_space$length_scale, infer_time$periodic_scale, infer
 # ------------------------------------------------------------------------------
 
 # Fit --------------------------------------------------------------------------
-sub_n <- 4
 
-time_matrix <- time_kernel(
-  1:nt,
-  periodic_scale = hyperparmameters[2],
-  long_term_scale = hyperparmameters[3],
-  period = 52
-)
+llh <- function(f, dist_k_inv, time_k_inv) {
+  # Hessian of the quadratic term
+  # The Hessian is -Sigma_inv, represented using the Kronecker product
+  Hess_quad <- -kronecker(dist_k_inv, time_k_inv)
 
-time_inv_reg <- time_matrix |>
-  regularise() |>
-  solve()
+  # Initialize the Hessian of the likelihood term
+  Hess_likelihood <- matrix(0, nrow = length(f), ncol = length(f))
 
-space_matrix <- get_spatial_distance(coordinates)
+  # Poisson distribution
+  mu <- exp(f)  # Mean parameter
+  tmp <- -mu  # Second derivative of Poisson log-likelihood
+  Hess_likelihood <- diag(tmp)
 
-pars <- rep(NA, nrow(obs_data))
-tausq <- rep(NA, nrow(obs_data))
-pb <- progress_bar$new(total = n)
+  # Total Hessian
+  Hess <- Hess_quad + Hess_likelihood
 
-for(i in 1:n){
-  pb$tick()
-  dists <- space_matrix[i,]
-  indices <- order(dists)[1:(sub_n + 1)]
-  sub_d <- dplyr::filter(obs_data, id %in% indices)
+  # Return the Hessian matrix
+  return(Hess)
+}
 
-  sub_coordinates <- sub_d |>
-    dplyr::select(id, lat, lon) |>
-    dplyr::distinct() |>
-    dplyr::select(lat, lon)
-
-  sub_space_matrix <- space_kernel(
-    coordinates = sub_coordinates,
-    length_scale = hyperparmameters[1]
+fit <- function(obs_data, coordinates, hyperparameters, sub_n = 5, noise_var = 1e-3){
+  time_matrix <- time_kernel(
+    1:nt,
+    periodic_scale = hyperparmameters[2],
+    long_term_scale = hyperparmameters[3],
+    period = 52
   )
 
-  sub_space_inv_reg <- sub_space_matrix |>
+  time_inv_reg <- time_matrix |>
     regularise() |>
     solve()
 
-  # Full Spatiotemporal Kernel (Kronecker Product)
-  K_spacetime <- kronecker(sub_space_matrix, time_matrix)
+  spatial_dist <- get_spatial_distance(coordinates)
+  space_matrix <- space_kernel(coordinates, length_scale = hyperparmameters[1])
 
-  #miss_index <- which(is.na(sub_d$y_obs))
-  miss_index <- 1:nrow(sub_d)
-  obs_index <- which(!is.na(sub_d$y_obs))
+  obs_data$z_est <- NA
+  obs_data$tausq <- NA
 
-  y_obs <- log(sub_d$y_obs + 0.0001)[obs_index]
-  y_obs <- y_obs - sub_d$mu_infer[obs_index]
 
-  # 2) Subset into blocks for observed and missing
-  K_obs_obs   <- K_spacetime[obs_index, obs_index]
-  K_obs_miss  <- K_spacetime[obs_index, miss_index]
-  K_miss_obs  <- K_spacetime[miss_index, obs_index]
-  K_miss_miss <- K_spacetime[miss_index, miss_index]
+  pb <- progress_bar$new(total = n)
 
-  # 3) GP posterior (Gaussian version):
-  #    (Add noise variance on the diagonal of K_obs_obs if needed)
-  noise_var <- 1e-3
-  K_obs_obs_noisy <- K_obs_obs + diag(noise_var, nrow(K_obs_obs))
 
-  # Solve for alpha
-  alpha <- solve(K_obs_obs_noisy, y_obs)
+  for(i in 1:n){
+    pb$tick()
+    dists <- spatial_dist[i,]
+    indices <- order(dists)[1:(sub_n + 1)]
+    sub_d <- dplyr::filter(obs_data, id %in% indices)
 
-  # Posterior mean for missing points
-  post_mean <- K_miss_obs %*% alpha
-  post_mean <- post_mean + sub_d$mu_infer
-  # opt <- optim(
-  #   par = sub_d$f_infer,
-  #   fn = log_likelihood,
-  #   gr = log_likelihood_gradient,
-  #   mu = sub_d$mu_infer ,
-  #   dist_k_inv = sub_space_inv_reg,
-  #   time_k_inv = time_inv_reg,
-  #   n = sub_n + 1,
-  #   nt = nt,
-  #   y = sub_d$y_obs,
-  #   method = "BFGS",  # BFGS is a gradient-based optimization method
-  #   control = list(
-  #     fnscale = -1,     # To maximize the function
-  #     maxit = 100000,     # Increase the maximum number of iterations
-  #     reltol = 0.000001
-  #   )
-  # )
+    sub_space_matrix <- space_matrix[indices, indices]
 
-  pars[obs_data$id == i] <- post_mean[sub_d$id == i]
+    sub_space_inv_reg <- sub_space_matrix |>
+      regularise() |>
+      solve()
 
-  # calculate Hessian at the ML value
-  llh <- function(f, dist_k_inv, time_k_inv) {
-    # Hessian of the quadratic term
-    # The Hessian is -Sigma_inv, represented using the Kronecker product
-    Hess_quad <- -kronecker(dist_k_inv, time_k_inv)
+    # Full Spatiotemporal Kernel (Kronecker Product)
+    K_spacetime <- kronecker(sub_space_matrix, time_matrix)
 
-    # Initialize the Hessian of the likelihood term
-    Hess_likelihood <- matrix(0, nrow = length(f), ncol = length(f))
+    miss_index <- 1:nrow(sub_d)
+    obs_index <- which(!is.na(sub_d$y_obs))
 
-    # Poisson distribution
-    mu <- exp(f)  # Mean parameter
-    tmp <- -mu  # Second derivative of Poisson log-likelihood
-    Hess_likelihood <- diag(tmp)
+    y_obs <- log(sub_d$y_obs + 0.0001)[obs_index]
+    y_obs <- y_obs - sub_d$mu_infer[obs_index]
 
-    # Total Hessian
-    Hess <- Hess_quad + Hess_likelihood
+    # 2) Subset into blocks for observed and missing
+    K_obs_obs   <- K_spacetime[obs_index, obs_index]
+    K_miss_obs  <- K_spacetime[miss_index, obs_index]
 
-    # Return the Hessian matrix
-    return(Hess)
+    # 3) GP posterior (Gaussian version)
+    K_obs_obs_noisy <- K_obs_obs + diag(noise_var, nrow(K_obs_obs))
+
+    # Solve for alpha
+    alpha <- solve(K_obs_obs_noisy, y_obs)
+
+    # Posterior mean for missing points
+    post_mean <- K_miss_obs %*% alpha
+    post_mean <- post_mean + sub_d$mu_infer
+
+    obs_data[obs_data$id == i, "z_est"] <- post_mean[sub_d$id == i]
+
+    # calculate Hessian at the ML value
+    hess <- llh(
+      f = post_mean,
+      dist_k_inv = sub_space_inv_reg,
+      time_k_inv = time_inv_reg
+    )
+    # Approximate the Hessian as a diagonal matrix
+    hess_diag <- diag(hess)
+    # Approximate the variances
+    sub_tausq <- -1 / hess_diag
+    sub_tausq[sub_tausq < 0] <- 0  # Ensure non-negative variances
+    # Approximate the Hessian as a diagonal matrix
+    hess_diag <- diag(hess)
+    # Approximate the variances
+    sub_tausq <- -1 / hess_diag
+    sub_tausq[sub_tausq < 0] <- 0  # Ensure non-negative variances
+
+    obs_data[obs_data$id == i, "tausq"] <- sub_tausq[sub_d$id == i]
   }
 
-  # calculate Hessian at the ML value
-  hess <- llh(
-    f = post_mean,
-    dist_k_inv = sub_space_inv_reg,
-    time_k_inv = time_inv_reg
-  )
-  # Approximate the Hessian as a diagonal matrix
-  hess_diag <- diag(hess)
-  # Approximate the variances
-  sub_tausq <- -1 / hess_diag
-  sub_tausq[sub_tausq < 0] <- 0  # Ensure non-negative variances
-  # Approximate the Hessian as a diagonal matrix
-  hess_diag <- diag(hess)
-  # Approximate the variances
-  sub_tausq <- -1 / hess_diag
-  sub_tausq[sub_tausq < 0] <- 0  # Ensure non-negative variances
+  mean_lambda <- mean(exp(obs_data$z_est))
+  var_y <- var(obs_data$y_obs, na.rm = TRUE)
+  overdispersion <- (mean_lambda^2) / (var_y - mean_lambda)
 
-  tausq[obs_data$id == i] <- sub_tausq[sub_d$id == i]
+  fit_data <- obs_data |>
+    dplyr::mutate(
+      # Compute the 95% confidence interval for z
+      z_min = z_est - 1.96 * sqrt(tausq),
+      z_max = z_est + 1.96 * sqrt(tausq),
+
+      # Convert this uncertainty to the count scale. We cannot simply exponentiate
+      # z_min and z_max because exponentiation is nonlinear, and normal confidence
+      # intervals don’t transform correctly.
+      # Instead, we compute quantiles of the corresponding lognormal distribution.
+      lambda_est = qlnorm(0.5, meanlog = z_est, sdlog = sqrt(tausq)),
+      lambda_min = qlnorm(0.025, meanlog = z_est, sdlog = sqrt(tausq)),
+      lambda_max = qlnorm(0.975, meanlog = z_est, sdlog = sqrt(tausq)),
+
+      # Prediction intervals assuming Negative Binomially distributed data.
+      # The Negative Binomial accounts for overdispersion beyond Poisson variability.
+      negbin_size = lambda_est / overdispersion,  # Size parameter for NB
+      negbin_prob = negbin_size / (negbin_size + lambda_est), # NB probability
+
+      # Compute quantiles of the Negative Binomial distribution as prediction intervals.
+      pred_Q2.5 = qnbinom(0.025, size = negbin_size, prob = negbin_prob),
+      pred_Q25 = qnbinom(0.25, size = negbin_size, prob = negbin_prob),
+      data_Q50 = qnbinom(0.5, size = negbin_size, prob = negbin_prob),
+      pred_Q75 = qnbinom(0.75, size = negbin_size, prob = negbin_prob),
+      pred_Q97.5 = qnbinom(0.975, size = negbin_size, prob = negbin_prob)
+    )
+
+  return(fit_data)
 }
 
-mean_lambda <- mean(exp(pars))
-var_y <- var(obs_data$y_obs, na.rm = TRUE)
-overdispersion <- (mean_lambda^2) / (var_y - mean_lambda)
+fit_data <- fit(obs_data, coordinates, hyperparameters, sub_n = 5)
 
-fit_data <- obs_data |>
-  dplyr::mutate(
-
-    # Estimate of z, conditioned on observations
-    z_est = pars,
-    # Posterior variance of z
-    tausq = tausq,
-
-    # Compute the 95% confidence interval for z
-    z_min = z_est - 1.96 * sqrt(tausq),
-    z_max = z_est + 1.96 * sqrt(tausq),
-
-    # Convert this uncertainty to the count scale. We cannot simply exponentiate
-    # z_min and z_max because exponentiation is nonlinear, and normal confidence
-    # intervals don’t transform correctly.
-    # Instead, we compute quantiles of the corresponding lognormal distribution.
-    lambda_est = qlnorm(0.5, meanlog = z_est, sdlog = sqrt(tausq)),
-    lambda_min = qlnorm(0.025, meanlog = z_est, sdlog = sqrt(tausq)),
-    lambda_max = qlnorm(0.975, meanlog = z_est, sdlog = sqrt(tausq)),
-
-    # Prediction intervals assuming Negative Binomially distributed data.
-    # The Negative Binomial accounts for overdispersion beyond Poisson variability.
-    negbin_size = lambda_est / overdispersion,  # Size parameter for NB
-    negbin_prob = negbin_size / (negbin_size + lambda_est), # NB probability
-
-    # Compute quantiles of the Negative Binomial distribution as prediction intervals.
-    pred_Q2.5 = qnbinom(0.025, size = negbin_size, prob = negbin_prob),
-    pred_Q25 = qnbinom(0.25, size = negbin_size, prob = negbin_prob),
-    data_Q50 = qnbinom(0.5, size = negbin_size, prob = negbin_prob),
-    pred_Q75 = qnbinom(0.75, size = negbin_size, prob = negbin_prob),
-    pred_Q97.5 = qnbinom(0.975, size = negbin_size, prob = negbin_prob)
-  )
 
 sim_data +
   geom_ribbon(
