@@ -39,12 +39,12 @@ infer_space_kernel_params <- function(data, plot = FALSE){
         y = rbf_kernel(distance, optimal_theta)
       )
 
-    cor_plot <- ggplot() +
-      geom_point(data = space_cor, aes(x = distance, y = cor), alpha = 0.5) +
-      geom_line(data = pred, aes(x = distance, y = y), col = "deeppink") +
-      xlab("Spatial distance") +
-      ylab("") +
-      theme_bw()
+    cor_plot <- ggplot2::ggplot() +
+      ggplot2::geom_point(data = space_cor, ggplot2::aes(x = distance, y = cor), alpha = 0.5) +
+      ggplot2::geom_line(data = pred, ggplot2::aes(x = distance, y = y), col = "deeppink") +
+      ggplot2::xlab("Spatial distance") +
+      ggplot2::ylab("") +
+      ggplot2::theme_bw()
     print(cor_plot)
   }
 
@@ -99,12 +99,12 @@ infer_time_kernel_params <- function(data, period, plot = FALSE){
           rbf_kernel(x =distance, theta = optim_result_time$par[2])
       )
 
-    cor_plot <- ggplot() +
-      geom_point(data = time_cor, aes(x = time_distance, y = cor), alpha = 0.5) +
-      geom_line(data = pred, aes(x = distance, y = y), col = "deeppink") +
-      xlab("Temporal distance") +
-      ylab("") +
-      theme_bw()
+    cor_plot <- ggplot2::ggplot() +
+      ggplot2::geom_point(data = time_cor, ggplot2::aes(x = time_distance, y = cor), alpha = 0.5) +
+      ggplot2::geom_line(data = pred, ggplot2::aes(x = distance, y = y), col = "deeppink") +
+      ggplot2::xlab("Temporal distance") +
+      ggplot2::ylab("") +
+      ggplot2::theme_bw()
     print(cor_plot)
   }
 

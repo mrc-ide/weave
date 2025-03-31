@@ -1,0 +1,260 @@
+---
+title: "Introduction"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Introduction}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup}
+library(weave)
+```
+
+# Overview
+
+In the following overview we will show how weave can be used to i) simulate malaria
+case time series data with a specific spatial-temporal stucture, ii) add structured
+missingness iii) infer hyperparameters from observed data and iv) fit and predict
+to fill missingness and identify outliers.
+
+
+## Model Summary
+
+We simulate spatiotemporal case count data using the following model:
+
+### Observed Counts
+
+Let $y_{st}$ denote the observed case counts at site $s$ and time $t$.\
+These are assumed to follow a Poisson distribution:
+
+$$
+y_{st} \sim \text{Poisson}(\lambda_{st})
+$$
+
+### Mean Structure
+
+The mean case count $\lambda_{st}$ is modelled on the log scale as:
+
+$$
+\lambda_{st} = \exp(z_{st})
+$$
+
+$$
+z_{st} = mu_s + f_{st}
+$$
+
+Where:
+
+-   $\mu_s$ is a site-specific intercept
+-   $f_{st}$ is a latent spatiotemporal effect
+
+### Latent Process
+
+The latent process $f_{st}$ is assumed to follow a multivariate normal distribution:
+
+$$
+\mathbf{f} \sim \mathcal{N}(0, \Sigma)
+$$
+
+Where the covariance matrix $\Sigma$ captures the spatiotemporal correlation structure.
+
+### Spatiotemporal Covariance
+
+The covariance matrix $\Sigma$ is defined as the Kronecker product of two smaller covariance matrices:
+
+$$
+\Sigma = \text{dist}_k \otimes \text{time}_k
+$$
+
+Where:
+
+-   $\text{dist}_k$ captures the spatial covariance between sites
+-   $\text{time}_k$ captures the temporal covariance across time points
+
+This Kronecker structure allows for efficient representation and computation of spatiotemporal correlations.
+
+## Assumed Parameters
+
+The spatiotemporal Gaussian process is governed by a set of interpretable parameters that define the shape of the covariance functions in space and time.
+
+### Spatial Correlation
+
+We model spatial correlation using a **Radial Basis Function (RBF) kernel**, also known as a squared exponential kernel:
+
+$$
+K_{\text{space}}(d) = \exp\left( -\frac{d^2}{2 \cdot \text{length_scale}^2} \right)
+$$
+
+Where:
+
+-   $d$ is the distance between two sites.
+-   **`length_scale`** controls how quickly correlation decays with distance:
+    -   Higher values result in **smoother** spatial variation, with correlation persisting across larger distances.
+    -   Lower values lead to **more localised** spatial variation.
+
+```{r spatial-kernel-plot, fig.cap="Spatial kernel with RBF structure", echo=TRUE}
+# Assumed parameters
+length_scale <- 3
+
+# Generate kernel values
+space_pd <- data.frame(
+  distance = 1:100
+) |>
+  dplyr::mutate(
+    k = rbf_kernel(distance, theta = length_scale),
+    group = "True"
+  )
+
+# Plot
+space_plot <- ggplot2::ggplot(space_pd, ggplot2::aes(x = distance, y = k, colour = group)) +
+  ggplot2::geom_line() +
+  ggplot2::theme_bw() +
+  ggplot2::labs(x = "Distance (Kms)", y = "Kernel value", title = "Spatial RBF Kernel")
+
+space_plot
+```
+
+## Temporal Correlation
+
+We model temporal correlation using the product of a **periodic kernel** and a **long-term radial basis function (RBF) kernel**. This captures both **seasonal cycles** and **smooth long-term trends** in time.
+
+The combined kernel is defined as:
+
+$$
+K_{\text{time}}(\Delta t) =
+\underbrace{\exp\left( -\frac{2 \sin^2\left( \pi \Delta t / \text{period} \right)}{\text{periodic_scale}^2} \right)}_{\text{Periodic kernel}} \times
+\underbrace{\exp\left( -\frac{\Delta t^2}{2 \cdot \text{long_term_scale}^2} \right)}_{\text{Long-term RBF kernel}}
+$$
+
+Where:
+
+-   $\Delta t$ is the time difference between two observations.
+-   `periodic_scale` controls the strength of seasonal (cyclical) variation:
+    -   Higher values → stronger seasonal patterns.
+    -   Lower values → weaker seasonality.
+-   `long_term_scale` controls the decay of long-term correlation:
+    -   Higher values → smoother long-term trends (correlation persists longer).
+    -   Lower values → short-term variation dominates.
+-   `period` is the length of one seasonal cycle (e.g. 52 weeks for annual seasonality).
+
+### Example Kernel with Assumed Parameters
+
+```{r temporal-kernel-plot, fig.cap="Temporal kernel combining seasonal and long-term correlation", echo=TRUE}
+# Assumed parameters 
+periodic_scale <- 1
+long_term_scale <- 200
+period <- 52
+nt <- 260
+
+# Generate kernel values
+time_pd <- data.frame(week = 1:nt) |>
+  dplyr::mutate( k = periodic_kernel(x = week, alpha = periodic_scale, period = period) *
+                   rbf_kernel(x = week, theta = long_term_scale), group = "True" )
+
+# Plot
+time_plot <- ggplot2::ggplot(time_pd, ggplot2::aes(x = week, y = k, colour = group)) +
+  ggplot2::geom_line() + 
+  ggplot2::theme_bw() +
+  ggplot2::labs(x = "Distance (Weeks)", y = "Kernel value", title = "Temporal Kernel")
+
+time_plot
+```
+
+# Simulating data and adding missingness
+
+```{r simulation, echo = TRUE}
+set.seed(3210)
+# Number of sites
+n = 9
+# Number of timesteps (3 years of weekly data)
+nt = 52 * 3
+# Site mean case count
+site_means = c(10, 20, 100)
+# p_one: probability that a new cluster begins with a missing value.
+#   - higher p_one: more missing data overall.
+#   - lower p_one: less missing data overall.
+p_one = 0.2
+# p_switch: probability of switching between missing and observed states.
+#   - lower p_switch: longer sequences (clusters) of missingness or non-missingness.
+#   - higher p_switch: shorter clusters, more frequent switching between states.
+p_switch = 0.1
+
+coordinates <- data.frame(
+  id = factor(1:n),
+  lat = 1:n,
+  lon = 1:n,
+  mu = log(site_means)
+)
+
+space_k <- space_kernel(
+  coordinates = coordinates,
+  length_scale = length_scale
+)
+
+time_k <- time_kernel(
+  times = 1:nt,
+  periodic_scale = periodic_scale,
+  long_term_scale = long_term_scale,
+  period = period
+)
+
+true_data <- simulate_data(
+  n = n,
+  nt = nt,
+  coordinates = coordinates,
+  space_k = space_k,
+  time_k = time_k
+)
+dplyr::glimpse(true_data)
+
+obs_data <- observed_data2(
+  data = true_data,
+  p_one = p_one,
+  p_switch = p_switch
+)
+
+dplyr::glimpse(obs_data)
+
+# Plot data
+hf_labeller <- function(value) {
+  paste("HF:", value)
+}
+
+sim_data <- ggplot2::ggplot() +
+  ggplot2::geom_point(data = true_data, ggplot2::aes(x = t, y = y), size = 0.3, colour = "red") +
+  ggplot2::geom_point(data = obs_data, ggplot2::aes(x = t, y = y_obs), size = 0.3, colour = "black") +
+  ggplot2::geom_line(data = true_data, ggplot2::aes(x = t, y = lambda, colour = id)) +
+  ggplot2::facet_wrap(~ id, scales = "free_y", labeller = ggplot2::labeller(id = hf_labeller)) +
+  ggplot2::ylab("Cases") +
+  ggplot2::xlab("Week") +
+  ggplot2::theme_bw() +
+  ggplot2::theme(
+    legend.position = "none",
+    strip.background = ggplot2::element_rect(fill = "white", colour = "grey50"),
+    strip.text = ggplot2::element_text(size = 8, face = "bold"),
+    panel.spacing = ggplot2::unit(0.5, "lines")
+  ) +
+  ggplot2::ggtitle("Simulated data")
+
+sim_data
+```
+# Hyperparameters
+Next we need to make a (quick) guess at inferring the underlying kernel hyperparameters 
+(length_scale, periodic_scale and long_term_scale) from the observed data. There
+are more rigorous ways of doing this, but here we opt for a quick approximation
+
+```{r hyperparameters}
+infer_space <- infer_space_kernel_params(obs_data, TRUE)
+infer_time <- infer_time_kernel_params(obs_data, 52, TRUE)
+
+hyperparmameters <- c(infer_space$length_scale, infer_time$periodic_scale, infer_time$long_term_scale)
+hyperparmameters
+```
