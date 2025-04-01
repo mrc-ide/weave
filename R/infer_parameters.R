@@ -1,8 +1,6 @@
 infer_space_kernel_params <- function(data, plot = FALSE){
 
-  spatial_distance <- get_spatial_distance(unique(data[,c("lon", "lat")]))
-
-  zmat <- matrix(obs_data$z_infer, nrow = nt, ncol = n, byrow = FALSE)
+  zmat <- matrix(data$z_infer, nrow = nt, ncol = n, byrow = FALSE)
 
   # Step 2: compute correlation between sites across time
   # Each site is a row, time across columns
@@ -11,7 +9,7 @@ infer_space_kernel_params <- function(data, plot = FALSE){
   corr_mat <- cov2cor(cov_mat)
   corr_mat[corr_mat<0] <- 0
 
-  dist_mat <- get_spatial_distance(coordinates)
+  dist_mat <- get_spatial_distance(unique(data[,c("lon", "lat")]))
   space_cor <- data.frame(distance = as.vector(dist_mat), cor = as.vector(corr_mat))
 
   # Fitting theta to empirical correlations

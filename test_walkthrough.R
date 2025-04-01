@@ -7,15 +7,15 @@ library(tidyr)
 # True parameters --------------------------------------------------------------
 set.seed(321)
 # Number of sites
-n = 100
+n = 9
 # Number of timesteps
-nt = 52 * 8
+nt = 52 * 5
 # Site mean case count
 site_means = round(runif(n, 10, 100))
 # length_scale: determines how quickly correlation decays with distance
 #   - higher length_scale: correlation persists over longer distances (smoother spatial variation)
 #   - lower length_scale: correlation decays rapidly, indicating localised variation
-length_scale <- 30
+length_scale <- 3
 # periodic_scale: strength of repeating (seasonal or cyclical) patterns
 #   - higher periodic_scale: stronger seasonal patterns
 #   - lower periodic_scale: weaker seasonal patterns
@@ -29,7 +29,7 @@ period = 52
 # p_one: probability that a new cluster begins with a missing value.
 #   - higher p_one: more missing data overall.
 #   - lower p_one: less missing data overall.
-p_one = 0.6
+p_one = 0.3
 # p_switch: probability of switching between missing and observed states.
 #   - lower p_switch: longer sequences (clusters) of missingness or non-missingness.
 #   - higher p_switch: shorter clusters, more frequent switching between states.
@@ -102,7 +102,7 @@ hf_labeller <- function(value) {
 sim_data <- ggplot() +
   geom_point(data = true_data, aes(x = t, y = y), size = 0.3, colour = "red") +
   geom_point(data = obs_data, aes(x = t, y = y_obs), size = 0.3, colour = "black") +
-  geom_line(data = true_data, aes(x = t, y = lambda, colour = id)) +
+  geom_line(data = true_data, aes(x = t, y = lambda)) +
   facet_wrap(~ id, scales = "free_y", labeller = labeller(id = hf_labeller)) +
   ylab("Cases") +
   xlab("Week") +
@@ -228,11 +228,14 @@ fit <- function(obs_data, coordinates, hyperparameters, sub_n = 5, noise_var = 1
     obs_data[obs_data$id == i, "tausq"] <- sub_tausq[sub_d$id == i]
   }
 
-  mean_lambda <- mean(exp(obs_data$z_est))
-  var_y <- var(obs_data$y_obs, na.rm = TRUE)
-  overdispersion <- (mean_lambda^2) / (var_y - mean_lambda)
-
   fit_data <- obs_data |>
+    dplyr::mutate(
+      # Overdisperson estimates, by site
+      mean_lambda = mean(exp(z_est)),
+      var_y = var(y_obs, na.rm = TRUE),
+      overdispersion = (mean_lambda^2) / (var_y - mean_lambda),
+      .by = id
+    ) |>
     dplyr::mutate(
       # Compute the 95% confidence interval for z
       z_min = z_est - 1.96 * sqrt(tausq),
@@ -257,6 +260,13 @@ fit <- function(obs_data, coordinates, hyperparameters, sub_n = 5, noise_var = 1
       data_Q50 = qnbinom(0.5, size = negbin_size, prob = negbin_prob),
       pred_Q75 = qnbinom(0.75, size = negbin_size, prob = negbin_prob),
       pred_Q97.5 = qnbinom(0.975, size = negbin_size, prob = negbin_prob)
+    ) |>
+    dplyr::mutate(
+      # Surprisal (information theory)
+      log_p = dnbinom(y_obs, size = negbin_size, prob = negbin_prob, log = TRUE),
+      y_mode = floor((negbin_size - 1) * (1 - negbin_prob) / negbin_prob),
+      log_p_mode = dnbinom(y_mode,  size = negbin_size, prob = negbin_prob, log = TRUE),
+      surprisal = 1 - exp(log_p - log_p_mode) # 0: most expected, 1: highly surprising
     )
 
   return(fit_data)
@@ -279,3 +289,20 @@ sim_data +
     aes(x = t, y = data_Q50, col = id), linewidth = 1
   )
 
+outlier_pd <- fit_data |>
+  mutate(
+    size = ifelse(surprisal < 0.8, 1, 5)
+  )
+
+ggplot(data = outlier_pd, aes(x = t, y = y_obs, colour = surprisal, size = size)) +
+  geom_point() +
+  scale_colour_viridis_c(option = "A", end = 0.8) +
+  scale_size(range = c(0.5, 1.5)) +
+  theme_bw() +
+  facet_wrap(~ id, scale = "free_y")
+
+ggplot(data = outlier_pd, aes(x = t, y = id, fill = surprisal)) +
+  geom_tile() +
+  scale_fill_viridis_c(option = "A", end = 0.8, na.value = "black") +
+  theme_bw() +
+  coord_fixed()
