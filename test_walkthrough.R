@@ -3,13 +3,14 @@ library(progress)
 library(ggplot2)
 library(dplyr)
 library(tidyr)
+library(patchwork)
 
 # True parameters --------------------------------------------------------------
-set.seed(321)
+set.seed(321234)
 # Number of sites
-n = 9
+n = 16
 # Number of timesteps
-nt = 52 * 5
+nt = 52 * 3
 # Site mean case count
 site_means = round(runif(n, 10, 100))
 # length_scale: determines how quickly correlation decays with distance
@@ -100,8 +101,8 @@ hf_labeller <- function(value) {
 }
 
 sim_data <- ggplot() +
-  geom_point(data = true_data, aes(x = t, y = y), size = 0.3, colour = "red") +
-  geom_point(data = obs_data, aes(x = t, y = y_obs), size = 0.3, colour = "black") +
+  geom_point(data = true_data, aes(x = t, y = y), size = 1, colour = "red") +
+  geom_point(data = obs_data, aes(x = t, y = y_obs), size = 1, colour = "black") +
   geom_line(data = true_data, aes(x = t, y = lambda)) +
   facet_wrap(~ id, scales = "free_y", labeller = labeller(id = hf_labeller)) +
   ylab("Cases") +
@@ -275,7 +276,7 @@ fit <- function(obs_data, coordinates, hyperparameters, sub_n = 5, noise_var = 1
 fit_data <- fit(obs_data, coordinates, hyperparameters, sub_n = 5)
 
 
-sim_data +
+fit_plot <- sim_data +
   geom_ribbon(
     data = fit_data,
     aes(x = t, ymin = pred_Q2.5, ymax = pred_Q97.5, fill = id), alpha = 0.25
@@ -287,7 +288,8 @@ sim_data +
   geom_line(
     data = fit_data,
     aes(x = t, y = data_Q50, col = id), linewidth = 1
-  )
+  ) +
+  ggtitle("Filling missingness")
 
 outlier_pd <- fit_data |>
   mutate(
@@ -301,8 +303,18 @@ ggplot(data = outlier_pd, aes(x = t, y = y_obs, colour = surprisal, size = size)
   theme_bw() +
   facet_wrap(~ id, scale = "free_y")
 
-ggplot(data = outlier_pd, aes(x = t, y = id, fill = surprisal)) +
+outlier_heatmap <- ggplot(data = outlier_pd, aes(x = t, y = id, fill = surprisal)) +
   geom_tile() +
   scale_fill_viridis_c(option = "A", end = 0.8, na.value = "black") +
+  ylab("HF") +
+  xlab("week") +
   theme_bw() +
-  coord_fixed()
+  #coord_fixed() +
+  theme(
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    legend.position = "none"
+    ) +
+  ggtitle("Outlier detection")
+
+example_plot <- (fit_plot / outlier_heatmap) + plot_layout(heights = c(1, 0.1))

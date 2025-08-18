@@ -70,10 +70,10 @@ infer_time_kernel_params <- function(data, period, plot = FALSE){
 
   # Optimise sigma to minimise the difference between empirical and predicted correlations
   optim_result_time <- optim(
-    par = c(1, 1),
+    par = c(1, 200),
     fn = fit_sigma,
     method = "L-BFGS-B",
-    lower = c(0.1, 10),
+    lower = c(0.1, 52),
     upper = c(10, 52 * 10000),
     period = period,
     time_cor = time_cor
