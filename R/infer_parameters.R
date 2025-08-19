@@ -1,5 +1,12 @@
 infer_space_kernel_params <- function(data, plot = FALSE){
 
+  if (!"z_infer" %in% names(data)) {
+    stop("data must contain a 'z_infer' column", call. = FALSE)
+  }
+
+  n <- length(unique(data$id))
+  nt <- max(data$t)
+
   zmat <- matrix(data$z_infer, nrow = nt, ncol = n, byrow = FALSE)
 
   # Step 2: compute correlation between sites across time
@@ -46,6 +53,13 @@ infer_space_kernel_params <- function(data, plot = FALSE){
 }
 
 infer_time_kernel_params <- function(data, period, plot = FALSE){
+
+  if (!"z_infer" %in% names(data)) {
+    stop("data must contain a 'z_infer' column", call. = FALSE)
+  }
+
+  n <- length(unique(data$id))
+  nt <- max(data$t)
 
   fmat <- t(matrix(data$z_infer, nrow = nt, ncol = n, byrow = FALSE))
   cov_mat <- cov(fmat, use = "pairwise.complete.obs")
