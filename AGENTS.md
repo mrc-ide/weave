@@ -79,6 +79,7 @@ Agents must **not** manually edit:
 -   `pkgdown/`
 -   `data/`
 -   `data-raw/`
+-   `NAMESPACE`
 -   `DESCRIPTION` version number
 -   Licence or authorship information
 
