@@ -60,7 +60,7 @@ data_missing <- function(data, ...){
   return(data)
 }
 
-data_observed_summmary <- function(data, ...){
+data_observed_summary <- function(data, ...){
   site_names <- rlang::enquos(...)
 
   data <- data |>
@@ -120,9 +120,8 @@ data_process <- function(data, ...){
   data <- data |>
     data_complete(...) |>
     data_missing(...) |>
-    data_observed_summmary(...) |>
+    data_observed_summary(...) |>
     data_initial_par() |>
-    data_order_index() |>
     data_order_index(...)
 
   return(data)
