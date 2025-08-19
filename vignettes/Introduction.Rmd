@@ -190,9 +190,10 @@ p_switch = 0.1
 coordinates <- data.frame(
   id = factor(1:n),
   lat = 1:n,
-  lon = 1:n,
-  mu = log(site_means)
+  lon = 1:n
 )
+
+mu <- log(site_means)
 
 space_k <- space_kernel(
   coordinates = coordinates,
@@ -211,7 +212,8 @@ true_data <- simulate_data(
   nt = nt,
   coordinates = coordinates,
   space_k = space_k,
-  time_k = time_k
+  time_k = time_k,
+  mu = mu
 )
 dplyr::glimpse(true_data)
 

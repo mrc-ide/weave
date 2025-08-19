@@ -11,10 +11,37 @@
 #'  f_st ~ MVN(0,Σ)
 #' Spatiotemporal covariance:
 #'  Σ = dist_k ⊗ time_k
+#'
+#' @param n Number of sites
+#' @param nt Number of time points
+#' @param coordinates Data frame of site coordinates
+#' @param space_k Spatial kernel matrix
+#' @param time_k Temporal kernel matrix
+#' @param mu Site-specific intercepts; either scalar or vector of length `n`
+#'
+#' @return A data frame with simulated counts and latent variables
+#'
+#' @examples
+#' n <- 2; nt <- 3
+#' coords <- data.frame(id = factor(1:n), lat = 1:n, lon = 1:n)
+#' simulate_data(
+#'   n, nt, coords,
+#'   space_k = diag(n), time_k = diag(nt),
+#'   mu = c(0.1, 0.2)
+#' )
 simulate_data <- function(
     n, nt,
     coordinates,
-    space_k, time_k){
+    space_k, time_k,
+    mu = 0){
+
+  if (length(mu) == 1) {
+    mu <- rep(mu, n)
+  } else if (length(mu) != n) {
+    stop("`mu` must have length 1 or `n`")
+  }
+
+  mu_vec <- rep(mu, each = nt)
 
   output_df <- tidyr::expand_grid(
     id = factor(1:n),
@@ -25,9 +52,10 @@ simulate_data <- function(
     ) |>
     dplyr::mutate(
       f = quick_mvnorm(space_k, time_k),
+      mu = mu_vec,
       z = mu + f,
       lambda = exp(z),
-      y = rpois(n * nt, lambda)
+      y = stats::rpois(n * nt, lambda)
     )
 
   return(output_df)
