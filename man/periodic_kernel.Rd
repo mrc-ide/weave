@@ -2,10 +2,20 @@
 % Please edit documentation in R/kernel.R
 \name{periodic_kernel}
 \alias{periodic_kernel}
-\title{Periodic kernel function}
+\title{Periodic kernel}
 \usage{
 periodic_kernel(x, alpha, period)
 }
+\arguments{
+\item{x}{A numeric vector or matrix of distances.}
+
+\item{alpha}{A positive numeric scalar controlling the amplitude.}
+
+\item{period}{A positive numeric scalar giving the period.}
+}
+\value{
+A numeric vector or matrix of periodic kernel values.
+}
 \description{
-Periodic kernel function
+Computes a periodic kernel for a distance vector or matrix.
 }

@@ -6,6 +6,18 @@
 \usage{
 space_kernel(coordinates, length_scale, nugget = 1e-09)
 }
+\arguments{
+\item{coordinates}{A data frame with columns `lon` and `lat` in degrees.}
+
+\item{length_scale}{A positive numeric scalar for the spatial length scale.}
+
+\item{nugget}{A non-negative numeric scalar added to the diagonal for
+numerical stability.}
+}
+\value{
+A positive-definite matrix representing spatial covariance.
+}
 \description{
-Estimate the spatial kernel
+Builds a spatial covariance matrix using an RBF kernel with a nugget
+term for numerical stability.
 }

@@ -2,10 +2,19 @@
 % Please edit documentation in R/kernel.R
 \name{rbf_kernel}
 \alias{rbf_kernel}
-\title{RBF kernel function}
+\title{Radial basis function kernel}
 \usage{
 rbf_kernel(x, theta)
 }
+\arguments{
+\item{x}{A numeric vector or matrix of distances.}
+
+\item{theta}{A positive numeric scalar giving the length-scale parameter.}
+}
+\value{
+A numeric vector or matrix with RBF kernel values.
+}
 \description{
-RBF kernel function
+Computes the radial basis function (RBF) kernel for a distance vector
+or matrix.
 }

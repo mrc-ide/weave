@@ -1,7 +1,23 @@
 #' Simulate spatiotemporal case counts
 #'
-#' Generates Poisson counts for `n` sites across `nt` time points from a latent
-#' Gaussian process with separable spatial and temporal kernels.
+#' This function generates synthetic case count data under a spatiotemporal
+#' Poisson model with site-specific effects and a latent Gaussian process.
+#'
+#' The model is defined as:
+#' \deqn{y_{st} \sim \text{Pois}(\lambda_{st})}
+#' \deqn{\lambda_{st} = \exp(z_{st})}
+#' \deqn{z_{st} = \mu_s + f_{st}}
+#'
+#' where:
+#' - \eqn{\mu_s} is a site-specific intercept,
+#' - \eqn{f_{st}} is a latent Gaussian process with mean zero and covariance
+#'   \eqn{\Sigma},
+#' - \eqn{\Sigma} has separable spatiotemporal structure given by
+#'   \eqn{\Sigma = \text{dist}_k \otimes \text{time}_k}, the Kronecker product
+#'   of a spatial kernel and a temporal kernel.
+#'
+#' This formulation allows counts at each site and time point to vary according
+#' to both site-level heterogeneity and correlated spatiotemporal fluctuations.
 #'
 #' @param n Number of spatial locations.
 #' @param nt Number of time points.
@@ -39,10 +55,7 @@ simulate_data <- function(
   return(output_df)
 }
 
-#' Generate observed data with missingness
-#'
-#' Introduces missing values into simulated counts and computes simple
-#' estimates of the latent components for each site.
+#' Observed data generation
 #'
 #' @param data Output of [simulate_data()].
 #' @param p_one Probability that a new missingness cluster starts with a missing
@@ -66,47 +79,10 @@ observed_data <- function(data, p_one, p_switch) {
       y_obs = ifelse(missing == 1, NA, y_obs)
     ) |>
     dplyr::mutate(
-      mu_infer = log(mean(y_obs, na.rm = TRUE)),
-      .by = (id)
-    ) |>
-    dplyr::mutate(
-      z_infer = ifelse(is.na(y_obs), mu_infer, log(y_obs + 1)),
-      f_infer = z_infer - mu_infer
-    ) |>
-    dplyr::select(id, t, lat, lon, y_obs, mu_infer, z_infer, f_infer)
-}
-
-#' Alternative observed data generation
-#'
-#' Variant of [observed_data()] that derives `mu_infer` from the mean of the
-#' log-transformed observations.
-#'
-#' @param data Output of [simulate_data()].
-#' @param p_one Probability that a new missingness cluster starts with a missing
-#'   value.
-#' @param p_switch Probability of switching between missing and observed
-#'   clusters.
-#'
-#' @return Tibble with observed counts `y_obs` and inferred `mu_infer`,
-#'   `z_infer` and `f_infer`.
-#'
-#' @details Missingness is generated stochastically via
-#'   [generate_clustered_binary()]. Set a seed with [set.seed()] to reproduce
-#'   results.
-#'
-#' @keywords internal
-observed_data2 <- function(data, p_one, p_switch) {
-  data |>
-    dplyr::mutate(
-      y_obs = y,
-      missing = generate_clustered_binary(dplyr::n(), p_one, p_switch),
-      y_obs = ifelse(missing == 1, NA, y_obs)
-    ) |>
-    dplyr::mutate(
-      z_infer = log(y_obs + 1),
+      z_infer = log1p(y_obs),
       mu_infer = mean(z_infer, na.rm = TRUE),
       f_infer = z_infer - mu_infer,
-      .by = "id"
+      .by = id
     ) |>
     dplyr::select(id, t, lat, lon, y_obs, mu_infer, z_infer, f_infer)
 }

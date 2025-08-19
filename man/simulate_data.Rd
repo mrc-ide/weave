@@ -2,7 +2,7 @@
 % Please edit documentation in R/simulate.R
 \name{simulate_data}
 \alias{simulate_data}
-\title{Simulate data from the model
+\title{Simulate spatiotemporal case counts
 Case counts:
  y_st ~ Pois(λ_st)
 Cases mean:
@@ -18,18 +18,44 @@ Spatiotemporal covariance:
 \usage{
 simulate_data(n, nt, coordinates, space_k, time_k)
 }
-\description{
-Simulate data from the model
-Case counts:
- y_st ~ Pois(λ_st)
-Cases mean:
- λ_st = exp(z_st)
-Cases mean (log scale):
- z_st = µ_s + f_st
-Where we have a site specific intercept:
- µ_s
-and a latent GP:
- f_st ~ MVN(0,Σ)
-Spatiotemporal covariance:
- Σ = dist_k ⊗ time_k
+\arguments{
+\item{n}{Number of spatial locations.}
+
+\item{nt}{Number of time points.}
+
+\item{coordinates}{Data frame with columns `id`, `lat` and `lon` describing
+site locations.}
+
+\item{space_k}{Spatial covariance matrix.}
+
+\item{time_k}{Temporal covariance matrix.}
 }
+\value{
+Tibble containing the latent effect `f`, mean `z`, rate `lambda` and
+  simulated counts `y` for each site-time combination.
+}
+\description{
+This function generates synthetic case count data under a spatiotemporal
+Poisson model with site-specific effects and a latent Gaussian process.
+}
+\details{
+The model is defined as:
+\deqn{y_{st} \sim \text{Pois}(\lambda_{st})}
+\deqn{\lambda_{st} = \exp(z_{st})}
+\deqn{z_{st} = \mu_s + f_{st}}
+
+where:
+- \eqn{\mu_s} is a site-specific intercept,
+- \eqn{f_{st}} is a latent Gaussian process with mean zero and covariance
+  \eqn{\Sigma},
+- \eqn{\Sigma} has separable spatiotemporal structure given by
+  \eqn{\Sigma = \text{dist}_k \otimes \text{time}_k}, the Kronecker product
+  of a spatial kernel and a temporal kernel.
+
+This formulation allows counts at each site and time point to vary according
+to both site-level heterogeneity and correlated spatiotemporal fluctuations.
+
+Randomness comes from multivariate normal and Poisson draws. Use
+  [set.seed()] before calling for reproducible simulations.
+}
+\keyword{internal}
