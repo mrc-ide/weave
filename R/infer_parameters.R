@@ -1,4 +1,4 @@
-infer_space_kernel_params <- function(data, plot = FALSE){
+infer_space_kernel_params <- function(data, nt, n, plot = FALSE){
 
   zmat <- matrix(data$z_infer, nrow = nt, ncol = n, byrow = FALSE)
 
@@ -45,7 +45,7 @@ infer_space_kernel_params <- function(data, plot = FALSE){
   )
 }
 
-infer_time_kernel_params <- function(data, period, plot = FALSE){
+infer_time_kernel_params <- function(data, period, nt, n, plot = FALSE){
 
   fmat <- t(matrix(data$z_infer, nrow = nt, ncol = n, byrow = FALSE))
   cov_mat <- cov(fmat, use = "pairwise.complete.obs")
