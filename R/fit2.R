@@ -62,7 +62,11 @@ fit2 <- function(obs_data, coordinates, hyperparameters, n, nt){
   # Centered observed response (log with eps, minus mu_infer)
   y_obs <- obs_data$f_infer[obs_idx]
 
-  noise_var = rep(1e-3, length(obs_idx))
+  #noise_var = rep(1e-3, length(obs_idx))
+  lam_hat <- exp(obs_data$mu_infer[obs_idx])
+  noise_var <- lam_hat / (lam_hat + 1)^2
+
+
   # (Optional but helpful) diagonal preconditioner from diag(K_oo) + noise
   # diag(K) = kron(diag(space), diag(time)); pick observed entries
   kdiag_full <- as.vector(kronecker(diag(space_mat), diag(time_mat)))
