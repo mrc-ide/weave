@@ -61,13 +61,14 @@ fit2 <- function(obs_data, coordinates, hyperparameters){
 
   # Define the observed-system matvec: (S K S^T + noise * I) v
   A_mv <- function(v) {
+    #browser()
     sel$S(kron_mv(sel$ST(v), space_mat, time_mat)) + noise_var * v
   }
 
-  noise_var =
+  noise_var = rep(1e-3, length(obs_idx))
     # (Optional but helpful) diagonal preconditioner from diag(K_oo) + noise
     # diag(K) = kron(diag(space), diag(time)); pick observed entries
-    kdiag_full <- as.vector(kronecker(diag(space_mat), diag(time_mat)))
+  kdiag_full <- as.vector(kronecker(diag(space_mat), diag(time_mat)))
   M_inv <- function(v) v / (kdiag_full[obs_idx] + 1e-12)
 
   # Solve for alpha using PCG
