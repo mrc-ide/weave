@@ -8,19 +8,21 @@ kron_mv <- function(v, space, time) {
   as.vector(t(Y))
 }
 
-# Selection helpers for masking observed entries
-make_select <- function(obs_idx, N) {
-  # obs_idx: integer positions (1..N) of observed entries in vec order (times fastest)
-  list(
-    S   = function(x_full) x_full[obs_idx],
-    ST  = function(x_obs) { v <- numeric(N); v[obs_idx] <- x_obs; v }
-  )
+with_nas <- function(x_obs, obs_idx, N){
+  v <- numeric(N)
+  v[obs_idx] <- x_obs
+  v
 }
 
-# Minimal (preconditioned) Conjugate Gradient for A x = b, where A is given as a function
-pcg <- function(Amv, b, M_inv = NULL, tol = 1e-8, maxit = 10000) {
+# Define the observed-system matvec: (S K S^T + noise * I) v
+Amv <- function(v, obs_idx, N, space_mat, time_mat, noise_var) {
+  #browser()
+  kron_mv(with_nas(v, obs_idx, N), space_mat, time_mat)[obs_idx] + noise_var * v
+}
+
+pcg <- function(b, obs_idx, N, space_mat, time_mat, noise_var, M_inv = NULL, tol = 1e-8, maxit = 10000) {
   x <- numeric(length(b))
-  r <- b - Amv(x)
+  r <- b - Amv(x, obs_idx, N, space_mat, time_mat, noise_var)
   z <- if (is.null(M_inv)) r else M_inv(r)
   p <- z
   rz_old <- sum(r * z)
@@ -28,7 +30,7 @@ pcg <- function(Amv, b, M_inv = NULL, tol = 1e-8, maxit = 10000) {
     if(it == maxit){
       warning("maxit reached")
     }
-    Ap <- Amv(p)
+    Ap <- Amv(p, obs_idx, N, space_mat, time_mat, noise_var)
     alpha <- rz_old / sum(p * Ap)
     x <- x + alpha * p
     r <- r - alpha * Ap
@@ -42,40 +44,35 @@ pcg <- function(Amv, b, M_inv = NULL, tol = 1e-8, maxit = 10000) {
   x
 }
 
+fit2 <- function(obs_data, coordinates, hyperparameters, n, nt){
+  # Build kernels
+  time_mat  <- time_kernel(
+    times = 1:nt,
+    periodic_scale = hyperparameters[2],
+    long_term_scale = hyperparameters[3],
+    period = 52
+  )
+  space_mat <- space_kernel(
+    coordinates = coordinates, length_scale = hyperparameters[1]
+  )
 
-fit2 <- function(obs_data, coordinates, hyperparameters){
-  # Build kernels once
-  time_mat  <- time_kernel(1:nt, periodic_scale = hyperparameters[2],
-                           long_term_scale = hyperparameters[3], period = 52)
-  space_mat <- space_kernel(coordinates, length_scale = hyperparameters[1])
-
-  # Indices of observed entries in your vec order (times fastest within site)
-  # Suppose obs_data has columns id (1..n), t (1..nt), y_obs
   obs_idx <- which(!is.na(obs_data$y_obs))  # ensure ordering matches vec stacking
-  N <- nrow(space_mat) * nrow(time_mat)
-
-  sel <- make_select(obs_idx, N)
+  N <- n * nt
 
   # Centered observed response (log with eps, minus mu_infer)
-  y_obs <- log(obs_data$y_obs[obs_idx] + 1e-4) - obs_data$mu_infer[obs_idx]
-
-  # Define the observed-system matvec: (S K S^T + noise * I) v
-  A_mv <- function(v) {
-    #browser()
-    sel$S(kron_mv(sel$ST(v), space_mat, time_mat)) + noise_var * v
-  }
+  y_obs <- obs_data$f_infer[obs_idx]
 
   noise_var = rep(1e-3, length(obs_idx))
-    # (Optional but helpful) diagonal preconditioner from diag(K_oo) + noise
-    # diag(K) = kron(diag(space), diag(time)); pick observed entries
+  # (Optional but helpful) diagonal preconditioner from diag(K_oo) + noise
+  # diag(K) = kron(diag(space), diag(time)); pick observed entries
   kdiag_full <- as.vector(kronecker(diag(space_mat), diag(time_mat)))
   M_inv <- function(v) v / (kdiag_full[obs_idx] + 1e-12)
 
   # Solve for alpha using PCG
-  alpha <- pcg(A_mv, y_obs, M_inv = M_inv, tol = 1e-6)
+  alpha <- pcg(y_obs, obs_idx, N, space_mat, time_mat, noise_var,  M_inv = M_inv, tol = 1e-6)
 
   # Posterior mean at all entries: f_hat = K S^T alpha  (then add mu)
-  f_hat <- kron_mv(sel$ST(alpha), space_mat, time_mat)
+  f_hat <- kron_mv(with_nas(alpha, obs_idx, N), space_mat, time_mat)
 
   # Write back z_est per row (times-fastest vec matches your (id,t) order)
   obs_data$z_est <- f_hat + obs_data$mu_infer
@@ -131,27 +128,3 @@ fit2 <- function(obs_data, coordinates, hyperparameters){
 
   return(fit_data)
 }
-#
-# fit_data2 <- fit2(obs_data, coordinates, hyperparameters)
-
-# fit_plot <- sim_data +
-#   geom_ribbon(
-#     data = fit_data2,
-#     aes(x = t, ymin = pred_Q2.5, ymax = pred_Q97.5, fill = id), alpha = 0.25
-#   ) +
-#   geom_ribbon(
-#     data = fit_data2,
-#     aes(x = t, ymin = pred_Q25, ymax = pred_Q75, fill = id, alpha = 0.5)
-#   ) +
-#   geom_line(
-#     data = fit_data2,
-#     aes(x = t, y = data_Q50, col = id), linewidth = 1
-#   ) +
-#   ggtitle("Filling missingness")
-# fit_plot
-# outlier_pd <- fit_data |>
-#   mutate(
-#     size = ifelse(surprisal < 0.8, 1, 5)
-#   )
-
-
