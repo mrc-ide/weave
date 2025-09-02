@@ -46,4 +46,3 @@ to both site-level heterogeneity and correlated spatiotemporal fluctuations.
 Randomness comes from multivariate normal and Poisson draws. Use
   [set.seed()] before calling for reproducible simulations.
 }
-\keyword{internal}

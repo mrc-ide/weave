@@ -32,7 +32,7 @@
 #' @details Randomness comes from multivariate normal and Poisson draws. Use
 #'   [set.seed()] before calling for reproducible simulations.
 #'
-#' @keywords internal
+#' @export
 simulate_data <- function(
     n, nt,
     coordinates,
@@ -70,7 +70,7 @@ simulate_data <- function(
 #'   [generate_clustered_binary()]. Set a seed with [set.seed()] to reproduce
 #'   results.
 #'
-#' @keywords internal
+#' @export
 observed_data <- function(data, p_one, p_switch) {
   data |>
     dplyr::mutate(

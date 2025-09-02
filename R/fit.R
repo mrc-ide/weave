@@ -179,6 +179,7 @@ pcg <- function(b, obs_idx, N, space_mat, time_mat, noise_var, kdiag_full, tol =
   x
 }
 
+#' @export
 fit <- function(obs_data, coordinates, hyperparameters, n, nt){
   # Build kernels
   time_mat  <- time_kernel(

@@ -7,6 +7,7 @@
 #'
 #' @param space Space kernel matrix
 #' @param time  Time kernel matrix
+#' @export
 quick_mvnorm <- function(space, time) {
   n_sites <- nrow(space)
   n_times <- nrow(time)

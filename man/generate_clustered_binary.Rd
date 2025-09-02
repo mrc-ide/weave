@@ -31,4 +31,3 @@ set.seed(1)
 generate_clustered_binary(5, 0.2, 0.1)
 
 }
-\keyword{internal}

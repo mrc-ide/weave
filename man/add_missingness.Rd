@@ -26,4 +26,3 @@ values with `NA`. The original counts are preserved in `true_n`.
 Uses [generate_clustered_binary()] for randomness. Results are
   stochastic unless a seed is set via [set.seed()] before calling.
 }
-\keyword{internal}

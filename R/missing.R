@@ -18,7 +18,7 @@
 #' set.seed(1)
 #' generate_clustered_binary(5, 0.2, 0.1)
 #'
-#' @keywords internal
+#' @export
 generate_clustered_binary <- function(n, p_one, p_switch) {
   result <- numeric(n)
   result[1] <- rbinom(1, 1, p_one)
@@ -48,7 +48,7 @@ generate_clustered_binary <- function(n, p_one, p_switch) {
 #' @details Uses [generate_clustered_binary()] for randomness. Results are
 #'   stochastic unless a seed is set via [set.seed()] before calling.
 #'
-#' @keywords internal
+#' @export
 add_missingness <- function(data, p_one, p_switch) {
   data |>
     dplyr::mutate(

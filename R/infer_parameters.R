@@ -1,3 +1,4 @@
+#' @export
 infer_space_kernel_params <- function(data, nt, n, plot = FALSE, max_pairs = 1000){
 
   zmat <- matrix(data$z_infer, nrow = nt, ncol = n, byrow = FALSE)
@@ -43,6 +44,7 @@ infer_space_kernel_params <- function(data, nt, n, plot = FALSE, max_pairs = 100
   list(length_scale = optimal_theta)
 }
 
+#' @export
 infer_time_kernel_params <- function(data, period, nt, n, plot = FALSE, max_pairs = 1000){
 
   fmat <- t(matrix(data$z_infer, nrow = nt, ncol = n, byrow = FALSE))

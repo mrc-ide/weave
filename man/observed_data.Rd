@@ -27,4 +27,3 @@ Missingness is generated stochastically via
   [generate_clustered_binary()]. Set a seed with [set.seed()] to reproduce
   results.
 }
-\keyword{internal}
