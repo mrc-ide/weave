@@ -1,3 +1,29 @@
+regularise <- function(x, lambda = 1e-5) {
+  x + lambda * diag(nrow(x))
+}
+
+
+llh <- function(f, dist_k_inv, time_k_inv) {
+  # Hessian of the quadratic term
+  # The Hessian is -Sigma_inv, represented using the Kronecker product
+  Hess_quad <- -kronecker(dist_k_inv, time_k_inv)
+
+  # Initialize the Hessian of the likelihood term
+  Hess_likelihood <- matrix(0, nrow = length(f), ncol = length(f))
+
+  # Poisson distribution
+  mu <- exp(f)  # Mean parameter
+  tmp <- -mu  # Second derivative of Poisson log-likelihood
+  Hess_likelihood <- diag(tmp)
+
+  # Total Hessian
+  Hess <- Hess_quad + Hess_likelihood
+
+  # Return the Hessian matrix
+  return(Hess)
+}
+
+
 # Fast matvec for K = space ⊗ time, with times varying fastest
 kron_mv <- function(v, space, time) {
   n_sites <- nrow(space); n_times <- nrow(time)
@@ -50,7 +76,7 @@ pcg <- function(b, obs_idx, N, space_mat, time_mat, noise_var, kdiag_full, tol =
   x
 }
 
-fit2 <- function(obs_data, coordinates, hyperparameters, n, nt){
+fit <- function(obs_data, coordinates, hyperparameters, n, nt){
   # Build kernels
   time_mat  <- time_kernel(
     times = 1:nt,
