@@ -20,10 +20,16 @@ Amv <- function(v, obs_idx, N, space_mat, time_mat, noise_var) {
   kron_mv(with_nas(v, obs_idx, N), space_mat, time_mat)[obs_idx] + noise_var * v
 }
 
-pcg <- function(b, obs_idx, N, space_mat, time_mat, noise_var, M_inv = NULL, tol = 1e-8, maxit = 10000) {
+# Apply M^{-1} v ≈ v / (diag(K_oo) [+ noise]); +1e-12 avoids divide-by-zero.
+# (If using per-observation noise_var, prefer: v / (kdiag_full[obs_idx] + noise_var + 1e-12))
+M_inv <- function(v, kdiag_full, obs_idx, noise_var) {
+  v / (kdiag_full[obs_idx] + noise_var + 1e-12)
+}
+
+pcg <- function(b, obs_idx, N, space_mat, time_mat, noise_var, kdiag_full, tol = 1e-8, maxit = 10000) {
   x <- numeric(length(b))
   r <- b - Amv(x, obs_idx, N, space_mat, time_mat, noise_var)
-  z <- if (is.null(M_inv)) r else M_inv(r)
+  z <- M_inv(r, kdiag_full, obs_idx, noise_var)
   p <- z
   rz_old <- sum(r * z)
   for (it in seq_len(maxit)) {
@@ -35,7 +41,7 @@ pcg <- function(b, obs_idx, N, space_mat, time_mat, noise_var, M_inv = NULL, tol
     x <- x + alpha * p
     r <- r - alpha * Ap
     if (sqrt(sum(r * r)) <= tol * sqrt(sum(b * b))) break
-    z <- if (is.null(M_inv)) r else M_inv(r)
+    z <- M_inv(r, kdiag_full, obs_idx, noise_var)
     rz_new <- sum(r * z)
     beta <- rz_new / rz_old
     p <- z + beta * p
@@ -62,23 +68,31 @@ fit2 <- function(obs_data, coordinates, hyperparameters, n, nt){
   # Centered observed response (log with eps, minus mu_infer)
   y_obs <- obs_data$f_infer[obs_idx]
 
-  #noise_var = rep(1e-3, length(obs_idx))
+  # Heteroscedastic nugget on the log scale:
+  ## y_obs = log(Y+1) − mu_infer is noisy (Poisson + log). By the delta method,
+  ## Var[log(Y+1) | λ] ≈ λ/(λ+1)^2. Using λ̂_i = exp(mu_infer_i) gives
+  ## noise_var_i = λ̂_i/(λ̂_i+1)^2, which stabilises (S K S^T + diag(noise_var))
+  ## and avoids overfitting log-count noise.
   lam_hat <- exp(obs_data$mu_infer[obs_idx])
   noise_var <- lam_hat / (lam_hat + 1)^2
 
-
-  # (Optional but helpful) diagonal preconditioner from diag(K_oo) + noise
-  # diag(K) = kron(diag(space), diag(time)); pick observed entries
+  # Jacobi (diagonal) preconditioner:
+  ## For A = S K S^T [+ diag(noise)], approximate A^{-1} with 1/diag(A).
+  ## Since diag(K) = diag(space) ⊗ diag(time), build it once, then select observed entries.
   kdiag_full <- as.vector(kronecker(diag(space_mat), diag(time_mat)))
-  M_inv <- function(v) v / (kdiag_full[obs_idx] + 1e-12)
 
-  # Solve for alpha using PCG
-  alpha <- pcg(y_obs, obs_idx, N, space_mat, time_mat, noise_var,  M_inv = M_inv, tol = 1e-6)
+  # Solve for α using PCG:
+  ## α are the GP conditioning weights solving (S K S^T + diag(noise_var)) α = y_obs.
+  ## They map observations to the posterior mean via f_hat = K S^T α.
+  ## PCG (Preconditioned Conjugate Gradient) is an iterative solver that needs only
+  ## matrix–vector products with A (no full matrix), using M_inv as a diagonal
+  ## preconditioner to speed convergence.
+  alpha <- pcg(y_obs, obs_idx, N, space_mat, time_mat, noise_var, kdiag_full, tol = 1e-6)
 
   # Posterior mean at all entries: f_hat = K S^T alpha  (then add mu)
   f_hat <- kron_mv(with_nas(alpha, obs_idx, N), space_mat, time_mat)
 
-  # Write back z_est per row (times-fastest vec matches your (id,t) order)
+  # Write back z_est per row
   obs_data$z_est <- f_hat + obs_data$mu_infer
 
   # Variance (Hessian diag at ML): use your efficient diag trick, global form
@@ -87,7 +101,6 @@ fit2 <- function(obs_data, coordinates, hyperparameters, n, nt){
   kron_diag_inv <- as.vector(kronecker(diag(space_inv), diag(time_inv)))
   hess_diag <- -kron_diag_inv - exp(obs_data$z_est)  # evaluated at f_hat
   obs_data$tausq <- pmax(0, -1 / hess_diag)
-
 
   fit_data <- obs_data |>
     dplyr::mutate(
