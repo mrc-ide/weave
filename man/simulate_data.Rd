@@ -2,19 +2,7 @@
 % Please edit documentation in R/simulate.R
 \name{simulate_data}
 \alias{simulate_data}
-\title{Simulate spatiotemporal case counts
-Case counts:
- y_st ~ Pois(λ_st)
-Cases mean:
- λ_st = exp(z_st)
-Cases mean (log scale):
- z_st = µ_s + f_st
-Where we have a site specific intercept:
- µ_s
-and a latent GP:
- f_st ~ MVN(0,Σ)
-Spatiotemporal covariance:
- Σ = dist_k ⊗ time_k}
+\title{Simulate spatiotemporal case counts}
 \usage{
 simulate_data(n, nt, coordinates, space_k, time_k)
 }

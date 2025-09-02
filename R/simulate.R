@@ -47,9 +47,9 @@ simulate_data <- function(
     ) |>
     dplyr::mutate(
       f = quick_mvnorm(space_k, time_k),
-      z = mu + f,
-      lambda = exp(z),
-      y = rpois(n * nt, lambda)
+      z = .data$mu + .data$f,
+      lambda = exp(.data$z),
+      y = rpois(n * nt, .data$lambda)
     )
 
   return(output_df)
@@ -74,15 +74,15 @@ simulate_data <- function(
 observed_data <- function(data, p_one, p_switch) {
   data |>
     dplyr::mutate(
-      y_obs = y,
+      y_obs = .data$y,
       missing = generate_clustered_binary(dplyr::n(), p_one, p_switch),
-      y_obs = ifelse(missing == 1, NA, y_obs)
+      y_obs = ifelse(missing == 1, NA, .data$y_obs)
     ) |>
     dplyr::mutate(
-      z_infer = log1p(y_obs),
-      mu_infer = mean(z_infer, na.rm = TRUE),
-      f_infer = z_infer - mu_infer,
+      z_infer = log1p(.data$y_obs),
+      mu_infer = mean(.data$z_infer, na.rm = TRUE),
+      f_infer = .data$z_infer - .data$mu_infer,
       .by = id
     ) |>
-    dplyr::select(id, t, lat, lon, y_obs, mu_infer, z_infer, f_infer)
+    dplyr::select(dplyr::all_of(c("id", "t", "lat", "lon", "y_obs", "mu_infer", "z_infer", "f_infer")))
 }

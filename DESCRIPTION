@@ -4,7 +4,7 @@ Title: Health facility malaria data interpolation
 Version: 0.1.0
 Authors@R: c(
     person("Pete", "Winskill", email = "p.winskill@imperial.ac.uk", role = c("aut", "cre")),
-    person("Robert", "Verity", email = "r.verity@imperial.ac.uk", role = c("aut", "cre"))
+    person("Robert", "Verity", email = "r.verity@imperial.ac.uk", role = c("aut"))
     )
 Maintainer: The package maintainer <yourself@somewhere.net>
 Description: More about what it does (maybe more than one line)
@@ -18,4 +18,5 @@ Suggests:
     rmarkdown,
     testthat (>= 3.0.0)
 Config/testthat/edition: 3
-VignetteBuilder: knitr
+Imports: 
+    rlang

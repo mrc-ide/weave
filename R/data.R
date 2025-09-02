@@ -3,11 +3,11 @@ data_complete <- function(data, ...){
 
   # Complete all site x time combinations
   data <- data |>
-    tidyr::complete(!!!site_names, t, fill = list(n = NA)) |>
+    tidyr::complete(!!!site_names, .data$t, fill = list(n = NA)) |>
     dplyr::group_by(!!!site_names)|>
     dplyr::mutate(
-      lat = dplyr::first(lat, na_rm = TRUE),
-      lon = dplyr::first(lon, na_rm = TRUE)
+      lat = dplyr::first(.data$lat, na_rm = TRUE),
+      lon = dplyr::first(.data$lon, na_rm = TRUE)
     ) |>
     dplyr::ungroup()
 
@@ -20,26 +20,25 @@ data_missing <- function(data, ...){
   sites_to_drop_n <- data |>
     dplyr::group_by(!!!site_names) |>
     dplyr::filter(
-      all(is.na(n))
+      all(is.na(.data$n))
     ) |>
     dplyr::distinct(!!!site_names)
 
   sites_to_drop_lat_lon <- data |>
     dplyr::group_by(!!!site_names) |>
     dplyr::filter(
-      all(is.na(lat)) | all(is.na(lon))
+      all(is.na(.data$lat)) | all(is.na(.data$lon))
     ) |>
     dplyr::distinct(!!!site_names)
 
   sites_to_drop_no_cases <- data |>
     dplyr::group_by(!!!site_names) |>
     dplyr::filter(
-      sum(n, na.rm = TRUE) == 0
+      sum(.data$n, na.rm = TRUE) == 0
     ) |>
     dplyr::distinct(!!!site_names)
 
-  sites_to_drop <-
-    sites_to_drop_n |>
+  sites_to_drop <- sites_to_drop_n |>
     dplyr::bind_rows(sites_to_drop_lat_lon) |>
     dplyr::bind_rows(sites_to_drop_no_cases) |>
     dplyr::distinct()
@@ -66,13 +65,13 @@ data_observed_summary <- function(data, ...){
   data <- data |>
     dplyr::group_by(!!!site_names) |>
     dplyr::mutate(
-      observed_mu = log(mean(n, na.rm = T)),
-      observed_sigmasq = log((sd(n, na.rm = T) / mean(n, na.rm = T))^2 + 1)
+      observed_mu = log(mean(.data$n, na.rm = T)),
+      observed_sigmasq = log((sd(.data$n, na.rm = T) / mean(.data$n, na.rm = T))^2 + 1)
     ) |>
     dplyr::ungroup() |>
     dplyr::mutate(
-      observed_mu = ifelse(is.na(observed_mu), mean(observed_mu, na.rm = T), observed_mu),
-      observed_sigmasq = ifelse(is.na(observed_sigmasq), mean(observed_sigmasq, na.rm = T), observed_sigmasq)
+      observed_mu = ifelse(is.na(.data$observed_mu), mean(.data$observed_mu, na.rm = T), .data$observed_mu),
+      observed_sigmasq = ifelse(is.na(.data$observed_sigmasq), mean(.data$observed_sigmasq, na.rm = T), .data$observed_sigmasq)
     )
 
   return(data)
@@ -81,8 +80,8 @@ data_observed_summary <- function(data, ...){
 data_initial_par <- function(data){
   data <- data |>
     dplyr::mutate(
-      start_par = log(n + 1),
-      start_par = ifelse(is.na(n), observed_mu, start_par)
+      start_par = log1p(.data$n),
+      start_par = ifelse(is.na(.data$n), .data$observed_mu, .data$start_par)
     )
 
   return(data)
@@ -99,7 +98,7 @@ data_order_index <- function(data, ...){
     dplyr::group_by(!!!site_names)|>
     dplyr::mutate(#
       id = dplyr::cur_group_id(),
-      id = factor(id)
+      id = factor(.data$id)
       ) |>
     dplyr::ungroup()
 

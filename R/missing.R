@@ -52,9 +52,9 @@ generate_clustered_binary <- function(n, p_one, p_switch) {
 add_missingness <- function(data, p_one, p_switch) {
   data |>
     dplyr::mutate(
-      true_n = n,
+      true_n = .data$n,
       missing = generate_clustered_binary(dplyr::n(), p_one, p_switch),
-      n = ifelse(missing == 1, NA, n)
+      n = ifelse(missing == 1, NA, .data$n)
     ) |>
-    dplyr::select(-missing)
+    dplyr::select(-dplyr::all_of("missing"))
 }
