@@ -1,10 +1,22 @@
+#' Complete site-time combinations
+#'
+#' @description
+#' Adds rows for all combinations of site identifiers and time `t`.
+#'
+#' @param data A data frame containing site identifiers, time `t`,
+#'   counts `n`, and coordinates `lat` and `lon`.
+#' @param ... Columns identifying sites passed to [dplyr::group_by()]
+#'   (unquoted).
+#'
+#' @return A data frame with missing site-time combinations filled in and
+#'   `n` set to `NA`.
 data_complete <- function(data, ...){
   site_names <- rlang::enquos(...)
 
   # Complete all site x time combinations
   data <- data |>
     tidyr::complete(!!!site_names, .data$t, fill = list(n = NA)) |>
-    dplyr::group_by(!!!site_names)|>
+    dplyr::group_by(!!!site_names) |>
     dplyr::mutate(
       lat = dplyr::first(.data$lat, na_rm = TRUE),
       lon = dplyr::first(.data$lon, na_rm = TRUE)
@@ -14,6 +26,17 @@ data_complete <- function(data, ...){
   return(data)
 }
 
+#' Drop sites with missing data
+#'
+#' @description
+#' Removes sites lacking counts or coordinates and reports them.
+#'
+#' @param data A data frame containing site identifiers, time `t`,
+#'   counts `n`, and coordinates `lat` and `lon`.
+#' @param ... Columns identifying sites passed to [dplyr::group_by()]
+#'   (unquoted).
+#'
+#' @return A data frame with problem sites removed.
 data_missing <- function(data, ...){
   site_names <- rlang::enquos(...)
 
@@ -59,6 +82,17 @@ data_missing <- function(data, ...){
   return(data)
 }
 
+#' Calculate observed summary statistics
+#'
+#' @description
+#' Computes log-scale mean and variance summaries for each site.
+#'
+#' @param data A data frame containing site identifiers, time `t`,
+#'   counts `n`, and coordinates `lat` and `lon`.
+#' @param ... Columns identifying sites passed to [dplyr::group_by()]
+#'   (unquoted).
+#'
+#' @return A data frame with `observed_mu` and `observed_sigmasq` columns.
 data_observed_summary <- function(data, ...){
   site_names <- rlang::enquos(...)
 
@@ -77,6 +111,14 @@ data_observed_summary <- function(data, ...){
   return(data)
 }
 
+#' Initialise model parameters
+#'
+#' @description
+#' Provides starting values for latent parameters based on counts.
+#'
+#' @param data A data frame containing counts `n` and `observed_mu`.
+#'
+#' @return A data frame with an added `start_par` column.
 data_initial_par <- function(data){
   data <- data |>
     dplyr::mutate(
@@ -87,6 +129,16 @@ data_initial_par <- function(data){
   return(data)
 }
 
+#' Order data and assign identifiers
+#'
+#' @description
+#' Arranges data by site and time and creates a factor `id` per site.
+#'
+#' @param data A data frame containing site identifiers and time `t`.
+#' @param ... Columns identifying sites passed to [dplyr::group_by()]
+#'   (unquoted).
+#'
+#' @return A data frame ordered by site and time with an `id` column.
 data_order_index <- function(data, ...){
   site_names <- rlang::enquos(...)
 
@@ -95,17 +147,28 @@ data_order_index <- function(data, ...){
       !!!site_names,
       t
     ) |>
-    dplyr::group_by(!!!site_names)|>
-    dplyr::mutate(#
+    dplyr::group_by(!!!site_names) |>
+    dplyr::mutate(
       id = dplyr::cur_group_id(),
       id = factor(.data$id)
-      ) |>
+    ) |>
     dplyr::ungroup()
 
   return(data)
 }
 
 
+#' Process raw epidemiological data
+#'
+#' @description
+#' Validates and prepares input data for modelling.
+#'
+#' @param data A data frame containing site identifiers, time `t`,
+#'   counts `n`, and coordinates `lat` and `lon`.
+#' @param ... Columns identifying sites passed to [dplyr::group_by()]
+#'   (unquoted).
+#'
+#' @return A processed data frame ready for model fitting.
 data_process <- function(data, ...){
   if(!all(c("t", "n", "lat", "lon") %in% colnames(data))){
     stop("Input data must include the following columns: t, n, lat and lon"
