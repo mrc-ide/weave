@@ -2,21 +2,20 @@
 % Please edit documentation in R/kernel.R
 \name{periodic_kernel}
 \alias{periodic_kernel}
-\title{Modified periodic kernel with long-term decay}
+\title{Periodic kernel}
 \usage{
-periodic_kernel(distance, periodic_scale, long_term_scale, period)
+periodic_kernel(x, alpha, period)
 }
 \arguments{
-\item{periodic_scale}{The length scale parameter for the periodic kernel (in time units)}
+\item{x}{A numeric vector or matrix of distances.}
 
-\item{long_term_scale}{The length scale parameter for the long term kernel (in time units)}
+\item{alpha}{A positive numeric scalar controlling the amplitude.}
 
-\item{period}{The period of the data, representing the time interval over which periodic behavior repeats (in time units)}
-
-\item{t}{A scalar representing the time point(s) for the first input}
-
-\item{t_prime}{A scalar or vector representing the time point(s) for the second input}
+\item{period}{A positive numeric scalar giving the period.}
+}
+\value{
+A numeric vector or matrix of periodic kernel values.
 }
 \description{
-Period kernel refs https://tinyurl.com/52mzsrhh, https://tinyurl.com/yc4dtm68
+Computes a periodic kernel for a distance vector or matrix.
 }

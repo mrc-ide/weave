@@ -1,30 +1,27 @@
 #' Quick multivariate normal samples over two dimensions
 #'
+#' This is equivalent to estimating the full spatio-temporal covariance matrix
+#' and sampling from the multivariate normal distribution:
+#' full_k <- kronecker(dist_k, time_k)
+#' f  <- mvrnorm(1, rep(0, n * nt), full_k)
+#'
 #' @param space Space kernel matrix
 #' @param time  Time kernel matrix
-quick_mvnorm <- function(space, time){
+#' @export
+quick_mvnorm <- function(space, time) {
   n_sites <- nrow(space)
   n_times <- nrow(time)
 
-  # TODO - is this correct!
-  L_s <- t(chol(space))
-  L_t <- chol(time)
+  # Cholesky factors: L_s lower (so L_s %*% t(L_s) = space), L_t upper
+  L_s <- t(chol(space))  # lower-tri
+  L_t <- chol(time)      # upper-tri
 
-  # Generate a matrix of i.i.d. standard normal variables
+  # i.i.d. standard normals arranged as [sites x times]
   W <- matrix(rnorm(n_sites * n_times), nrow = n_sites, ncol = n_times)
 
-  # Construct the sample matrix
+  # Apply separable transforms: Z has cov(time ⊗ space)
   Z <- L_s %*% W %*% L_t
 
-  # Flatten the matrix
-  z <- as.vector(Z)
-
-  # We need to reorder 'z' so that times vary faster than sites
-  z_matrix <- matrix(z, nrow = n_sites, ncol = n_times)
-  z_reordered <- as.vector(t(z_matrix))
-
-  # Add the mean
-  z <- as.vector(z_reordered)
-
-  return(z)
+  # Flatten with times varying fastest
+  as.vector(t(Z))
 }

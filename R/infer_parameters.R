@@ -1,37 +1,27 @@
-cor_translate <- function(x){
-  (x + 1) / 2
-}
+#' @export
+infer_space_kernel_params <- function(data, nt, n, plot = FALSE, max_pairs = 1000){
 
-infer_space_kernel_params <- function(data, plot = FALSE){
+  zmat <- matrix(data$z_infer, nrow = nt, ncol = n, byrow = FALSE)
 
-  data$z_t_hat = log(data$n + 1)# - data$observed_mu
+  # Pairwise complete correlation/covariance
+  cov_mat <- cov(zmat, use = "pairwise.complete.obs")
+  corr_mat <- cov2cor(cov_mat)
+  corr_mat[corr_mat < 0] <- 0
 
-    spatial_distance <- get_spatial_distance(data)
+  dist_mat <- get_spatial_distance(unique(data[,c("lon", "lat")]))
+  space_cor <- data.frame(distance = as.vector(dist_mat), cor = as.vector(corr_mat))
 
-  space_cor <- expand.grid(id1 = unique(data$id), id2 = unique(data$id), t = unique(data$t)) |>
-    dplyr::filter(as.numeric(id1) < as.numeric(id2)) |>
-    dplyr::left_join(dplyr::select(data, id, t, z_t_hat), by = c("id1" = "id", "t" = "t")) |>
-    dplyr::left_join(dplyr::select(data, id, t, z_t_hat), by = c("id2" = "id", "t" = "t")) |>
-    dplyr::filter(!is.na(z_t_hat.x), !is.na(z_t_hat.y)) |>
-    dplyr::filter(dplyr::n() > 5, .by = c(id1, id2)) |>
-    dplyr::summarise(
-      cor = cor(z_t_hat.x, z_t_hat.y),
-      .by = c("id1", "id2")
-    ) |>
-    dplyr::mutate(
-      cor = ifelse(cor < 0, 0, cor),
-      distance = purrr::map2_dbl(id1, id2, ~ spatial_distance[.x, .y])
-    ) |>
-    dplyr::filter(!is.na(cor))
-
+  # Downsample pairs if needed
+  if(nrow(space_cor) > max_pairs){
+    space_cor <- space_cor[sample.int(nrow(space_cor), max_pairs), ]
+  }
 
   # Fitting theta to empirical correlations
   fit_sigma <- function(theta, space_cor) {
     predicted_correlations <- rbf_kernel(space_cor$distance, theta)
-    sum((predicted_correlations - space_cor$cor)^2)
+    sum((predicted_correlations - space_cor$cor)^2, na.rm = TRUE)
   }
 
-  # Optimise theta to minimise the difference between empirical and predicted correlations
   optimal_theta <- optimise(f = fit_sigma, interval = c(0, 100), space_cor = space_cor)$minimum
 
   if(plot){
@@ -42,57 +32,53 @@ infer_space_kernel_params <- function(data, plot = FALSE){
         y = rbf_kernel(distance, optimal_theta)
       )
 
-    cor_plot <- ggplot() +
-      geom_point(data = space_cor, aes(x = distance, y = cor), alpha = 0.5) +
-      geom_line(data = pred, aes(x = distance, y = y), col = "deeppink") +
-      xlab("Spatial distance") +
-      ylab("") +
-      theme_bw()
+    cor_plot <- ggplot2::ggplot() +
+      ggplot2::geom_point(data = space_cor, ggplot2::aes(x = distance, y = cor), alpha = 0.5) +
+      ggplot2::geom_line(data = pred, ggplot2::aes(x = distance, y = y), col = "deeppink") +
+      ggplot2::xlab("Spatial distance") +
+      ggplot2::ylab("") +
+      ggplot2::theme_bw()
     print(cor_plot)
   }
 
-  return(
-    list(
-      theta = optimal_theta
-    )
-  )
+  list(length_scale = optimal_theta)
 }
 
-infer_time_kernel_params <- function(data, period, plot = FALSE){
+#' @export
+infer_time_kernel_params <- function(data, period, nt, n, plot = FALSE, max_pairs = 1000){
 
-  data$z_t_hat = log(data$n + 1)# - data$observed_mu
+  fmat <- t(matrix(data$z_infer, nrow = nt, ncol = n, byrow = FALSE))
+  cov_mat <- cov(fmat, use = "pairwise.complete.obs")
+  corr_mat <- cov2cor(cov_mat)
 
-  time_cor <- expand.grid(t1 = unique(data$t), t2 = unique(data$t), id = unique(data$id)) |>
-    dplyr::filter(t1 < t2) |>
-    dplyr::left_join(dplyr::select(data, id, t, z_t_hat), by = c("t1" = "t", "id" = "id")) |>
-    dplyr::left_join(dplyr::select(data, id, t, z_t_hat), by = c("t2" = "t", "id" = "id")) |>
-    dplyr::filter(!is.na(z_t_hat.x), !is.na(z_t_hat.y)) |>
-    dplyr::filter(dplyr::n() > 5, .by = c(t1, t2)) |>
-    dplyr::summarise(
-      cor = cor(z_t_hat.x, z_t_hat.y),
-      .by = c("t1", "t2")
-    ) |>
-    dplyr::mutate(
-      time_distance = abs(t2 - t1)
-    )
+  lags <- 0:(nt - 1)
+  mean_corr_by_lag <- numeric(length(lags))
 
-  # Fitting sigma to empirical correlations,
-  fit_sigma <- function(params, period, time_cor) {
-    predicted_correlations <- periodic_kernel(
-      time_cor$time_distance,
-      periodic_scale = params[1],
-      long_term_scale = params[2],
-      period = period
-    )
-    sum((predicted_correlations - time_cor$cor)^2)
+  for (h in lags) {
+    idx_i <- 1:(nt - h)
+    idx_j <- idx_i + h
+    correlations <- mapply(function(i, j) corr_mat[i, j], idx_i, idx_j)
+    if(length(correlations) > max_pairs){
+      correlations <- sample(correlations, max_pairs)
+    }
+    mean_corr_by_lag[h + 1] <- mean(correlations, na.rm = TRUE)
   }
 
-  # Optimise sigma to minimise the difference between empirical and predicted correlations
+  time_cor <- data.frame(time_distance = 1:nt, cor = mean_corr_by_lag)
+
+  fit_sigma <- function(params, period, time_cor) {
+    predicted_correlations <- periodic_kernel(x = time_cor$time_distance,
+                                              alpha = params[1], period = period) *
+      rbf_kernel(x = time_cor$time_distance,
+                 theta = params[2])
+    sum((predicted_correlations - time_cor$cor)^2, na.rm = TRUE)
+  }
+
   optim_result_time <- optim(
-    par = c(1, 1),
+    par = c(1, 200),
     fn = fit_sigma,
     method = "L-BFGS-B",
-    lower = c(0.1, 10),
+    lower = c(0.1, 52),
     upper = c(10, 52 * 10000),
     period = period,
     time_cor = time_cor
@@ -103,28 +89,25 @@ infer_time_kernel_params <- function(data, period, plot = FALSE){
       distance = seq(0, max(time_cor$time_distance), length.out = 100)
     ) |>
       dplyr::mutate(
-        y = periodic_kernel(
-          distance,
-          periodic_scale = optim_result_time$par[1],
-          long_term_scale = optim_result_time$par[2],
-          period = period
-        )
+        y = periodic_kernel(x = distance,
+                            alpha = optim_result_time$par[1],
+                            period = period) *
+          rbf_kernel(x = distance,
+                     theta = optim_result_time$par[2])
       )
 
-    cor_plot <- ggplot() +
-      geom_point(data = time_cor, aes(x = time_distance, y = cor), alpha = 0.5) +
-      geom_line(data = pred, aes(x = distance, y = y), col = "deeppink") +
-      xlab("Temporal distance") +
-      ylab("") +
-      theme_bw()
+    cor_plot <- ggplot2::ggplot() +
+      ggplot2::geom_point(data = time_cor, ggplot2::aes(x = time_distance, y = cor), alpha = 0.5) +
+      ggplot2::geom_line(data = pred, ggplot2::aes(x = distance, y = y), col = "deeppink") +
+      ggplot2::xlab("Temporal distance") +
+      ggplot2::ylab("") +
+      ggplot2::theme_bw()
     print(cor_plot)
   }
 
-  return(
-    list(
-      periodic_scale = optim_result_time$par[1],
-      long_term_scale = optim_result_time$par[2],
-      period = period
-    )
+  list(
+    periodic_scale = optim_result_time$par[1],
+    long_term_scale = optim_result_time$par[2],
+    period = period
   )
 }

@@ -1,41 +1,96 @@
-#' Modified periodic kernel with long-term decay
+#' Radial basis function kernel
 #'
-#' Period kernel refs https://tinyurl.com/52mzsrhh, https://tinyurl.com/yc4dtm68
+#' Computes the radial basis function (RBF) kernel for a distance vector
+#' or matrix.
 #'
-#' @param t A scalar representing the time point(s) for the first input
-#' @param t_prime A scalar or vector representing the time point(s) for the second input
-#' @param periodic_scale The length scale parameter for the periodic kernel (in time units)
-#' @param long_term_scale The length scale parameter for the long term kernel (in time units)
-#' @param period The period of the data, representing the time interval over which periodic behavior repeats (in time units)
+#' @param x A numeric vector or matrix of distances.
+#' @param theta A positive numeric scalar giving the length-scale parameter.
 #'
+#' @return A numeric vector or matrix with RBF kernel values.
 #' @export
-periodic_kernel <- function(time_distance, periodic_scale = 0.65, long_term_scale = 500, period = 52) {
-  periodic_component <- exp(-2 * sin(pi * time_distance / period)^2 / periodic_scale^2)
-  long_term_component <- exp(-(1 / long_term_scale) * time_distance)
-  kernel_value <- periodic_component * long_term_component
-  return(kernel_value)
+rbf_kernel <- function(x, theta) {
+  exp(-x^2 / (2 * theta^2))
 }
 
-#' RBF kernel function
+#' Periodic kernel
 #'
-#' @param x A scalar representing the first input point
-#' @param x_prime A scalar or vector representing the second input point(s)
-#' @param sigma The length scale parameter, controlling the smoothness of the kernel
+#' Computes a periodic kernel for a distance vector or matrix.
 #'
+#' @param x A numeric vector or matrix of distances.
+#' @param alpha A positive numeric scalar controlling the amplitude.
+#' @param period A positive numeric scalar giving the period.
+#'
+#' @return A numeric vector or matrix of periodic kernel values.
 #' @export
-rbf_kernel <- function(distance, theta) {
-  kernel_value <- exp(-distance^2 / (2 * theta^2))
-  return(kernel_value)
+periodic_kernel <- function(x, alpha, period) {
+  exp(-2 * sin(pi * x / period)^2 / alpha^2)
 }
 
-get_spatial_distance <- function(data) {
-  data |>
-    dplyr::select(id, lat, lon) |>
-    dplyr::distinct() |>
-    dplyr::arrange(id) |>
-    dplyr::select(-id) |>
-    dist() |>
+#' Pairwise spatial distances
+#'
+#' Computes pairwise Euclidean distances between locations.
+#'
+#' @param coordinates A data frame with columns `lon` and `lat` in degrees.
+#'
+#' @return A symmetric matrix of pairwise spatial distances.
+#' @export
+get_spatial_distance <- function(coordinates) {
+  dist(coordinates[, c("lon", "lat")], diag = TRUE, upper = TRUE) |>
     as.matrix()
 }
 
+#' Pairwise temporal distances
+#'
+#' Computes pairwise distances between time points.
+#'
+#' @param times A numeric vector of time indices.
+#'
+#' @return A symmetric matrix of pairwise temporal distances.
+#' @export
+get_temporal_distance <- function(times) {
+  dist(times, diag = TRUE, upper = TRUE) |>
+    as.matrix()
+}
 
+#' Estimate the spatial kernel
+#'
+#' Builds a spatial covariance matrix using an RBF kernel with a nugget
+#' term for numerical stability.
+#'
+#' @param coordinates A data frame with columns `lon` and `lat` in degrees.
+#' @param length_scale A positive numeric scalar for the spatial length scale.
+#' @param nugget A non-negative numeric scalar added to the diagonal for
+#'   numerical stability.
+#'
+#' @return A positive-definite matrix representing spatial covariance.
+#' @export
+space_kernel <- function(coordinates, length_scale, nugget = 1e-9) {
+  space_matrix <- get_spatial_distance(coordinates)
+  rbf_kernel(space_matrix, theta = length_scale) +
+    diag(x = nugget, nrow = nrow(space_matrix))
+}
+
+#' Estimate the temporal kernel
+#'
+#' Builds a temporal covariance matrix by combining periodic and
+#' long-term RBF components with a nugget term for numerical stability.
+#'
+#' @param times A numeric vector of time indices.
+#' @param periodic_scale A positive numeric scalar controlling the periodic
+#'   variation.
+#' @param long_term_scale A positive numeric scalar for the long-term length
+#'   scale.
+#' @param nugget A non-negative numeric scalar added to the diagonal for
+#'   numerical stability.
+#' @param period A positive numeric scalar giving the period of the seasonal
+#'   component.
+#'
+#' @return A positive-definite matrix representing temporal covariance.
+#' @export
+time_kernel <- function(times, periodic_scale, long_term_scale,
+                        nugget = 1e-9, period = 52) {
+  time_matrix <- get_temporal_distance(times)
+  period_k <- periodic_kernel(x = time_matrix, alpha = periodic_scale, period = period)
+  long_term_k <- rbf_kernel(x = time_matrix, theta = long_term_scale)
+  period_k * long_term_k + diag(x = nugget, nrow = nrow(time_matrix))
+}
