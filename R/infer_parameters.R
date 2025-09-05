@@ -64,7 +64,7 @@ infer_time_kernel_params <- function(data, period, nt, n, plot = FALSE, max_pair
     mean_corr_by_lag[h + 1] <- mean(correlations, na.rm = TRUE)
   }
 
-  time_cor <- data.frame(time_distance = 1:nt, cor = mean_corr_by_lag)
+  time_cor <- data.frame(time_distance = lags, cor = mean_corr_by_lag)
 
   fit_sigma <- function(params, period, time_cor) {
     predicted_correlations <- periodic_kernel(x = time_cor$time_distance,
@@ -108,6 +108,7 @@ infer_time_kernel_params <- function(data, period, nt, n, plot = FALSE, max_pair
   list(
     periodic_scale = optim_result_time$par[1],
     long_term_scale = optim_result_time$par[2],
-    period = period
+    period = period,
+    time_cor = time_cor
   )
 }
