@@ -35,7 +35,7 @@ periodic_kernel <- function(x, alpha, period) {
 #' @return A symmetric matrix of pairwise spatial distances.
 #' @export
 get_spatial_distance <- function(coordinates) {
-  dist(coordinates[, c("lon", "lat")], diag = TRUE, upper = TRUE) |>
+  stats::dist(coordinates[, c("lon", "lat")], diag = TRUE, upper = TRUE) |>
     as.matrix()
 }
 
@@ -48,7 +48,7 @@ get_spatial_distance <- function(coordinates) {
 #' @return A symmetric matrix of pairwise temporal distances.
 #' @export
 get_temporal_distance <- function(times) {
-  dist(times, diag = TRUE, upper = TRUE) |>
+  stats::dist(times, diag = TRUE, upper = TRUE) |>
     as.matrix()
 }
 

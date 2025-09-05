@@ -1,7 +1,7 @@
 Package: weave
 Type: Package
 Title: Health facility malaria data interpolation
-Version: 0.1.1
+Version: 0.1.2
 Authors@R: c(
     person("Pete", "Winskill", email = "p.winskill@imperial.ac.uk", role = c("aut", "cre")),
     person("Robert", "Verity", email = "r.verity@imperial.ac.uk", role = c("aut"))
@@ -16,7 +16,10 @@ RoxygenNote: 7.3.2
 Depends:
     R (>= 4.1.0)
 Imports: 
-    rlang
+    dplyr,
+    ggplot2,
+    rlang,
+    tidyr
 Suggests: 
     knitr,
     rmarkdown,

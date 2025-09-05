@@ -17,7 +17,7 @@ quick_mvnorm <- function(space, time) {
   L_t <- chol(time)      # upper-tri
 
   # i.i.d. standard normals arranged as [sites x times]
-  W <- matrix(rnorm(n_sites * n_times), nrow = n_sites, ncol = n_times)
+  W <- matrix(stats::rnorm(n_sites * n_times), nrow = n_sites, ncol = n_times)
 
   # Apply separable transforms: Z has cov(time ⊗ space)
   Z <- L_s %*% W %*% L_t

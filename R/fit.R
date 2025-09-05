@@ -179,6 +179,31 @@ pcg <- function(b, obs_idx, N, space_mat, time_mat, noise_var, kdiag_full, tol =
   x
 }
 
+#' Fit a spatiotemporal GP to log–counts (matrix-free PCG)
+#'
+#' Fits a separable spatiotemporal Gaussian process to the working
+#' log–count scale and returns posterior means/uncertainties plus simple
+#' predictive summaries. The solve uses a **matrix-free** preconditioned
+#' conjugate gradient (PCG) on the observed system with a Kronecker
+#' covariance \eqn{K = K_{\mathrm{space}} \otimes K_{\mathrm{time}}}.
+#'
+#' @param obs_data Tibble/data.frame with one row per site–time. Must contain
+#'   at least columns `id`, `t`, `y_obs` (counts, may be `NA`),
+#'   `mu_infer` (site mean on log scale), and `f_infer`
+#'   (working response, e.g. `log(y_obs+1) - mu_infer`).
+#' @param coordinates Tibble/data.frame with site metadata used by the spatial
+#'   kernel (e.g. `id`, `lat`, `lon`).
+#' @param hyperparameters Numeric length-3 vector:
+#'   `c(space_length_scale, time_periodic_scale, time_long_term_scale)`.
+#' @param n Integer, number of sites.
+#' @param nt Integer, number of time points.
+#' @return A tibble with the original rows plus columns:
+#'   `z_est` (posterior mean on log scale), `tausq` (approx. variance),
+#'   `z_min`, `z_max` (95% CI), lognormal summaries on the count scale
+#'   `lambda_est`, `lambda_min`, `lambda_max`, and simple Negative-Binomial
+#'   prediction summaries `negbin_size`, `negbin_prob`, `pred_Q2.5`,
+#'   `pred_Q25`, `data_Q50`, `pred_Q75`, `pred_Q97.5`, plus `log_p`,
+#'   `y_mode`, and `surprisal`.
 #' @export
 fit <- function(obs_data, coordinates, hyperparameters, n, nt){
   # Build kernels
@@ -235,42 +260,42 @@ fit <- function(obs_data, coordinates, hyperparameters, n, nt){
   fit_data <- obs_data |>
     dplyr::mutate(
       # Overdisperson estimates, by site
-      mean_lambda = mean(exp(z_est)),
-      var_y = var(y_obs, na.rm = TRUE),
-      overdispersion = (mean_lambda^2) / (var_y - mean_lambda),
-      .by = id
+      mean_lambda = mean(exp(.data$z_est)),
+      var_y = stats::var(y_obs, na.rm = TRUE),
+      overdispersion = (.data$mean_lambda^2) / (.data$var_y - .data$mean_lambda),
+      .by = .data$id
     ) |>
     dplyr::mutate(
       # Compute the 95% confidence interval for z
-      z_min = z_est - 1.96 * sqrt(tausq),
-      z_max = z_est + 1.96 * sqrt(tausq),
+      z_min = .data$z_est - 1.96 * sqrt(.data$tausq),
+      z_max = .data$z_est + 1.96 * sqrt(.data$tausq),
 
       # Convert this uncertainty to the count scale. We cannot simply exponentiate
       # z_min and z_max because exponentiation is nonlinear, and normal confidence
       # intervals don’t transform correctly.
       # Instead, we compute quantiles of the corresponding lognormal distribution.
-      lambda_est = qlnorm(0.5, meanlog = z_est, sdlog = sqrt(tausq)),
-      lambda_min = qlnorm(0.025, meanlog = z_est, sdlog = sqrt(tausq)),
-      lambda_max = qlnorm(0.975, meanlog = z_est, sdlog = sqrt(tausq)),
+      lambda_est = stats::qlnorm(0.5, meanlog = .data$z_est, sdlog = sqrt(.data$tausq)),
+      lambda_min = stats::qlnorm(0.025, meanlog = .data$z_est, sdlog = sqrt(.data$tausq)),
+      lambda_max = stats::qlnorm(0.975, meanlog = .data$z_est, sdlog = sqrt(.data$tausq)),
 
       # Prediction intervals assuming Negative Binomially distributed data.
       # The Negative Binomial accounts for overdispersion beyond Poisson variability.
-      negbin_size = lambda_est / overdispersion,  # Size parameter for NB
-      negbin_prob = negbin_size / (negbin_size + lambda_est), # NB probability
+      negbin_size = .data$lambda_est / .data$overdispersion,  # Size parameter for NB
+      negbin_prob = .data$negbin_size / (.data$negbin_size + .data$lambda_est), # NB probability
 
       # Compute quantiles of the Negative Binomial distribution as prediction intervals.
-      pred_Q2.5 = qnbinom(0.025, size = negbin_size, prob = negbin_prob),
-      pred_Q25 = qnbinom(0.25, size = negbin_size, prob = negbin_prob),
-      data_Q50 = qnbinom(0.5, size = negbin_size, prob = negbin_prob),
-      pred_Q75 = qnbinom(0.75, size = negbin_size, prob = negbin_prob),
-      pred_Q97.5 = qnbinom(0.975, size = negbin_size, prob = negbin_prob)
+      pred_Q2.5 = stats::qnbinom(0.025, size = .data$negbin_size, prob = .data$negbin_prob),
+      pred_Q25 = stats::qnbinom(0.25, size = .data$negbin_size, prob = .data$negbin_prob),
+      data_Q50 = stats::qnbinom(0.5, size = .data$negbin_size, prob = .data$negbin_prob),
+      pred_Q75 = stats::qnbinom(0.75, size = .data$negbin_size, prob = .data$negbin_prob),
+      pred_Q97.5 = stats::qnbinom(0.975, size = .data$negbin_size, prob = .data$negbin_prob)
     ) |>
     dplyr::mutate(
       # Surprisal (information theory)
-      log_p = dnbinom(y_obs, size = negbin_size, prob = negbin_prob, log = TRUE),
-      y_mode = floor((negbin_size - 1) * (1 - negbin_prob) / negbin_prob),
-      log_p_mode = dnbinom(y_mode,  size = negbin_size, prob = negbin_prob, log = TRUE),
-      surprisal = 1 - exp(log_p - log_p_mode) # 0: most expected, 1: highly surprising
+      log_p = stats::dnbinom(.data$y_obs, size = .data$negbin_size, prob = .data$negbin_prob, log = TRUE),
+      y_mode = floor((.data$negbin_size - 1) * (1 - .data$negbin_prob) / .data$negbin_prob),
+      log_p_mode = stats::dnbinom(.data$y_mode,  size = .data$negbin_size, prob = .data$negbin_prob, log = TRUE),
+      surprisal = 1 - exp(.data$log_p - .data$log_p_mode) # 0: most expected, 1: highly surprising
     )
 
   return(fit_data)

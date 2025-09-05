@@ -27,7 +27,7 @@ test_that("initial parameters derived from counts", {
       n = c(1, 2, NA, 4),
       lat = 1,
       lon = 1
-    ) |> 
+    ) |>
     data_observed_summary(admin1, admin2)
 
   result <- data_initial_par(input_data)
@@ -42,7 +42,7 @@ test_that("index assigned after ordering", {
     data.frame(
       admin1 = rep("A", 6),
       admin2 = c(rep("A", 4), rep("B", 2)),
-      t = c(1, 3, 4, 2, 2, 1),
+      t = as.integer(c(1, 3, 4, 2, 2, 1)),
       n = 1:6,
       lat = 1,
       lon = 1
@@ -53,7 +53,7 @@ test_that("index assigned after ordering", {
   expect_s3_class(result$id, "factor")
   expect_identical(result$admin2, c(rep("A", 4), rep("B", 2)))
   expect_identical(result$t, c(1:4, 1:2))
-  expect_identical(as.integer(result$id), c(rep(1, 4), rep(2, 2)))
+  expect_identical(as.integer(result$id), as.integer(c(rep(1, 4), rep(2, 2))))
 })
 
 test_that("data processing pipeline builds structure", {
@@ -79,7 +79,7 @@ test_that("data processing pipeline builds structure", {
   expect_s3_class(result$id, "factor")
   expect_identical(result$admin2, c(rep("A", 4), rep("B", 4)))
   expect_identical(result$t, rep(1:4, times = 2))
-  expect_identical(as.integer(result$id), c(rep(1, 4), rep(2, 4)))
+  expect_identical(as.integer(result$id), as.integer(c(rep(1, 4), rep(2, 4))))
 
   exp_start <- ifelse(is.na(result$n), result$observed_mu, log1p(result$n))
   expect_equal(result$start_par, exp_start)

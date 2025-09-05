@@ -100,7 +100,7 @@ data_observed_summary <- function(data, ...){
     dplyr::group_by(!!!site_names) |>
     dplyr::mutate(
       observed_mu = log(mean(.data$n, na.rm = T)),
-      observed_sigmasq = log((sd(.data$n, na.rm = T) / mean(.data$n, na.rm = T))^2 + 1)
+      observed_sigmasq = log((stats::sd(.data$n, na.rm = T) / mean(.data$n, na.rm = T))^2 + 1)
     ) |>
     dplyr::ungroup() |>
     dplyr::mutate(
