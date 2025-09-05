@@ -1,12 +1,25 @@
 <urlset xmlns = 'http://www.sitemaps.org/schemas/sitemap/0.9'>
 <url><loc>/404.html</loc></url>
+<url><loc>/AGENTS.html</loc></url>
 <url><loc>/LICENSE-text.html</loc></url>
 <url><loc>/LICENSE.html</loc></url>
 <url><loc>/authors.html</loc></url>
 <url><loc>/index.html</loc></url>
-<url><loc>/reference/exponential_kernel.html</loc></url>
+<url><loc>/reference/Amv.html</loc></url>
+<url><loc>/reference/M_inv.html</loc></url>
+<url><loc>/reference/fill_vector.html</loc></url>
+<url><loc>/reference/get_spatial_distance.html</loc></url>
+<url><loc>/reference/get_temporal_distance.html</loc></url>
 <url><loc>/reference/index.html</loc></url>
+<url><loc>/reference/kron_mv.html</loc></url>
+<url><loc>/reference/llh.html</loc></url>
+<url><loc>/reference/pcg.html</loc></url>
 <url><loc>/reference/periodic_kernel.html</loc></url>
+<url><loc>/reference/quick_mvnorm.html</loc></url>
 <url><loc>/reference/rbf_kernel.html</loc></url>
+<url><loc>/reference/regularise.html</loc></url>
+<url><loc>/reference/space_kernel.html</loc></url>
+<url><loc>/reference/tidyeval.html</loc></url>
+<url><loc>/reference/time_kernel.html</loc></url>
 </urlset>
 
