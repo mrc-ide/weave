@@ -107,8 +107,8 @@ infer_time_kernel_params <- function(data, period, nt, n, plot = FALSE, max_pair
     par = c(1, 200),
     fn = fit_sigma,
     method = "L-BFGS-B",
-    lower = c(0.1, 52),
-    upper = c(10, 52 * 10000),
+    lower = c(0.1, period),
+    upper = c(10, period * 10000),
     period = period,
     time_cor = time_cor
   )
