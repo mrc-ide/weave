@@ -11,7 +11,7 @@
 #' @return A data frame with missing site-time combinations filled in and
 #'   `n` set to `NA`.
 data_complete <- function(data, ...){
-  site_names <- rlang::enquos(...)
+  site_names <- rlang::ensyms(...)
 
   # Complete all site x time combinations
   data <- data |>
