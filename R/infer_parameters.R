@@ -106,11 +106,11 @@ infer_time_kernel_params <- function(data, period, nt, n, plot = FALSE, max_pair
   }
 
   optim_result_time <- stats::optim(
-    par = c(1, 200),
+    par = lower + ((upper - lower) / 2),
     fn = fit_sigma,
     method = "L-BFGS-B",
     lower = lower,
-    upper = upper
+    upper = upper,
     period = period,
     time_cor = time_cor
   )
