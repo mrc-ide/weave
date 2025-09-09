@@ -15,7 +15,7 @@ data_complete <- function(data, ...){
 
   # Complete all site x time combinations
   data <- data |>
-    tidyr::complete(!!!site_names, .data$t, fill = list(n = NA)) |>
+    tidyr::complete(tidyr::nesting(!!!site_names), .data$t, fill = list(n = NA)) |>
     dplyr::group_by(!!!site_names) |>
     dplyr::mutate(
       lat = dplyr::first(.data$lat, na_rm = TRUE),
