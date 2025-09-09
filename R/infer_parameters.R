@@ -12,7 +12,7 @@
 #'
 #' @return A list with `length_scale`.
 #' @export
-infer_space_kernel_params <- function(data, nt, n, plot = FALSE, max_pairs = 1000){
+infer_space_kernel_params <- function(data, nt, n, plot = FALSE, max_pairs = 1000, lower = 0, upper = 100){
 
   zmat <- matrix(data$z_infer, nrow = nt, ncol = n, byrow = FALSE)
 
@@ -35,7 +35,7 @@ infer_space_kernel_params <- function(data, nt, n, plot = FALSE, max_pairs = 100
     sum((predicted_correlations - space_cor$cor)^2, na.rm = TRUE)
   }
 
-  optimal_theta <- stats::optimise(f = fit_sigma, interval = c(0, 100), space_cor = space_cor)$minimum
+  optimal_theta <- stats::optimise(f = fit_sigma, interval = c(lower, upper), space_cor = space_cor)$minimum
 
   if(plot){
     pred <- data.frame(
@@ -74,7 +74,9 @@ infer_space_kernel_params <- function(data, nt, n, plot = FALSE, max_pairs = 100
 #'
 #' @return A list with `periodic_scale`, `long_term_scale` and `period`.
 #' @export
-infer_time_kernel_params <- function(data, period, nt, n, plot = FALSE, max_pairs = 1000){
+infer_time_kernel_params <- function(data, period, nt, n, plot = FALSE, max_pairs = 1000,
+                                     lower = c(0.1, 100),
+                                     upper = c(10, 10 * 10000)){
 
   fmat <- t(matrix(data$z_infer, nrow = nt, ncol = n, byrow = FALSE))
   cov_mat <- stats::cov(fmat, use = "pairwise.complete.obs")
@@ -107,8 +109,8 @@ infer_time_kernel_params <- function(data, period, nt, n, plot = FALSE, max_pair
     par = c(1, 200),
     fn = fit_sigma,
     method = "L-BFGS-B",
-    lower = c(0.1, period),
-    upper = c(10, period * 10000),
+    lower = lower,
+    upper = upper
     period = period,
     time_cor = time_cor
   )
