@@ -4,7 +4,16 @@
 \alias{infer_time_kernel_params}
 \title{Estimate time-kernel (periodic × RBF) parameters from empirical ACF}
 \usage{
-infer_time_kernel_params(data, period, nt, n, plot = FALSE, max_pairs = 1000)
+infer_time_kernel_params(
+  data,
+  period,
+  nt,
+  n,
+  plot = FALSE,
+  max_pairs = 1000,
+  lower = c(0.1, 1),
+  upper = c(10, 10 * 10000)
+)
 }
 \arguments{
 \item{data}{Data frame with column `z_infer` and facetting columns `id`, `t`
@@ -19,6 +28,10 @@ infer_time_kernel_params(data, period, nt, n, plot = FALSE, max_pairs = 1000)
 \item{plot}{Logical; if `TRUE`, show empirical vs fitted correlation–lag curve.}
 
 \item{max_pairs}{Integer; optional downsampling of per-lag pairs for speed.}
+
+\item{lower}{A vector of length 2 with lower bounds of search}
+
+\item{upper}{A vector of length 2 with upper bounds of search}
 }
 \value{
 A list with `periodic_scale`, `long_term_scale` and `period`.

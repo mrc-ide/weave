@@ -9,6 +9,8 @@
 #' @param n Integer, number of sites (used to reshape).
 #' @param plot Logical; if `TRUE`, show empirical vs fitted correlation–distance curve.
 #' @param max_pairs Integer; optional downsampling of site pairs for speed.
+#' @param lower Lower bound of search
+#' @param upper Upper bound of search
 #'
 #' @return A list with `length_scale`.
 #' @export
@@ -71,11 +73,13 @@ infer_space_kernel_params <- function(data, nt, n, plot = FALSE, max_pairs = 100
 #' @param n Integer, number of sites.
 #' @param plot Logical; if `TRUE`, show empirical vs fitted correlation–lag curve.
 #' @param max_pairs Integer; optional downsampling of per-lag pairs for speed.
+#' @param lower A vector of length 2 with lower bounds of search
+#' @param upper A vector of length 2 with upper bounds of search
 #'
 #' @return A list with `periodic_scale`, `long_term_scale` and `period`.
 #' @export
 infer_time_kernel_params <- function(data, period, nt, n, plot = FALSE, max_pairs = 1000,
-                                     lower = c(0.1, 100),
+                                     lower = c(0.1, 1),
                                      upper = c(10, 10 * 10000)){
 
   fmat <- t(matrix(data$z_infer, nrow = nt, ncol = n, byrow = FALSE))

@@ -4,7 +4,15 @@
 \alias{infer_space_kernel_params}
 \title{Estimate spatial RBF length scale from empirical correlations}
 \usage{
-infer_space_kernel_params(data, nt, n, plot = FALSE, max_pairs = 1000)
+infer_space_kernel_params(
+  data,
+  nt,
+  n,
+  plot = FALSE,
+  max_pairs = 1000,
+  lower = 0,
+  upper = 100
+)
 }
 \arguments{
 \item{data}{Data frame with columns `z_infer`, `lon`, `lat`.}
@@ -16,6 +24,10 @@ infer_space_kernel_params(data, nt, n, plot = FALSE, max_pairs = 1000)
 \item{plot}{Logical; if `TRUE`, show empirical vs fitted correlation–distance curve.}
 
 \item{max_pairs}{Integer; optional downsampling of site pairs for speed.}
+
+\item{lower}{Lower bound of search}
+
+\item{upper}{Upper bound of search}
 }
 \value{
 A list with `length_scale`.
