@@ -197,6 +197,7 @@ pcg <- function(b, obs_idx, N, space_mat, time_mat, noise_var, kdiag_full, tol =
 #'   `c(space_length_scale, time_periodic_scale, time_long_term_scale)`.
 #' @param n Integer, number of sites.
 #' @param nt Integer, number of time points.
+#' @param period time periodicity
 #' @return A tibble with the original rows plus columns:
 #'   `z_est` (posterior mean on log scale), `tausq` (approx. variance),
 #'   `z_min`, `z_max` (95% CI), lognormal summaries on the count scale
@@ -205,13 +206,13 @@ pcg <- function(b, obs_idx, N, space_mat, time_mat, noise_var, kdiag_full, tol =
 #'   `pred_Q25`, `data_Q50`, `pred_Q75`, `pred_Q97.5`, plus `log_p`,
 #'   `y_mode`, and `surprisal`.
 #' @export
-fit <- function(obs_data, coordinates, hyperparameters, n, nt){
+fit <- function(obs_data, coordinates, hyperparameters, n, nt, period = 52){
   # Build kernels
   time_mat  <- time_kernel(
     times = 1:nt,
     periodic_scale = hyperparameters[2],
     long_term_scale = hyperparameters[3],
-    period = 52
+    period = period
   )
   space_mat <- space_kernel(
     coordinates = coordinates, length_scale = hyperparameters[1]

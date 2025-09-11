@@ -4,7 +4,7 @@
 \alias{fit}
 \title{Fit a spatiotemporal GP to log–counts (matrix-free PCG)}
 \usage{
-fit(obs_data, coordinates, hyperparameters, n, nt)
+fit(obs_data, coordinates, hyperparameters, n, nt, period = 52)
 }
 \arguments{
 \item{obs_data}{Tibble/data.frame with one row per site–time. Must contain
@@ -21,6 +21,8 @@ kernel (e.g. `id`, `lat`, `lon`).}
 \item{n}{Integer, number of sites.}
 
 \item{nt}{Integer, number of time points.}
+
+\item{period}{time periodicity}
 }
 \value{
 A tibble with the original rows plus columns:
