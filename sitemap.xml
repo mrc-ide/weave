@@ -15,6 +15,7 @@
 <url><loc>/reference/data_process.html</loc></url>
 <url><loc>/reference/fill_vector.html</loc></url>
 <url><loc>/reference/fit.html</loc></url>
+<url><loc>/reference/fold_score_nb.html</loc></url>
 <url><loc>/reference/get_spatial_distance.html</loc></url>
 <url><loc>/reference/get_temporal_distance.html</loc></url>
 <url><loc>/reference/index.html</loc></url>
@@ -22,6 +23,8 @@
 <url><loc>/reference/infer_time_kernel_params.html</loc></url>
 <url><loc>/reference/kron_mv.html</loc></url>
 <url><loc>/reference/llh.html</loc></url>
+<url><loc>/reference/make_time_folds.html</loc></url>
+<url><loc>/reference/make_time_folds_interleave.html</loc></url>
 <url><loc>/reference/pcg.html</loc></url>
 <url><loc>/reference/periodic_kernel.html</loc></url>
 <url><loc>/reference/quick_mvnorm.html</loc></url>
@@ -30,5 +33,6 @@
 <url><loc>/reference/space_kernel.html</loc></url>
 <url><loc>/reference/tidyeval.html</loc></url>
 <url><loc>/reference/time_kernel.html</loc></url>
+<url><loc>/reference/tune_hyperparameters_optim.html</loc></url>
 </urlset>
 
