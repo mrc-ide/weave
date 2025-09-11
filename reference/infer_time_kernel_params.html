@@ -46,7 +46,16 @@ least-squares.</p>
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">infer_time_kernel_params</span><span class="op">(</span><span class="va">data</span>, <span class="va">period</span>, <span class="va">nt</span>, <span class="va">n</span>, plot <span class="op">=</span> <span class="cn">FALSE</span>, max_pairs <span class="op">=</span> <span class="fl">1000</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">infer_time_kernel_params</span><span class="op">(</span></span>
+<span>  <span class="va">data</span>,</span>
+<span>  <span class="va">period</span>,</span>
+<span>  <span class="va">nt</span>,</span>
+<span>  <span class="va">n</span>,</span>
+<span>  plot <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  max_pairs <span class="op">=</span> <span class="fl">1000</span>,</span>
+<span>  lower <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.1</span>, <span class="fl">1</span><span class="op">)</span>,</span>
+<span>  upper <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">10</span>, <span class="fl">10</span> <span class="op">*</span> <span class="fl">10000</span><span class="op">)</span></span>
+<span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -76,6 +85,14 @@ least-squares.</p>
 
 <dt id="arg-max-pairs">max_pairs<a class="anchor" aria-label="anchor" href="#arg-max-pairs"></a></dt>
 <dd><p>Integer; optional downsampling of per-lag pairs for speed.</p></dd>
+
+
+<dt id="arg-lower">lower<a class="anchor" aria-label="anchor" href="#arg-lower"></a></dt>
+<dd><p>A vector of length 2 with lower bounds of search</p></dd>
+
+
+<dt id="arg-upper">upper<a class="anchor" aria-label="anchor" href="#arg-upper"></a></dt>
+<dd><p>A vector of length 2 with upper bounds of search</p></dd>
 
 </dl></div>
     <div class="section level2">
