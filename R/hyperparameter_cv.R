@@ -50,7 +50,7 @@ make_time_folds_interleave <- function(df, time_col = "t", K = 5) {
 #'
 #' @return Mean predictive log-likelihood across folds.
 #' @keywords internal
-fold_score_nb <- function(theta, obs_data, coordinates, n, nt, folds) {
+fold_score_nb <- function(theta, obs_data, coordinates, n, nt, folds, period) {
   fold_ll <- numeric(length(folds))
   for (k in seq_along(folds)) {
     idx_hold <- folds[[k]]
@@ -63,7 +63,8 @@ fold_score_nb <- function(theta, obs_data, coordinates, n, nt, folds) {
       obs_data = dat_mask,
       coordinates = coordinates,
       hyperparameters = theta,
-      n = n, nt = nt
+      n = n, nt = nt,
+      period = period
     )
 
     y_true <- obs_data$y_obs[idx_hold]
@@ -116,6 +117,7 @@ fold_score_nb <- function(theta, obs_data, coordinates, n, nt, folds) {
 tune_hyperparameters_optim <- function(
     obs_data,
     coordinates,
+    period,
     id_col = "id",
     time_col = "t",
     n_sites_sample = 40,
@@ -142,7 +144,7 @@ tune_hyperparameters_optim <- function(
 
   obj <- function(par) {
     theta <- as.numeric(par)
-    -fold_score_nb(theta, obs_data = obs_sub, coordinates = coords_sub, n = n, nt = nt, folds = folds)
+    -fold_score_nb(theta, obs_data = obs_sub, coordinates = coords_sub, n = n, nt = nt, folds = folds, period = period)
   }
 
   fit_opt <- optim(

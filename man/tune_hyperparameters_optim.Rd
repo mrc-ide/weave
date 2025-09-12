@@ -14,6 +14,7 @@ tune_hyperparameters_optim(
   init = c(space = 20, t_per = 4, t_long = 12),
   lower = c(space = 5, t_per = 1, t_long = 3),
   upper = c(space = 200, t_per = 20, t_long = 52),
+  period = period,
   seed = 123
 )
 }
