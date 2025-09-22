@@ -99,30 +99,29 @@ gp_draw <- function(state, tol = 1e-6) {
 bounds <- function(state, n_lambda = 30, n_draw = 100,
                    quantiles = c(0.025, 0.25, 0.75, 0.975)) {
   # Lambda draws
-  #lam_draws <- replicate(n_lambda, gp_draw(state), simplify = "array")
-
   lam_draws <- pbapply::pbsapply(
     seq_len(n_lambda),
-    function(i) gp_draw(state)
-  ) |>
-    as.matrix()
+    function(i) gp_draw(state),
+    simplify = FALSE
+  )
+  lam_draws <- do.call(cbind, lam_draws)
 
-  # Add observation noise
-  count_draws <- lapply(seq_len(n_draw), function(x) {
-    tmp <- lam_draws
-    tmp[] <- stats::rpois(length(lam_draws), lambda = lam_draws)
-    tmp
-  })
-  count_draws <- do.call("cbind", count_draws)
+  # Ensure matrix layout is sites × draws
+  lam_draws <- matrix(lam_draws, nrow = state$N)
 
-  # Apply quantiles: result is (n_obs × n_quantiles)
-  qs <- t(apply(
-    count_draws,
-    1,
-    function(x) as.vector(stats::quantile(x, probs = quantiles))
-  ))
+  # Add observation noise: replicate columns for Poisson draws
+  lambda_mat <- lam_draws[, rep(seq_len(ncol(lam_draws)), each = n_draw), drop = FALSE]
+  count_draws <- stats::rpois(length(lambda_mat), lambda = lambda_mat)
+  dim(count_draws) <- dim(lambda_mat)
 
-  qs <- matrix(qs, ncol = length(quantiles))
+  # Compute quantiles per observation
+  quantile_fun <- function(x) stats::quantile(x, probs = quantiles, names = FALSE)
+  qs <- vapply(
+    seq_len(nrow(count_draws)),
+    function(i) quantile_fun(count_draws[i, , drop = TRUE]),
+    FUN.VALUE = numeric(length(quantiles))
+  )
+  qs <- t(qs)
 
   # Build output
   out <- data.frame(
