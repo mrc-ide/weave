@@ -25,3 +25,28 @@ quick_mvnorm <- function(space, time) {
   # Flatten with times varying fastest
   as.vector(t(Z))
 }
+
+
+#' Quick multivariate normal samples over two dimensions (cholesky precomputed)
+#'
+#' This is equivalent to estimating the full spatio-temporal covariance matrix
+#' and sampling from the multivariate normal distribution:
+#' full_k <- kronecker(dist_k, time_k)
+#' f  <- mvrnorm(1, rep(0, n * nt), full_k)
+#'
+#' @param space Cholesky decomposition of sapace kernel matrix
+#' @param time  Cholesky decomposition of time kernel matrix
+#' @export
+quick_mvnorm_chol <- function(space_chol, time_chol) {
+  n_sites <- nrow(space_chol)
+  n_times <- nrow(time_chol)
+
+  # i.i.d. standard normals arranged as [sites x times]
+  W <- matrix(stats::rnorm(n_sites * n_times), nrow = n_sites, ncol = n_times)
+
+  # Apply separable transforms: Z has cov(time ⊗ space)
+  Z <- t(space_chol) %*% W %*% time_chol
+
+  # Flatten with times varying fastest
+  as.vector(t(Z))
+}
