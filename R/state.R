@@ -72,7 +72,7 @@ gp_build_state <- function(obs_data, coordinates, hyperparameters, n, nt, period
 
   # A-solve closure for (S K S^T + D) y = rhs
   A_solve <- function(rhs_obs, tol = 1e-6) {
-    weave:::pcg(rhs_obs, obs_idx, N, space_mat, time_mat, noise_var, kdiag_full, tol = tol)
+    pcg(rhs_obs, obs_idx, N, space_mat, time_mat, noise_var, kdiag_full, tol = tol)
   }
 
   list(

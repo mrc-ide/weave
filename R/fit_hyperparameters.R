@@ -59,14 +59,14 @@ fit <- function(obs_data, coordinates, nt, period, n_sites, mask_prop = 0.2, ver
     )
     lam_hat <- gp_posterior_mean(state)
     # Score ONLY the held-out cells
-    ll <- sum(dpois(fitting_data$y_comp[held_idx], lam_hat[held_idx], log = TRUE))
+    ll <- sum(stats::dpois(fitting_data$y_comp[held_idx], lam_hat[held_idx], log = TRUE))
     if(verbose){
       print(ll)
     }
     return(ll)
   }
 
-  optim(
+  stats::optim(
     par = par0,
     fn = fit_f,
     method = "L-BFGS-B",

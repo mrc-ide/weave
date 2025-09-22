@@ -103,9 +103,9 @@ bounds <- function(state, n_lambda = 30, n_draw = 100,
 
   lam_draws <- pbapply::pbsapply(
     seq_len(n_lambda),
-    function(i) gp_draw(state),
-    simplify = "array"
-  )
+    function(i) gp_draw(state)
+  ) |>
+    as.matrix()
 
   # Add observation noise
   count_draws <- lapply(seq_len(n_draw), function(x) {
@@ -116,7 +116,13 @@ bounds <- function(state, n_lambda = 30, n_draw = 100,
   count_draws <- do.call("cbind", count_draws)
 
   # Apply quantiles: result is (n_obs × n_quantiles)
-  qs <- t(apply(count_draws, 1, stats::quantile, probs = quantiles))
+  qs <- t(apply(
+    count_draws,
+    1,
+    function(x) as.vector(stats::quantile(x, probs = quantiles))
+  ))
+
+  qs <- matrix(qs, ncol = length(quantiles))
 
   # Build output
   out <- data.frame(

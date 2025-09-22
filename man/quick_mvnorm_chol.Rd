@@ -7,9 +7,9 @@
 quick_mvnorm_chol(space_chol, time_chol)
 }
 \arguments{
-\item{space}{Cholesky decomposition of sapace kernel matrix}
+\item{space_chol}{Cholesky decomposition of sapace kernel matrix}
 
-\item{time}{Cholesky decomposition of time kernel matrix}
+\item{time_chol}{Cholesky decomposition of time kernel matrix}
 }
 \description{
 This is equivalent to estimating the full spatio-temporal covariance matrix

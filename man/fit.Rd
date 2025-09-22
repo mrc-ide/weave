@@ -2,7 +2,7 @@
 % Please edit documentation in R/fit_hyperparameters.R
 \name{fit}
 \alias{fit}
-\title{Fit hyperparameters}
+\title{Fit hyperparmeters}
 \usage{
 fit(
   obs_data,
@@ -18,11 +18,11 @@ fit(
 )
 }
 \arguments{
-\item{obs_data}{Data frame of observations with at least \code{id}, \code{y_obs},
-\code{mu_infer}, and \code{f_infer} columns.}
+\item{obs_data}{Data frame of observations with at least `id`, `y_obs`,
+`mu_infer`, and `f_infer` columns.}
 
-\item{coordinates}{Data frame of site coordinates containing an \code{id} column
-that matches the site identifiers in \code{obs_data}.}
+\item{coordinates}{Data frame of site coordinates containing an `id` column
+that matches the site identifiers in `obs_data`.}
 
 \item{nt}{Number of time points per site.}
 
@@ -32,25 +32,18 @@ that matches the site identifiers in \code{obs_data}.}
 
 \item{mask_prop}{Proportion of observed points per site to hold out.}
 
-\item{verbose}{Logical; whether to print objective values during optimisation.}
+\item{verbose}{Logical; whether to print objective values during
+optimisation.}
 
-\item{par0}{Initial hyperparameter values passed to \code{optim()}.}
+\item{par0}{Initial hyperparameter values passed to `optim()`.}
 
-\item{lower}{Lower bounds for the hyperparameters passed to \code{optim()}.}
+\item{lower}{Lower bounds for the hyperparameters passed to `optim()`.}
 
-\item{upper}{Upper bounds for the hyperparameters passed to \code{optim()}.}
+\item{upper}{Upper bounds for the hyperparameters passed to `optim()`.}
 }
 \value{
-A list as returned by \code{stats::optim()}.
+A list as returned by `stats::optim()`.
 }
 \description{
-This helper picks a small group of monitoring sites, hides a few of their
-observed counts, and tweaks the model settings until those withheld values
-are predicted well.
-}
-\details{
-Under the hood it samples `n_sites` IDs, masks a proportion of their observed
-counts, and uses `optim()` with an L-BFGS-B search to maximise the Poisson
-log-likelihood of the held-out data, returning the hyperparameters that score
-best.
+Fit hyperparmeters
 }
