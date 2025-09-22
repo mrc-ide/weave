@@ -120,8 +120,8 @@ bounds <- function(state, n_lambda = 30, n_draw = 100,
 
   # Build output
   out <- data.frame(
-    id = obs_data$id,
-    t = obs_data$t,
+    id = state$id,
+    t = state$t,
     qs
   )
 
