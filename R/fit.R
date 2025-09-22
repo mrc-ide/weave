@@ -255,7 +255,9 @@ fit <- function(obs_data, coordinates, hyperparameters, n, nt, period = 52){
   space_inv <- chol2inv(chol(regularise(space_mat)))
   time_inv  <- chol2inv(chol(regularise(time_mat)))
   kron_diag_inv <- as.vector(kronecker(diag(space_inv), diag(time_inv)))
-  hess_diag <- -kron_diag_inv - exp(obs_data$z_est)  # evaluated at f_hat
+  lik_curv <- numeric(n * nt)
+  lik_curv[obs_idx] <- exp(obs_data$z_est[obs_idx])  # 0 at missing entries
+  hess_diag <- -kron_diag_inv - lik_curv
   obs_data$tausq <- pmax(0, -1 / hess_diag)
 
   fit_data <- obs_data |>
