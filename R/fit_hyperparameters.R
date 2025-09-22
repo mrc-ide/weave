@@ -1,4 +1,13 @@
-#' Fit hyperparmeters
+#' Fit hyperparameters
+#'
+#' This helper picks a small group of monitoring sites, hides a few of their
+#' observed counts, and tweaks the model settings until those withheld values
+#' are predicted well.
+#'
+#' Under the hood it samples `n_sites` IDs, masks a proportion of their observed
+#' counts, and uses `optim()` with an L-BFGS-B search to maximise the Poisson
+#' log-likelihood of the held-out data, returning the hyperparameters that score
+#' best.
 #' @export
 fit <- function(obs_data, nt, period, n_sites, mask_prop = 0.2, verbose = FALSE, par0 = c(1, 5, 100), lower = c(1e-4, 0.8, 52 * 1.5), upper = c(2, 10, 500)) {
   ids <- sample(unique(obs_data$id), n_sites)

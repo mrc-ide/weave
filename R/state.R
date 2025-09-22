@@ -15,6 +15,14 @@ kdiag_from_factors <- function(space_diag, time_diag, n, nt) {
 
 #' Build state object
 #'
+#' This convenience wrapper assembles the ingredients the Gaussian process (GP)
+#' model needs so downstream functions can work with a single, tidy bundle.
+#'
+#' It builds the spatial and temporal kernels, indexes the observed counts,
+#' prepares working responses and variances for the Poisson log-scale
+#' approximation, and returns the matrices and closures required for GP
+#' inference.
+#'
 #' @param obs_data Observation data
 #' @param coordinates Site coordinates
 #' @param hyperparameters Vector of hyperparameters
