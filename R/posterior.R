@@ -22,8 +22,8 @@
 #' @export
 gp_posterior_mean <- function(state, tol = 1e-6) {
   alpha <- state$A_solve(state$y_work, tol = tol)             # A^{-1} y
-  f_hat <- weave:::kron_mv(
-    weave:::fill_vector(alpha, state$obs_idx, state$N),
+  f_hat <- kron_mv(
+    fill_vector(alpha, state$obs_idx, state$N),
     state$space_mat, state$time_mat
   )
   z_hat <- f_hat + state$mu_infer
@@ -64,8 +64,8 @@ gp_draw <- function(state, tol = 1e-6) {
   alpha_tilde <- state$A_solve(rhs, tol = tol)
 
   # Posterior draw for f (centred log scale): eta - K S^T alpha_tilde
-  f_draw <- eta - weave:::kron_mv(
-    weave:::fill_vector(alpha_tilde, state$obs_idx, state$N),
+  f_draw <- eta - kron_mv(
+    fill_vector(alpha_tilde, state$obs_idx, state$N),
     state$space_mat, state$time_mat
   )
 
@@ -110,13 +110,13 @@ bounds <- function(state, n_lambda = 30, n_draw = 100,
   # Add observation noise
   count_draws <- lapply(seq_len(n_draw), function(x) {
     tmp <- lam_draws
-    tmp[] <- rpois(length(lam_draws), lambda = lam_draws)
+    tmp[] <- stats::rpois(length(lam_draws), lambda = lam_draws)
     tmp
   })
   count_draws <- do.call("cbind", count_draws)
 
   # Apply quantiles: result is (n_obs × n_quantiles)
-  qs <- t(apply(count_draws, 1, quantile, probs = quantiles))
+  qs <- t(apply(count_draws, 1, stats::quantile, probs = quantiles))
 
   # Build output
   out <- data.frame(

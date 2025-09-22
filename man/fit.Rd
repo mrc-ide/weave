@@ -2,7 +2,7 @@
 % Please edit documentation in R/fit_hyperparameters.R
 \name{fit}
 \alias{fit}
-\title{Fit hyperparmeters}
+\title{Fit hyperparameters}
 \usage{
 fit(
   obs_data,
@@ -17,5 +17,13 @@ fit(
 )
 }
 \description{
-Fit hyperparmeters
+This helper picks a small group of monitoring sites, hides a few of their
+observed counts, and tweaks the model settings until those withheld values
+are predicted well.
+}
+\details{
+Under the hood it samples `n_sites` IDs, masks a proportion of their observed
+counts, and uses `optim()` with an L-BFGS-B search to maximise the Poisson
+log-likelihood of the held-out data, returning the hyperparameters that score
+best.
 }

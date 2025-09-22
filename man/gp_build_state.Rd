@@ -23,5 +23,12 @@ gp_build_state(obs_data, coordinates, hyperparameters, n, nt, period = 52)
 List of pre-computaed GP elements
 }
 \description{
-Build state object
+This convenience wrapper assembles the ingredients the Gaussian process (GP)
+model needs so downstream functions can work with a single, tidy bundle.
+}
+\details{
+It builds the spatial and temporal kernels, indexes the observed counts,
+prepares working responses and variances for the Poisson log-scale
+approximation, and returns the matrices and closures required for GP
+inference.
 }

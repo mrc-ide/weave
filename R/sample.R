@@ -34,8 +34,8 @@ quick_mvnorm <- function(space, time) {
 #' full_k <- kronecker(dist_k, time_k)
 #' f  <- mvrnorm(1, rep(0, n * nt), full_k)
 #'
-#' @param space Cholesky decomposition of sapace kernel matrix
-#' @param time  Cholesky decomposition of time kernel matrix
+#' @param space_chol Cholesky decomposition of sapace kernel matrix
+#' @param time_chol  Cholesky decomposition of time kernel matrix
 #' @export
 quick_mvnorm_chol <- function(space_chol, time_chol) {
   n_sites <- nrow(space_chol)
