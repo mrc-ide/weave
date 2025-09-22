@@ -107,7 +107,7 @@ bounds <- function(state, n_lambda = 30, n_draw = 100,
   lam_draws <- do.call(cbind, lam_draws)
 
   # Ensure matrix layout is sites × draws
-  lam_draws <- matrix(lam_draws, nrow = state$N)
+  lam_draws <- matrix(lam_draws, nrow = state$n)
 
   # Add observation noise: replicate columns for Poisson draws
   lambda_mat <- lam_draws[, rep(seq_len(ncol(lam_draws)), each = n_draw), drop = FALSE]
