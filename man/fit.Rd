@@ -6,6 +6,7 @@
 \usage{
 fit(
   obs_data,
+  coordinates,
   nt,
   period,
   n_sites,
@@ -15,6 +16,32 @@ fit(
   lower = c(1e-04, 0.8, 52 * 1.5),
   upper = c(2, 10, 500)
 )
+}
+\arguments{
+\item{obs_data}{Data frame of observations with at least \code{id}, \code{y_obs},
+\code{mu_infer}, and \code{f_infer} columns.}
+
+\item{coordinates}{Data frame of site coordinates containing an \code{id} column
+that matches the site identifiers in \code{obs_data}.}
+
+\item{nt}{Number of time points per site.}
+
+\item{period}{Period used for the temporal kernel.}
+
+\item{n_sites}{Number of sites to sample for optimisation.}
+
+\item{mask_prop}{Proportion of observed points per site to hold out.}
+
+\item{verbose}{Logical; whether to print objective values during optimisation.}
+
+\item{par0}{Initial hyperparameter values passed to \code{optim()}.}
+
+\item{lower}{Lower bounds for the hyperparameters passed to \code{optim()}.}
+
+\item{upper}{Upper bounds for the hyperparameters passed to \code{optim()}.}
+}
+\value{
+A list as returned by \code{stats::optim()}.
 }
 \description{
 Fit hyperparmeters
