@@ -78,6 +78,8 @@ gp_build_state <- function(obs_data, coordinates, hyperparameters, n, nt, period
     kdiag_full = kdiag_full,
     A_solve = A_solve,
     mu_infer = obs_data$mu_infer,
+    id = obs_data$id,
+    t = obs_data$t,
     N = N,
     n = n,
     nt = nt
