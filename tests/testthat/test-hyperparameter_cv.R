@@ -46,3 +46,37 @@ test_that("tune_hyperparameters_optim returns list of results", {
   expect_true(is.finite(res$best_cv_score))
 })
 
+test_that("fit requires coordinates for sampled sites", {
+  set.seed(2)
+  n_sites <- 3
+  nt <- 4
+  ids <- rep(seq_len(n_sites), each = nt)
+  t <- rep(seq_len(nt), times = n_sites)
+  y <- rpois(n_sites * nt, lambda = 1)
+  mu <- rep(0, n_sites * nt)
+  f <- log1p(y) - mu
+  obs_data <- data.frame(id = ids, t = t, y_obs = y, mu_infer = mu, f_infer = f)
+  coordinates <- data.frame(id = seq_len(n_sites), lon = rnorm(n_sites), lat = rnorm(n_sites))
+
+  res <- fit(
+    obs_data = obs_data,
+    coordinates = coordinates,
+    nt = nt,
+    period = 52,
+    n_sites = 2
+  )
+  expect_true(all(c("par", "value", "counts", "convergence", "message") %in% names(res)))
+
+  missing_coords <- coordinates[-1, , drop = FALSE]
+  expect_error(
+    fit(
+      obs_data = obs_data,
+      coordinates = missing_coords,
+      nt = nt,
+      period = 52,
+      n_sites = n_sites
+    ),
+    "Coordinates missing"
+  )
+})
+

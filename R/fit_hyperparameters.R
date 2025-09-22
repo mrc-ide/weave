@@ -1,18 +1,38 @@
-#' Fit hyperparameters
+#' Fit hyperparmeters
 #'
-#' This helper picks a small group of monitoring sites, hides a few of their
-#' observed counts, and tweaks the model settings until those withheld values
-#' are predicted well.
+#' @param obs_data Data frame of observations with at least `id`, `y_obs`,
+#'   `mu_infer`, and `f_infer` columns.
+#' @param coordinates Data frame of site coordinates containing an `id` column
+#'   that matches the site identifiers in `obs_data`.
+#' @param nt Number of time points per site.
+#' @param period Period used for the temporal kernel.
+#' @param n_sites Number of sites to sample for optimisation.
+#' @param mask_prop Proportion of observed points per site to hold out.
+#' @param verbose Logical; whether to print objective values during
+#'   optimisation.
+#' @param par0 Initial hyperparameter values passed to `optim()`.
+#' @param lower Lower bounds for the hyperparameters passed to `optim()`.
+#' @param upper Upper bounds for the hyperparameters passed to `optim()`.
 #'
-#' Under the hood it samples `n_sites` IDs, masks a proportion of their observed
-#' counts, and uses `optim()` with an L-BFGS-B search to maximise the Poisson
-#' log-likelihood of the held-out data, returning the hyperparameters that score
-#' best.
+#' @return A list as returned by `stats::optim()`.
 #' @export
-fit <- function(obs_data, nt, period, n_sites, mask_prop = 0.2, verbose = FALSE, par0 = c(1, 5, 100), lower = c(1e-4, 0.8, 52 * 1.5), upper = c(2, 10, 500)) {
+fit <- function(obs_data, coordinates, nt, period, n_sites, mask_prop = 0.2, verbose = FALSE, par0 = c(1, 5, 100), lower = c(1e-4, 0.8, 52 * 1.5), upper = c(2, 10, 500)) {
+  if (!"id" %in% names(coordinates)) {
+    stop("`coordinates` must contain an `id` column.", call. = FALSE)
+  }
+
   ids <- sample(unique(obs_data$id), n_sites)
-  fitting_data   <- obs_data[obs_data$id %in% ids, ]
-  fitting_coords <- coordinates[coordinates$id %in% ids, ]
+  missing_ids <- setdiff(ids, coordinates$id)
+  if (length(missing_ids)) {
+    stop(
+      "Coordinates missing for sampled site IDs: ",
+      paste(missing_ids, collapse = ", "),
+      call. = FALSE
+    )
+  }
+
+  fitting_data <- obs_data[obs_data$id %in% ids, ]
+  fitting_coords <- coordinates[match(ids, coordinates$id), , drop = FALSE]
 
   # Hold-out mask: choose a fraction of NON-NA y_obs per site; keep at least 1 observed point/site
   split_idx <- split(seq_len(nrow(fitting_data)), fitting_data$id)
