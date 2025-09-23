@@ -119,9 +119,20 @@ bounds <- function(state, n_lambda = 30, n_draw = 100,
     X = seq_len(N),
     FUN = function(i) {
       lam_i <- lam_mat[i, ]
-      # n_lambda * n_draw draws, with lambda repeated in blocks of size n_draw
-      draws_i <- stats::rpois(n = length(lam_i) * n_draw,
-                              lambda = rep(lam_i, each = n_draw))
+      if(length(state$hyperparameters) == 3){
+        # n_lambda * n_draw draws, with lambda repeated in blocks of size n_draw
+        draws_i <- stats::rpois(
+          n = length(lam_i) * n_draw,
+          lambda = rep(lam_i, each = n_draw)
+        )
+      }
+      if(length(state$hyperparameters) == 4){
+        draws_i <- stats::rnbinom(
+          n = length(lam_i) * n_draw,
+          mu = rep(lam_i, each = n_draw),
+          size = state$hyperparameters[4]
+        )
+      }
       quantile_fun(draws_i)
     },
     simplify = "matrix"
