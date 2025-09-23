@@ -52,14 +52,21 @@ fit <- function(obs_data, coordinates, nt, period, n_sites, mask_prop = 0.2, ver
     state <- gp_build_state(
       obs_data       = fitting_data,
       coordinates    = fitting_coords,
-      hyperparameters = par,
+      hyperparameters = par[1:3],
       n              = n_sites,
       nt             = nt,
       period         = period
     )
     lam_hat <- gp_posterior_mean(state)
     # Score ONLY the held-out cells
-    ll <- sum(stats::dpois(fitting_data$y_comp[held_idx], lam_hat[held_idx], log = TRUE))
+    if(length(par) == 3){
+      ll <- sum(stats::dpois(fitting_data$y_comp[held_idx], lam_hat[held_idx], log = TRUE))
+    }
+    if(length(par) == 4){
+      # Smaller size = more overdispersed
+      ll <- sum(stats::dnbinom(fitting_data$y_comp[held_idx], mu = lam_hat[held_idx], size = par[4], log = TRUE))
+    }
+
     if(verbose){
       print(ll)
     }
