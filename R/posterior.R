@@ -98,40 +98,44 @@ gp_draw <- function(state, tol = 1e-6) {
 #' @export
 bounds <- function(state, n_lambda = 30, n_draw = 100,
                    quantiles = c(0.025, 0.25, 0.75, 0.975)) {
-  # Lambda draws
-  lam_draws <- pbapply::pbsapply(
+  N <- state$N
+  q_len <- length(quantiles)
+
+  # Lambda draws: get an N x n_lambda matrix directly (no list->cbind)
+  lam_mat <- pbapply::pbsapply(
     seq_len(n_lambda),
     function(i) gp_draw(state),
-    simplify = FALSE
+    simplify = "matrix"            # gives N rows × n_lambda cols
+  ) |> as.matrix()
+
+  # Preallocate output (numeric matrix is cheaper than data.frame while filling)
+  qs <- matrix(NA_real_, nrow = N, ncol = q_len)
+
+  # Helper: row-wise quantiles without building giant matrices
+  quantile_fun <- function(v) stats::quantile(v, probs = quantiles, names = FALSE)
+
+  # Iterate over rows; inner rpois call stays fully vectorised
+  qs <- pbapply::pbsapply(
+    X = seq_len(N),
+    FUN = function(i) {
+      lam_i <- lam_mat[i, ]
+      # n_lambda * n_draw draws, with lambda repeated in blocks of size n_draw
+      draws_i <- stats::rpois(n = length(lam_i) * n_draw,
+                              lambda = rep(lam_i, each = n_draw))
+      quantile_fun(draws_i)
+    },
+    simplify = "matrix"
   )
-  lam_draws <- do.call(cbind, lam_draws)
-
-  # Ensure matrix layout is sites × draws
-  lam_draws <- matrix(lam_draws, nrow = state$N)
-
-  # Add observation noise: replicate columns for Poisson draws
-  lambda_mat <- lam_draws[, rep(seq_len(ncol(lam_draws)), each = n_draw), drop = FALSE]
-  count_draws <- stats::rpois(length(lambda_mat), lambda = lambda_mat)
-  dim(count_draws) <- dim(lambda_mat)
-
-  # Compute quantiles per observation
-  quantile_fun <- function(x) stats::quantile(x, probs = quantiles, names = FALSE)
-  qs <- vapply(
-    seq_len(nrow(count_draws)),
-    function(i) quantile_fun(count_draws[i, , drop = TRUE]),
-    FUN.VALUE = numeric(length(quantiles))
-  )
-  qs <- t(qs)
+  qs <- t(qs)  # pbsapply returns q_len x N; transpose to N x q_len
 
   # Build output
   out <- data.frame(
     id = state$id,
-    t = state$t,
-    qs
+    t  = state$t,
+    qs,
+    row.names = NULL
   )
-
-  # Optional: give nice column names
   colnames(out)[-(1:2)] <- paste0("q", quantiles)
 
-  return(out)
+  out
 }
