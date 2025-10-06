@@ -1,6 +1,12 @@
 url: ~
 template:
   bootstrap: 5
-  assets:
-    css:
-      - pkgdown/nebula.css
+  bslib:
+    bg: "#0b132b"
+    fg: "#e0e1dd"
+    primary: "#98c1d9"
+    base_font: {google: "Fira Sans"}
+    heading_font: {google: "Fira Sans"}
+    code_font: {google: "Fira Code"}
+    code-bg: "#1c2541"
+    code-color: "#f4f4f9"
