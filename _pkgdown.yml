@@ -1,7 +1,7 @@
-url: ~
+url: https://mrc-ide.github.io/weave/
 template:
-  bootstrap: 5
   bslib:
+    version: 5
     bg: "#0b132b"
     fg: "#e0e1dd"
     primary: "#98c1d9"
