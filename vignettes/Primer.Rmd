@@ -1,0 +1,21 @@
+---
+title: "Gaussian Processes primer"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Gaussian Processes primer}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup}
+library(weave)
+```
+
+# Test

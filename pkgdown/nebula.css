@@ -1,0 +1,68 @@
+/* ---------- Nebula vignette theme ---------- */
+
+@import url('https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Fira+Code&display=swap');
+
+/* Page background */
+body, .article-content {
+  background-color: #0b132b;
+  color: #e0e1dd;
+  font-family: "Fira Sans", sans-serif;
+}
+
+/* Headings */
+h1, h2, h3, h4, h5, h6 {
+  color: #e0e1dd;
+  font-weight: bold;
+}
+
+/* Code blocks */
+pre, code {
+  background-color: #1c2541 !important;
+  color: #e0e1dd !important;
+  font-family: "Fira Code", monospace;
+  border: none;
+}
+
+/* Links */
+a, a:visited {
+  color: #6fffe9;
+}
+a:hover {
+  color: #98c1d9;
+}
+
+/* Tables */
+table {
+  background-color: #1c2541;
+  color: #e0e1dd;
+}
+th {
+  background-color: #0b132b;
+  color: #e0e1dd;
+}
+
+/* Horizontal rules and other separators */
+hr {
+  border-top: 1px solid #1c2541;
+}
+
+/* Tweak blockquotes */
+blockquote {
+  border-left: 4px solid #1c2541;
+  color: #e0e1dd;
+  background-color: #0b132b;
+  padding-left: 1em;
+}
+
+/* Remove white border around vignette content in pkgdown */
+.article {
+  background: none;
+  box-shadow: none;
+}
+
+/* Optional: navbar and footer (if you want them to match too) */
+.navbar, .navbar-default, footer {
+  background-color: #0b132b;
+  color: #e0e1dd;
+}
