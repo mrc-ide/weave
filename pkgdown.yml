@@ -3,7 +3,7 @@ pkgdown: 2.1.3
 pkgdown_sha: ~
 articles:
   Primer: Primer.html
-last_built: 2025-10-06T10:41Z
+last_built: 2025-10-06T12:01Z
 urls:
   reference: https://mrc-ide.github.io/weave/reference
   article: https://mrc-ide.github.io/weave/articles

@@ -5,14 +5,14 @@
 <meta charset="utf-8">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-<title>Gaussian Processes primer • weave</title>
+<title>Gaussian Processes: a Gentle Introduction • weave</title>
 <script src="../deps/jquery-3.6.0/jquery-3.6.0.min.js"></script><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <link href="../deps/bootstrap-5.3.1/bootstrap.min.css" rel="stylesheet">
 <script src="../deps/bootstrap-5.3.1/bootstrap.bundle.min.js"></script><link href="../deps/Fira_Sans-0.4.10/font.css" rel="stylesheet">
 <link href="../deps/Fira_Code-0.4.10/font.css" rel="stylesheet">
 <link href="../deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet">
 <link href="../deps/font-awesome-6.5.2/css/v4-shims.min.css" rel="stylesheet">
-<script src="../deps/headroom-0.11.0/headroom.min.js"></script><script src="../deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="../deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="../deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="../deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="../deps/search-1.0.0/fuse.min.js"></script><script src="../deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="../pkgdown.js"></script><meta property="og:title" content="Gaussian Processes primer">
+<script src="../deps/headroom-0.11.0/headroom.min.js"></script><script src="../deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="../deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="../deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="../deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="../deps/search-1.0.0/fuse.min.js"></script><script src="../deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="../pkgdown.js"></script><meta property="og:title" content="Gaussian Processes: a Gentle Introduction">
 </head>
 <body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
@@ -35,7 +35,7 @@
 <li class="active nav-item dropdown">
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
   <ul class="dropdown-menu" aria-labelledby="dropdown-articles">
-<li><a class="dropdown-item" href="../articles/Primer.html">Gaussian Processes primer</a></li>
+<li><a class="dropdown-item" href="../articles/Primer.html">Gaussian Processes: a Gentle Introduction</a></li>
   </ul>
 </li>
       </ul>
@@ -56,7 +56,7 @@
 <div class="row">
   <main id="main" class="col-md-9"><div class="page-header">
 
-      <h1>Gaussian Processes primer</h1>
+      <h1>Gaussian Processes: a Gentle Introduction</h1>
             
       
 
@@ -68,10 +68,167 @@
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://mrc-ide.github.io/weave/">weave</a></span><span class="op">)</span></span></code></pre></div>
 <div class="section level2">
-<h2 id="test">Test<a class="anchor" aria-label="anchor" href="#test"></a>
+<h2 id="why-gaussian-processes">1. Why Gaussian Processes?<a class="anchor" aria-label="anchor" href="#why-gaussian-processes"></a>
 </h2>
+<p><strong>Motivation and story</strong><br>
+Many real-world phenomena change smoothly but unpredictably — rainfall
+over time, temperature, the number of birds visiting a feeder, or
+website traffic.</p>
+<p><strong>Problem framing</strong><br>
+We often want to <em>infer the underlying pattern</em> from sparse,
+noisy observations <strong>without</strong> imposing a fixed parametric
+form. As much as possible, we want to let the data shape the result.</p>
+<p><strong>Enter Gaussian Processes</strong><br>
+A Gaussian process (GP) is a flexible, probabilistic approach to
+modelling unknown functions. It lets us predict <em>and</em> quantify
+uncertainty — not just what the function might be, but how confident we
+are.</p>
 </div>
-  </main>
+<div class="section level2">
+<h2 id="what-is-a-gaussian-process">2. What is a Gaussian Process?<a class="anchor" aria-label="anchor" href="#what-is-a-gaussian-process"></a>
+</h2>
+<div class="section level3">
+<h3 id="plain-language-explanation">Plain-language explanation<a class="anchor" aria-label="anchor" href="#plain-language-explanation"></a>
+</h3>
+<p>A <strong>Gaussian process (GP)</strong> is a probability
+distribution <strong>over functions</strong>, in the same way that a
+normal distribution is a probability distribution <strong>over
+numbers</strong>.</p>
+<p>Just as a normal distribution says, “a random variable is likely to
+take values near the mean, with some spread determined by the variance”,
+a Gaussian process says, “a random function is likely to take
+<em>shapes</em> near the mean function, with variability determined by
+the kernel”.</p>
+</div>
+<div class="section level3">
+<h3 id="building-intuition">Building intuition<a class="anchor" aria-label="anchor" href="#building-intuition"></a>
+</h3>
+<p>Instead of committing to a fixed equation (like fitting a straight
+line or a polynomial), a GP says:<br>
+&gt; “I don’t know the exact form of the function — but I do have
+beliefs about how it behaves.”</p>
+<p>Those beliefs are about how points in time relate to one another —
+whether nearby points tend to be similar, how far that similarity
+extends, and how much uncertainty there is. All of that structure is
+encoded in the <strong>kernel function</strong>.</p>
+<p>Once we’ve defined a kernel, we can imagine an infinite number of
+possible functions that are consistent with it and the GP represents a
+probability distribution over all of them.</p>
+</div>
+<div class="section level3">
+<h3 id="mathematical-form">Mathematical form<a class="anchor" aria-label="anchor" href="#mathematical-form"></a>
+</h3>
+<p>A Gaussian process is defined by a <strong>mean function</strong>
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>m</mi><mrow><mo stretchy="true" form="prefix">(</mo><mi>x</mi><mo stretchy="true" form="postfix">)</mo></mrow></mrow><annotation encoding="application/x-tex">m(x)</annotation></semantics></math>
+and a <strong>kernel (covariance) function</strong>
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>k</mi><mrow><mo stretchy="true" form="prefix">(</mo><mi>x</mi><mo>,</mo><mi>x</mi><mi>′</mi><mo stretchy="true" form="postfix">)</mo></mrow></mrow><annotation encoding="application/x-tex">k(x, x')</annotation></semantics></math>.</p>
+<p>For simplicity, we often assume the mean function is zero — that
+is:</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>m</mi><mrow><mo stretchy="true" form="prefix">(</mo><mi>x</mi><mo stretchy="true" form="postfix">)</mo></mrow><mo>=</mo><mn>0</mn></mrow><annotation encoding="application/x-tex">
+m(x) = 0
+</annotation></semantics></math></p>
+<p>This assumption is common because the kernel captures the interesting
+structure (smoothness, periodicity, etc.), and we can always add a
+non-zero mean function later if needed.</p>
+<p>With that simplification, we write:</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>f</mi><mrow><mo stretchy="true" form="prefix">(</mo><mi>x</mi><mo stretchy="true" form="postfix">)</mo></mrow><mo>∼</mo><mrow><mi>𝒢</mi><mi>𝒫</mi></mrow><mrow><mo stretchy="true" form="prefix">(</mo><mn>0</mn><mo>,</mo><mspace width="0.167em"></mspace><mi>k</mi><mrow><mo stretchy="true" form="prefix">(</mo><mi>x</mi><mo>,</mo><mi>x</mi><mi>′</mi><mo stretchy="true" form="postfix">)</mo></mrow><mo stretchy="true" form="postfix">)</mo></mrow></mrow><annotation encoding="application/x-tex">
+f(x) \sim \mathcal{GP}\left( 0,\, k(x, x') \right)
+</annotation></semantics></math></p>
+<p>This means that for any set of input points
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>x</mi><mn>1</mn></msub><mo>,</mo><msub><mi>x</mi><mn>2</mn></msub><mo>,</mo><mi>…</mi><mo>,</mo><msub><mi>x</mi><mi>n</mi></msub></mrow><annotation encoding="application/x-tex">x_1, x_2, \dots, x_n</annotation></semantics></math>,
+the corresponding function values follow a multivariate normal
+distribution with:</p>
+<ul>
+<li>a zero mean vector, and<br>
+</li>
+<li>a covariance matrix with entries
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>K</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub><mo>=</mo><mi>k</mi><mrow><mo stretchy="true" form="prefix">(</mo><msub><mi>x</mi><mi>i</mi></msub><mo>,</mo><msub><mi>x</mi><mi>j</mi></msub><mo stretchy="true" form="postfix">)</mo></mrow></mrow><annotation encoding="application/x-tex">K_{ij} = k(x_i, x_j)</annotation></semantics></math>.</li>
+</ul>
+</div>
+</div>
+<div class="section level2">
+<h2 id="a-real-example-hummingbirds-at-the-feeder">3. A Real Example: Hummingbirds at the Feeder<a class="anchor" aria-label="anchor" href="#a-real-example-hummingbirds-at-the-feeder"></a>
+</h2>
+<div class="float" id="id">
+<img src="../reference/figures/Hummingbird.jpg" class="class" style="width:6in;height:4in" alt="Hummingbird in flight. Photo By Savannah River Site"><div class="figcaption">Hummingbird in flight. Photo By Savannah River
+Site</div>
+</div>
+<p>To make these ideas more concrete, let’s look at a simple and
+intuitive example.</p>
+<p>Imagine we’ve set up a hummingbird feeder in our garden, and we want
+to model the <strong>number of hummingbirds</strong> visiting over
+time.<br>
+We don’t have a fixed equation for how that number changes, but we
+<em>do</em> have some prior beliefs:</p>
+<ul>
+<li>The number of hummingbirds on one day is likely to be similar to the
+number on nearby days.<br>
+</li>
+<li>Those similarities weaken as we compare days that are further
+apart.<br>
+</li>
+<li>The visits change smoothly rather than jumping around
+erratically.</li>
+</ul>
+<p>These are exactly the kinds of assumptions a Gaussian process can
+represent — and they are encoded in our <strong>kernel</strong>.</p>
+<hr>
+<div class="section level3">
+<h3 id="describing-the-kernel">3.1 Describing the kernel<a class="anchor" aria-label="anchor" href="#describing-the-kernel"></a>
+</h3>
+<p>We’ll use a <strong>radial basis function (RBF)</strong> kernel,
+which is one of the simplest and most widely used choices. It encodes
+the idea that points closer together in time are more strongly
+correlated, and that this correlation decays smoothly zwith
+distance.</p>
+<p>The RBF kernel is defined as:</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>k</mi><mrow><mo stretchy="true" form="prefix">(</mo><mi>x</mi><mo>,</mo><mi>x</mi><mi>′</mi><mo stretchy="true" form="postfix">)</mo></mrow><mo>=</mo><msup><mi>σ</mi><mn>2</mn></msup><mo>exp</mo><mrow><mo stretchy="true" form="prefix">(</mo><mo>−</mo><mfrac><msup><mrow><mo stretchy="true" form="prefix">(</mo><mi>x</mi><mo>−</mo><mi>x</mi><mi>′</mi><mo stretchy="true" form="postfix">)</mo></mrow><mn>2</mn></msup><mrow><mn>2</mn><msup><mo>ℓ</mo><mn>2</mn></msup></mrow></mfrac><mo stretchy="true" form="postfix">)</mo></mrow></mrow><annotation encoding="application/x-tex">
+k(x, x') = \sigma^2 \exp\left(-\frac{(x - x')^2}{2\ell^2}\right)
+</annotation></semantics></math></p>
+<ul>
+<li>
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msup><mi>σ</mi><mn>2</mn></msup><annotation encoding="application/x-tex">\sigma^2</annotation></semantics></math>
+controls the overall variability (amplitude) of the function.<br>
+</li>
+<li>
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mo>ℓ</mo><annotation encoding="application/x-tex">\ell</annotation></semantics></math>
+is the <strong>length-scale</strong>, which determines how quickly
+correlation falls off with time.</li>
+</ul>
+<p>A short length-scale means the number of hummingbirds can change
+rapidly from day to day (a “wiggly” world).<br>
+A long length-scale means it changes more gradually (a “smooth”
+world).</p>
+<hr>
+</div>
+<div class="section level3">
+<h3 id="visualising-the-kernel">3.2 Visualising the kernel<a class="anchor" aria-label="anchor" href="#visualising-the-kernel"></a>
+</h3>
+<p>Let’s look at what the kernel function looks like as a function of
+distance in time:</p>
+<p><img src="Primer_files/figure-html/unnamed-chunk-2-1.png" width="576"></p>
+<p>Using this kernel, we can draw some random functions from our GP
+representing simulated estimates of the number of hummingbirds at our
+feeder over time.</p>
+<p><img src="Primer_files/figure-html/unnamed-chunk-3-1.png" width="576"></p>
+<p>In our first example correlation between hummingbird numbers falls
+quickly as the distance between time points increases. We migth assume
+that hummingbird numbers vary more slowly, perhaps influenced by
+seasonal dynamics. We can encode this assumption by modifying our
+kernel.</p>
+<p><img src="Primer_files/figure-html/unnamed-chunk-4-1.png" width="576"></p>
+<p>Using this kernel, we can again draw some random functions from our
+GP representing simulated estimates of the number of hummingbirds at our
+feeder over time. We can see in this example the lines a smoother.</p>
+<p><img src="Primer_files/figure-html/unnamed-chunk-5-1.png" width="576"></p>
+</div>
+<div class="section level3">
+<h3 id="fitting-to-data">3.3 Fitting to data<a class="anchor" aria-label="anchor" href="#fitting-to-data"></a>
+</h3>
+</div>
+</div>
+  </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
+    </nav></aside>
 </div>
 
 
