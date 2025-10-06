@@ -20,7 +20,6 @@ set.seed(987656789)
 
 library(ggplot2)
 library(dplyr)
-library(patchwork)
 
 theme_nebula <- function() {
   theme_minimal(base_family = "Fira Sans", base_size = 14) +
