@@ -26,17 +26,55 @@ periodic_kernel <- function(x, alpha, period) {
   exp(-2 * sin(pi * x / period)^2 / alpha^2)
 }
 
-#' Pairwise spatial distances
+#' Pairwise spatial distances (Euclidean)
 #'
-#' Computes pairwise Euclidean distances between locations.
+#' Computes pairwise Euclidean distances between locations. Note that this
+#' treats `lon`/`lat` as Cartesian coordinates -- correct for projected
+#' coordinate systems and for synthetic data, but **wrong for real
+#' geographic coordinates in degrees** (one degree of longitude is not one
+#' degree of latitude). For real lat/lon data pass
+#' `distance_fn = haversine_distance` to [space_kernel()].
 #'
-#' @param coordinates A data frame with columns `lon` and `lat` in degrees.
+#' @param coordinates A data frame with columns `lon` and `lat`.
 #'
 #' @return A symmetric matrix of pairwise spatial distances.
 #' @export
 get_spatial_distance <- function(coordinates) {
-  dist(coordinates[, c("lon", "lat")], diag = TRUE, upper = TRUE) |>
+  stats::dist(coordinates[, c("lon", "lat")], diag = TRUE, upper = TRUE) |>
     as.matrix()
+}
+
+#' Pairwise great-circle (haversine) distances
+#'
+#' Treats `lon` and `lat` as degrees on the surface of the Earth and returns
+#' pairwise distances in kilometres. Use this whenever sites are spread over
+#' a region large enough that the Euclidean approximation breaks down (more
+#' than a few hundred kilometres) or when sites span a wide range of
+#' latitudes.
+#'
+#' @param coordinates A data frame with columns `lon` and `lat` in degrees.
+#' @param earth_radius_km Earth radius to use; defaults to 6371 km (mean).
+#'
+#' @return A symmetric matrix of pairwise great-circle distances in km.
+#' @export
+haversine_distance <- function(coordinates, earth_radius_km = 6371) {
+  lat <- coordinates$lat * pi / 180
+  lon <- coordinates$lon * pi / 180
+  n   <- length(lat)
+
+  # Pairwise differences via outer().
+  dlat <- outer(lat, lat, `-`)
+  dlon <- outer(lon, lon, `-`)
+  a    <- sin(dlat / 2)^2 +
+          cos(outer(lat, lat, function(a, b) (a + b) / 2 - (a - b) / 2)) *
+          cos(outer(lat, lat, function(a, b) (a + b) / 2 + (a - b) / 2)) *
+          sin(dlon / 2)^2
+  # The above expands to cos(lat_i) cos(lat_j); rewrite explicitly for clarity.
+  a    <- sin(dlat / 2)^2 +
+          outer(cos(lat), cos(lat)) * sin(dlon / 2)^2
+  c_   <- 2 * atan2(sqrt(a), sqrt(pmax(0, 1 - a)))
+
+  earth_radius_km * c_
 }
 
 #' Pairwise temporal distances
@@ -48,7 +86,7 @@ get_spatial_distance <- function(coordinates) {
 #' @return A symmetric matrix of pairwise temporal distances.
 #' @export
 get_temporal_distance <- function(times) {
-  dist(times, diag = TRUE, upper = TRUE) |>
+  stats::dist(times, diag = TRUE, upper = TRUE) |>
     as.matrix()
 }
 
@@ -57,15 +95,24 @@ get_temporal_distance <- function(times) {
 #' Builds a spatial covariance matrix using an RBF kernel with a nugget
 #' term for numerical stability.
 #'
-#' @param coordinates A data frame with columns `lon` and `lat` in degrees.
+#' By default uses Euclidean distance on `(lon, lat)`. Pass
+#' `distance_fn = haversine_distance` for real geographic coordinates in
+#' degrees.
+#'
+#' @param coordinates A data frame with columns `lon` and `lat`.
 #' @param length_scale A positive numeric scalar for the spatial length scale.
+#'   Interpreted in the units returned by `distance_fn` (degrees by default,
+#'   kilometres with haversine).
 #' @param nugget A non-negative numeric scalar added to the diagonal for
 #'   numerical stability.
+#' @param distance_fn Function taking `coordinates` and returning a symmetric
+#'   distance matrix. Defaults to [get_spatial_distance()] (Euclidean).
 #'
 #' @return A positive-definite matrix representing spatial covariance.
 #' @export
-space_kernel <- function(coordinates, length_scale, nugget = 1e-9) {
-  space_matrix <- get_spatial_distance(coordinates)
+space_kernel <- function(coordinates, length_scale, nugget = 1e-9,
+                         distance_fn = get_spatial_distance) {
+  space_matrix <- distance_fn(coordinates)
   rbf_kernel(space_matrix, theta = length_scale) +
     diag(x = nugget, nrow = nrow(space_matrix))
 }

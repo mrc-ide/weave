@@ -1,7 +1,7 @@
 Package: weave
 Type: Package
 Title: Health facility malaria data interpolation
-Version: 0.1.1
+Version: 0.2.0
 Authors@R: c(
     person("Pete", "Winskill", email = "p.winskill@imperial.ac.uk", role = c("aut", "cre")),
     person("Robert", "Verity", email = "r.verity@imperial.ac.uk", role = c("aut"))
@@ -12,13 +12,22 @@ Description: More about what it does (maybe more than one line)
 License: MIT + file LICENSE
 Encoding: UTF-8
 LazyData: true
-RoxygenNote: 7.3.2
+RoxygenNote: 7.3.3
 Depends:
     R (>= 4.1.0)
-Imports: 
-    rlang
-Suggests: 
+Imports:
+    rlang,
+    dplyr,
+    tidyr,
+    BayesLogit,
+    progress,
+    stats
+Suggests:
     knitr,
     rmarkdown,
-    testthat (>= 3.0.0)
+    testthat (>= 3.0.0),
+    coda,
+    lifecycle,
+    ggplot2
 Config/testthat/edition: 3
+VignetteBuilder: knitr

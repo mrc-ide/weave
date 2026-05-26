@@ -2,16 +2,21 @@
 % Please edit documentation in R/kernel.R
 \name{get_spatial_distance}
 \alias{get_spatial_distance}
-\title{Pairwise spatial distances}
+\title{Pairwise spatial distances (Euclidean)}
 \usage{
 get_spatial_distance(coordinates)
 }
 \arguments{
-\item{coordinates}{A data frame with columns `lon` and `lat` in degrees.}
+\item{coordinates}{A data frame with columns `lon` and `lat`.}
 }
 \value{
 A symmetric matrix of pairwise spatial distances.
 }
 \description{
-Computes pairwise Euclidean distances between locations.
+Computes pairwise Euclidean distances between locations. Note that this
+treats `lon`/`lat` as Cartesian coordinates -- correct for projected
+coordinate systems and for synthetic data, but **wrong for real
+geographic coordinates in degrees** (one degree of longitude is not one
+degree of latitude). For real lat/lon data pass
+`distance_fn = haversine_distance` to [space_kernel()].
 }

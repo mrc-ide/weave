@@ -1,0 +1,432 @@
+---
+title: "How weave fits the model"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{How weave fits the model}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment  = "#>",
+  fig.width = 8, fig.height = 5
+)
+```
+
+This vignette walks through *how* `weave` fits its spatio-temporal model.
+The goal is to give you a working mental picture of every block of the
+sampler, without skipping the parts that make it correct. It assumes you
+are comfortable with vectors, matrices, and a small amount of probability;
+it does **not** assume any background in MCMC, Gaussian processes, or
+Bayesian computation.
+
+We'll cover, in order:
+
+1. The model and what we want from it.
+2. Why straightforward approaches don't work, and what we do instead.
+3. The Pólya-Gamma identity --- the one trick that makes the rest easy.
+4. The five blocks of one sampling sweep, explained one at a time.
+5. Multiple chains, diagnostics, and what the output actually means.
+
+---
+
+## 1. The model
+
+We have weekly case counts $y_{st}$ at health facility $s$ in week $t$.
+We want to do three things with them at once:
+
+- **Smooth over time**, so a single week's spike doesn't dominate.
+- **Borrow strength across sites**, so a quiet facility benefits from its
+  neighbours.
+- **Fill in missing weeks** in a principled way, with honest uncertainty.
+
+The model that does all three is:
+
+$$
+y_{st} \sim \mathrm{NegBin}(r, \mu = e^{\psi_{st}}), \qquad
+\psi_{st} = \mu_s + f_{st},
+$$
+
+with the *latent field* $f$ given a Gaussian process prior:
+
+$$
+f \sim \mathcal{N}(0, \; K_{\text{space}} \otimes K_{\text{time}}).
+$$
+
+In plain English:
+
+- Each count is **negative binomial** with mean $\lambda_{st} = e^{\psi_{st}}$
+  and a dispersion parameter $r$ (small $r$ → heavy tails; $r \to \infty$
+  → Poisson).
+- The log-mean $\psi_{st}$ is a **site intercept** $\mu_s$ plus a smooth
+  **latent surface** $f_{st}$.
+- The surface $f$ has a Gaussian-process prior: it's smooth in space *and*
+  in time, with the smoothness controlled by three knobs (the kernel
+  hyperparameters $\theta$):
+  - `length_scale` --- how quickly correlation decays with distance.
+  - `periodic_scale` --- how peaky the seasonal cycle is.
+  - `long_term_scale` --- how smooth the year-on-year trend is.
+
+The covariance is **separable**: it factorises as a Kronecker product of a
+small spatial kernel and a small temporal kernel. This is the structural
+assumption that makes the maths tractable --- we never need to handle a
+$(n \cdot n_t) \times (n \cdot n_t)$ matrix as a whole.
+
+The parameters we want to learn from the data are $f$, $\mu_s$, $\theta$,
+and $r$. "Learn" here means: get a sample of values that is representative
+of the **posterior distribution** $p(f, \mu, \theta, r \mid y)$. Once we
+have such a sample we can answer any question we want --- the posterior
+mean for a missing week, a 95% credible interval, a forecast --- by
+summarising the sample.
+
+---
+
+## 2. Why this is hard, and what we do instead
+
+There are two reasons this is not a one-line maximum-likelihood problem.
+
+**Reason A: the latent field is enormous.** For 1000 facilities and 150
+weeks, $f$ has 150,000 entries. Standard tools like `Stan`'s NUTS can
+sample over that many parameters in principle, but the geometry is awful
+(the latent field is strongly correlated by construction), and you spend
+most of your time tuning step sizes.
+
+**Reason B: the likelihood is not Gaussian.** If $y_{st}$ were Gaussian, we
+could write down the posterior of $f$ in closed form and be done. The
+negative-binomial likelihood doesn't admit that, so we'd usually fall back
+on a Laplace approximation. But Laplace can be badly biased when counts
+are small, which is exactly the regime where routine HF data lives.
+
+The strategy `weave` uses sidesteps both problems:
+
+- Treat the model as a **Gibbs sampler**: cycle through the parameters,
+  updating each block from its conditional posterior given everything
+  else.
+- Make every block either **exactly conjugate** (closed-form Gaussian or
+  conjugate update) or a **simple one-dimensional sampler** (univariate
+  slice, random-walk Metropolis).
+- The hard block --- the 150,000-dim latent field $f$ --- becomes
+  conjugate-Gaussian after a clever data augmentation (next section), so
+  it's just one matrix-free linear solve per sweep.
+
+The result is a sampler with no hand-tuning, exact (no Laplace anywhere),
+and laptop-feasible for problem sizes in the thousands of sites and
+hundreds of weeks.
+
+---
+
+## 3. The Pólya-Gamma identity
+
+This is the only piece of maths you need to keep in mind. Everything else
+follows from it.
+
+The negative-binomial density, written with the linear predictor
+$\eta = \psi - \log r$, has an awkward denominator:
+
+$$
+P(y \mid r, \eta) \;\propto\; \frac{e^{y \eta}}{(1 + e^{\eta})^{\,y + r}}.
+$$
+
+The denominator is what stops the conditional posterior of $\eta$ from
+being Gaussian. The Pólya-Gamma identity (Polson, Scott, & Windle 2013)
+says: there is an auxiliary random variable $\omega$ with the Pólya-Gamma
+distribution such that
+
+$$
+\frac{e^{y \eta}}{(1 + e^{\eta})^{\,y + r}}
+= \int_0^\infty \exp\!\left(\kappa \eta - \tfrac{\omega}{2}\eta^2\right)\,
+  p_{\mathrm{PG}}(\omega \mid y + r, 0)\, d\omega,
+\qquad \kappa = \frac{y - r}{2}.
+$$
+
+Read the integrand on the right as a function of $\eta$. With $\omega$
+held fixed it is **exactly a Gaussian in $\eta$**, with mean $\kappa/\omega$
+and precision $\omega$. The negative-binomial likelihood has been
+re-expressed as a *Gaussian observation of $\eta$*, conditional on a
+latent variable $\omega$ we can sample efficiently.
+
+Practical consequence: introducing one $\omega$ per observed cell turns
+the latent-field block from "non-Gaussian likelihood, no closed form" into
+"Gaussian likelihood, closed-form conditional". The whole rest of the
+sampler is built on this.
+
+The `BayesLogit::rpg` function provides fast vectorised draws from the
+Pólya-Gamma distribution.
+
+---
+
+## 4. Inside one sweep
+
+A single sweep of the sampler updates every parameter once, in the
+following order:
+
+1. $\omega$ given $(f, \mu, \theta, r, y)$
+2. $f$ given $(\omega, \mu, \theta, r, y)$
+3. $\mu$ given $(\omega, f, r, y)$
+4. $\theta$ given $f$
+5. $r$ given $(y, \psi)$
+
+We'll go through each block, explaining both the *what* (the conditional
+distribution) and the *how* (the algorithm).
+
+### 4.1 Block 1: $\omega \mid \mathrm{rest}$ --- the auxiliary refresh
+
+For each observed cell $i$ we compute
+$\eta_i = \psi_i - \log r = f_i + \mu_{s(i)} - \log r$, and draw
+
+$$
+\omega_i \sim \mathrm{PG}(y_i + r,\; \eta_i).
+$$
+
+This is one call to `BayesLogit::rpg` per sweep, vectorised over all
+observed cells. It is cheap (microseconds per draw) and trivially
+parallel.
+
+**Intuition**: $\omega_i$ is the "weight" the Gaussian-disguised
+likelihood will give to cell $i$ in the next block. Cells where the
+likelihood is sharp get large $\omega$; cells where the likelihood is
+flat get small $\omega$.
+
+### 4.2 Block 2: $f \mid \mathrm{rest}$ --- the heavy block
+
+After conditioning on $\omega$, the latent field has a Gaussian
+conditional posterior. Writing $S$ for the matrix that selects the
+observed cells out of the full $n \times n_t$ grid, and $\Omega =
+\mathrm{diag}(\omega)$:
+
+$$
+\Sigma_{\text{post}}^{-1} = K^{-1} + S^{\!\top} \Omega S, \qquad
+\mu_{\text{post}} = \Sigma_{\text{post}}\, S^{\!\top} \Omega\, (y^* - \mu),
+$$
+
+where $y^*_i = \kappa_i / \omega_i + \log r$ is the **pseudo-observation**
+the PG identity gave us.
+
+We never form $\Sigma_{\text{post}}$ --- it's a 150,000-dimensional dense
+matrix at production scale. Instead we use the **perturbation sampler** of
+Papandreou & Yuille (2010) / Bhattacharya et al. (2016), which produces an
+exact draw from the conditional Gaussian with one matrix-free linear solve:
+
+1. Sample a **prior draw** $u \sim \mathcal{N}(0, K)$. Because $K$ is
+   Kronecker-separable, this is cheap (the existing `quick_mvnorm` does it
+   in two Cholesky factorisations of small $n \times n$ and $n_t \times
+   n_t$ matrices).
+2. Sample an **observation-noise draw** $e_i \sim \mathcal{N}(0,
+   1/\omega_i)$ at each observed cell.
+3. Solve, by **preconditioned conjugate gradient (PCG)**, the small
+   observation-space system
+   $$(K + S^{\!\top}\Omega^{-1}S)\,\gamma = (y^* - \mu) - S u - e.$$
+4. Return $f = u + K\, S^{\!\top}\gamma$.
+
+The arithmetic to show this $f$ has exactly the right Gaussian
+distribution is a few lines of algebra. The intuition: $u$ is the right
+covariance but the wrong mean; the PCG solve is the precise correction
+that moves it to the posterior mean while *preserving* the covariance.
+
+**Why PCG is fast here.** PCG only needs two things: a way to multiply by
+the system matrix, and a "preconditioner" --- a fast approximation to its
+inverse. The system matrix never needs to exist as a matrix; the multiply
+is a sequence of small operations using the Kronecker structure. The
+preconditioner uses the eigendecomposition of the small $K_{\text{space}}$
+and $K_{\text{time}}$ kernels --- also cheap. Typical convergence is in
+50–150 iterations even on the production-scale problem.
+
+### 4.3 Block 3: $\mu_s \mid \mathrm{rest}$ --- per-site Gaussian
+
+The pseudo-observation $y^*_i$ is a Gaussian observation of $\psi_i = f_i
++ \mu_{s(i)}$ with precision $\omega_i$. Subtracting $f_i$ gives a
+Gaussian observation of $\mu_{s(i)}$ alone. Combined with the
+$\mathcal{N}(m_0, v_0)$ prior on $\mu_s$, the conditional posterior is
+closed-form Normal per site:
+
+$$
+\text{prec} = \frac{1}{v_0} + \sum_{i\, \in\, \text{site } s} \omega_i,
+\qquad
+\text{mean} = \frac{m_0/v_0 + \sum_{i\, \in\, \text{site } s} \omega_i (y^*_i - f_i)}{\text{prec}}.
+$$
+
+Implemented as two `tapply` accumulations over sites and one vector of
+`rnorm` draws --- fast and trivially correct.
+
+### 4.4 Block 4: $\theta \mid f$ --- slice on the kernel hyperparameters
+
+The three kernel hyperparameters $\theta = (\ell_s, \ell_p, \ell_t)$ each
+get a **univariate slice sampler** on the log scale. The target is the
+GP prior log-density of $f$ at the current value:
+
+$$
+\log p(\theta \mid f) = \log p(\theta) - \tfrac{1}{2}\log|K(\theta)|
+- \tfrac{1}{2}\, f^{\!\top} K(\theta)^{-1} f.
+$$
+
+We can compute both $\log|K|$ and $f^{\!\top} K^{-1} f$ cheaply because of
+the Kronecker structure: eigendecompose the small $K_{\text{space}}$ and
+$K_{\text{time}}$ separately, and the log-determinant is a sum of the log
+eigenvalues, while the quadratic form is a sum of squared entries of the
+rotated $f$ divided by the eigenvalues.
+
+The slice sampler itself (Neal 2003) needs no tuning. It picks a
+horizontal "slice" at a uniform height under the log-target, finds an
+interval bracketing the current value where the target is above the
+slice, and then samples uniformly from that interval (shrinking on
+rejection). Working on $\log \theta$ gives well-behaved stepping-out and
+keeps every value positive.
+
+This is the slowest block. Each accepted slice move requires an
+$O(n^3)$ eigendecomposition of the spatial kernel, which is a few
+seconds at $n = 1000$.
+
+### 4.5 Block 5: $r \mid \mathrm{rest}$ --- random-walk Metropolis
+
+The NB dispersion $r$ has no conjugate update, but it's a single positive
+scalar and the posterior is well-behaved. We use a **random-walk
+Metropolis-Hastings** update on $\log r$:
+
+1. Propose $\log r' = \log r + \mathcal{N}(0, s^2)$.
+2. Accept with probability
+   $$\min\!\left\{1,\; \frac{p(y \mid \psi, r') p(r')}{p(y \mid \psi, r) p(r)} \cdot \frac{r'}{r}\right\}.$$
+   (The trailing factor is the Jacobian for working on the log scale.)
+
+The proposal scale $s$ is tuned adaptively during burn-in using
+Robbins-Monro: nudge $\log s$ in the direction that brings the acceptance
+rate toward the gold-standard 0.44 for 1-D random walks.
+
+This is the only block with any "tuning", and we hide it inside burn-in.
+
+---
+
+## 5. Multiple chains, diagnostics, and posterior output
+
+A single chain is enough for point estimates but not enough to be
+*confident*. To detect non-convergence we run multiple chains in parallel
+with deliberately different starting points, and compare them.
+
+### 5.1 Overdispersed initial values
+
+With `n_chains > 1`, `fit_bayes()` starts each chain after the first at
+random draws from the priors of $\theta$ and $r$. The first chain still
+uses sensible deterministic starts so it converges quickly. The other
+chains are "overdispersed" --- different enough that if they all collapse
+onto the same posterior region, we can trust the result.
+
+### 5.2 Rhat (Gelman-Rubin diagnostic)
+
+For each parameter we compute the **potential scale reduction factor**
+$\hat R$. Informally:
+
+$$
+\hat R \approx \sqrt{\frac{\text{total variance across all chains}}{\text{average within-chain variance}}}.
+$$
+
+If the chains have all found the same distribution, the numerator and
+denominator are equal and $\hat R = 1$. Values bigger than $\sim 1.05$ are
+a sign chains haven't merged --- either the sampler is broken, the
+posterior is multimodal, or the chains need more sweeps.
+
+`summary.weave_bayes()` reports $\hat R$ for `length_scale`,
+`periodic_scale`, `long_term_scale`, and `r` automatically when `n_chains
+> 1`.
+
+### 5.3 Effective sample size (ESS)
+
+Chains are autocorrelated, so 1000 sweeps don't give 1000 independent
+posterior draws. The effective sample size is the number of *equivalent
+independent* draws. Aim for ESS $\geq 400$ per parameter for anything you
+want to quote a credible interval on; $\geq 100$ for exploration.
+`coda::effectiveSize` computes this from the trace.
+
+### 5.4 Storage of the latent field
+
+Storing $f$ at every sweep is a memory bomb (150k × 5000 sweeps × 3 chains
+≈ 18 GB at 8 bytes/double). By default `fit_bayes()` keeps only a
+**running mean and variance** of $f$ (Welford's algorithm; numerically
+stable and $O(N)$ per update). For posterior-predictive draws you can
+opt in to keeping a *thinned* set of full $f$ vectors --- the default of
+100 evenly-spaced samples per chain is plenty for downstream plotting.
+
+---
+
+## 6. Putting it together: a worked example
+
+Below is the minimal call that exercises everything we just discussed.
+For more depth see the full walkthrough at
+`implementation/test_walkthrough.R`.
+
+```{r, eval = FALSE}
+library(weave)
+source(system.file("../implementation/simulation.R", package = "weave"))
+
+# Simulate some HF count data.
+set.seed(42)
+n  <- 30; nt <- 104
+coords <- data.frame(
+  id  = factor(1:n),
+  lat = runif(n, 0, 5),
+  lon = runif(n, 0, 5),
+  mu  = log(runif(n, 10, 80))
+)
+space_k <- space_kernel(coords, length_scale = 2)
+time_k  <- time_kernel(1:nt, periodic_scale = 1, long_term_scale = 200)
+true    <- simulate_data(n, nt, coords, space_k, time_k, r = 15)
+obs     <- observed_data(true, p_one = 0.2, p_switch = 0.3)
+
+# Fit.
+fit <- fit_bayes(
+  obs,
+  n_sweeps = 1000, burnin = 400,
+  n_chains = 3,
+  store_f  = "thin"
+)
+
+# Diagnostics + posterior summary with Rhat.
+summary(fit)
+```
+
+What to look at after the fit:
+
+1. **Print the object**: chain count, sweeps, observation count, median
+   PCG iterations per sweep, MH acceptance for $r$ per chain.
+2. **Summary**: posterior medians and 95% intervals for the kernel
+   parameters and $r$, plus $\hat R$.
+3. **Posterior predictive**: `posterior_predict(fit)` gives one count-scale
+   draw per stored MCMC sample at every cell. Coverage on held-out cells
+   should be close to nominal.
+4. **Run multiple chains**: the only honest way to know the sampler has
+   converged is to see chains overlap and $\hat R$ near 1.
+
+---
+
+## 7. When the sampler is unhappy
+
+A short field guide:
+
+- **$\hat R > 1.1$** on `long_term_scale` after a moderate run: usually
+  just slow mixing on a weakly identified parameter. Add more sweeps
+  before worrying about model misspecification.
+- **MH acceptance for $r$ outside $[0.15, 0.6]$** after burn-in: the
+  adaptive scale didn't converge. Re-run with a longer burn-in.
+- **PCG iteration count climbs across sweeps**: this can happen when
+  $\omega$ becomes very heterogeneous (e.g. small $r$ + lots of zero
+  cells). Increase `pcg_maxit` or relax `pcg_tol`.
+- **Posterior predictive coverage well under 95%**: the model is mis-
+  specified. The two usual culprits are (a) site-level deviation from
+  the GP smoothness assumption --- some sites really are different ---
+  and (b) the wrong period (e.g. you used `period = 52` for monthly
+  data).
+
+---
+
+## 8. Further reading
+
+- Polson, N., Scott, J., & Windle, J. (2013). *Bayesian inference for
+  logistic models using Pólya-Gamma latent variables.* JASA 108(504).
+- Bhattacharya, A., Chakraborty, A., & Mallick, B. K. (2016). *Fast
+  sampling with Gaussian scale-mixture priors in high-dimensional
+  regression.* Biometrika 103(4).
+- Papandreou, G., & Yuille, A. (2010). *Gaussian sampling by local
+  perturbations.* NeurIPS.
+- Neal, R. (2003). *Slice sampling.* Annals of Statistics 31(3).
+- Gelman, A., & Rubin, D. (1992). *Inference from iterative simulation
+  using multiple sequences.* Statistical Science 7(4).

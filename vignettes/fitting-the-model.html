@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="utf-8" />
+<meta name="generator" content="pandoc" />
+<meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
+
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+
+
+<title>How weave fits the model</title>
+
+<script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
+// be compatible with the behavior of Pandoc < 2.8).
+document.addEventListener('DOMContentLoaded', function(e) {
+  var hs = document.querySelectorAll("div.section[class*='level'] > :first-child");
+  var i, h, a;
+  for (i = 0; i < hs.length; i++) {
+    h = hs[i];
+    if (!/^h[1-6]$/i.test(h.tagName)) continue;  // it should be a header h1-h6
+    a = h.attributes;
+    while (a.length > 0) h.removeAttribute(a[0].name);
+  }
+});
+</script>
+
+<style type="text/css">
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+span.underline{text-decoration: underline;}
+div.column{display: inline-block; vertical-align: top; width: 50%;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+</style>
+
+
+
+<style type="text/css">
+code {
+white-space: pre;
+}
+.sourceCode {
+overflow: visible;
+}
+</style>
+<style type="text/css" data-origin="pandoc">
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+{ counter-reset: source-line 0; }
+pre.numberSource code > span
+{ position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+{ content: counter(source-line);
+position: relative; left: -1em; text-align: right; vertical-align: baseline;
+border: none; display: inline-block;
+-webkit-touch-callout: none; -webkit-user-select: none;
+-khtml-user-select: none; -moz-user-select: none;
+-ms-user-select: none; user-select: none;
+padding: 0 4px; width: 4em;
+color: #aaaaaa;
+}
+pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa; padding-left: 4px; }
+div.sourceCode
+{ }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+code span.al { color: #ff0000; font-weight: bold; } 
+code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.at { color: #7d9029; } 
+code span.bn { color: #40a070; } 
+code span.bu { color: #008000; } 
+code span.cf { color: #007020; font-weight: bold; } 
+code span.ch { color: #4070a0; } 
+code span.cn { color: #880000; } 
+code span.co { color: #60a0b0; font-style: italic; } 
+code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.do { color: #ba2121; font-style: italic; } 
+code span.dt { color: #902000; } 
+code span.dv { color: #40a070; } 
+code span.er { color: #ff0000; font-weight: bold; } 
+code span.ex { } 
+code span.fl { color: #40a070; } 
+code span.fu { color: #06287e; } 
+code span.im { color: #008000; font-weight: bold; } 
+code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.kw { color: #007020; font-weight: bold; } 
+code span.op { color: #666666; } 
+code span.ot { color: #007020; } 
+code span.pp { color: #bc7a00; } 
+code span.sc { color: #4070a0; } 
+code span.ss { color: #bb6688; } 
+code span.st { color: #4070a0; } 
+code span.va { color: #19177c; } 
+code span.vs { color: #4070a0; } 
+code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } 
+</style>
+<script>
+// apply pandoc div.sourceCode style to pre.sourceCode instead
+(function() {
+  var sheets = document.styleSheets;
+  for (var i = 0; i < sheets.length; i++) {
+    if (sheets[i].ownerNode.dataset["origin"] !== "pandoc") continue;
+    try { var rules = sheets[i].cssRules; } catch (e) { continue; }
+    var j = 0;
+    while (j < rules.length) {
+      var rule = rules[j];
+      // check if there is a div.sourceCode rule
+      if (rule.type !== rule.STYLE_RULE || rule.selectorText !== "div.sourceCode") {
+        j++;
+        continue;
+      }
+      var style = rule.style.cssText;
+      // check if color or background-color is set
+      if (rule.style.color === '' && rule.style.backgroundColor === '') {
+        j++;
+        continue;
+      }
+      // replace div.sourceCode by a pre.sourceCode rule
+      sheets[i].deleteRule(j);
+      sheets[i].insertRule('pre.sourceCode{' + style + '}', j);
+    }
+  }
+})();
+</script>
+
+
+
+
+<style type="text/css">body {
+background-color: #fff;
+margin: 1em auto;
+max-width: 700px;
+overflow: visible;
+padding-left: 2em;
+padding-right: 2em;
+font-family: "Open Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+font-size: 14px;
+line-height: 1.35;
+}
+#TOC {
+clear: both;
+margin: 0 0 10px 10px;
+padding: 4px;
+width: 400px;
+border: 1px solid #CCCCCC;
+border-radius: 5px;
+background-color: #f6f6f6;
+font-size: 13px;
+line-height: 1.3;
+}
+#TOC .toctitle {
+font-weight: bold;
+font-size: 15px;
+margin-left: 5px;
+}
+#TOC ul {
+padding-left: 40px;
+margin-left: -1.5em;
+margin-top: 5px;
+margin-bottom: 5px;
+}
+#TOC ul ul {
+margin-left: -2em;
+}
+#TOC li {
+line-height: 16px;
+}
+table {
+margin: 1em auto;
+border-width: 1px;
+border-color: #DDDDDD;
+border-style: outset;
+border-collapse: collapse;
+}
+table th {
+border-width: 2px;
+padding: 5px;
+border-style: inset;
+}
+table td {
+border-width: 1px;
+border-style: inset;
+line-height: 18px;
+padding: 5px 5px;
+}
+table, table th, table td {
+border-left-style: none;
+border-right-style: none;
+}
+table thead, table tr.even {
+background-color: #f7f7f7;
+}
+p {
+margin: 0.5em 0;
+}
+blockquote {
+background-color: #f6f6f6;
+padding: 0.25em 0.75em;
+}
+hr {
+border-style: solid;
+border: none;
+border-top: 1px solid #777;
+margin: 28px 0;
+}
+dl {
+margin-left: 0;
+}
+dl dd {
+margin-bottom: 13px;
+margin-left: 13px;
+}
+dl dt {
+font-weight: bold;
+}
+ul {
+margin-top: 0;
+}
+ul li {
+list-style: circle outside;
+}
+ul ul {
+margin-bottom: 0;
+}
+pre, code {
+background-color: #f7f7f7;
+border-radius: 3px;
+color: #333;
+white-space: pre-wrap; 
+}
+pre {
+border-radius: 3px;
+margin: 5px 0px 10px 0px;
+padding: 10px;
+}
+pre:not([class]) {
+background-color: #f7f7f7;
+}
+code {
+font-family: Consolas, Monaco, 'Courier New', monospace;
+font-size: 85%;
+}
+p > code, li > code {
+padding: 2px 0px;
+}
+div.figure {
+text-align: center;
+}
+img {
+background-color: #FFFFFF;
+padding: 2px;
+border: 1px solid #DDDDDD;
+border-radius: 3px;
+border: 1px solid #CCCCCC;
+margin: 0 5px;
+}
+h1 {
+margin-top: 0;
+font-size: 35px;
+line-height: 40px;
+}
+h2 {
+border-bottom: 4px solid #f7f7f7;
+padding-top: 10px;
+padding-bottom: 2px;
+font-size: 145%;
+}
+h3 {
+border-bottom: 2px solid #f7f7f7;
+padding-top: 10px;
+font-size: 120%;
+}
+h4 {
+border-bottom: 1px solid #f7f7f7;
+margin-left: 8px;
+font-size: 105%;
+}
+h5, h6 {
+border-bottom: 1px solid #ccc;
+font-size: 105%;
+}
+a {
+color: #0033dd;
+text-decoration: none;
+}
+a:hover {
+color: #6666ff; }
+a:visited {
+color: #800080; }
+a:visited:hover {
+color: #BB00BB; }
+a[href^="http:"] {
+text-decoration: underline; }
+a[href^="https:"] {
+text-decoration: underline; }
+
+code > span.kw { color: #555; font-weight: bold; } 
+code > span.dt { color: #902000; } 
+code > span.dv { color: #40a070; } 
+code > span.bn { color: #d14; } 
+code > span.fl { color: #d14; } 
+code > span.ch { color: #d14; } 
+code > span.st { color: #d14; } 
+code > span.co { color: #888888; font-style: italic; } 
+code > span.ot { color: #007020; } 
+code > span.al { color: #ff0000; font-weight: bold; } 
+code > span.fu { color: #900; font-weight: bold; } 
+code > span.er { color: #a61717; background-color: #e3d2d2; } 
+</style>
+
+
+
+
+</head>
+
+<body>
+
+
+
+
+<h1 class="title toc-ignore">How weave fits the model</h1>
+
+
+
+<p>This vignette walks through <em>how</em> <code>weave</code> fits its
+spatio-temporal model. The goal is to give you a working mental picture
+of every block of the sampler, without skipping the parts that make it
+correct. It assumes you are comfortable with vectors, matrices, and a
+small amount of probability; it does <strong>not</strong> assume any
+background in MCMC, Gaussian processes, or Bayesian computation.</p>
+<p>We’ll cover, in order:</p>
+<ol style="list-style-type: decimal">
+<li>The model and what we want from it.</li>
+<li>Why straightforward approaches don’t work, and what we do
+instead.</li>
+<li>The Pólya-Gamma identity — the one trick that makes the rest
+easy.</li>
+<li>The five blocks of one sampling sweep, explained one at a time.</li>
+<li>Multiple chains, diagnostics, and what the output actually
+means.</li>
+</ol>
+<hr />
+<div id="the-model" class="section level2">
+<h2>1. The model</h2>
+<p>We have weekly case counts <span class="math inline">\(y_{st}\)</span> at health facility <span class="math inline">\(s\)</span> in week <span class="math inline">\(t\)</span>. We want to do three things with them
+at once:</p>
+<ul>
+<li><strong>Smooth over time</strong>, so a single week’s spike doesn’t
+dominate.</li>
+<li><strong>Borrow strength across sites</strong>, so a quiet facility
+benefits from its neighbours.</li>
+<li><strong>Fill in missing weeks</strong> in a principled way, with
+honest uncertainty.</li>
+</ul>
+<p>The model that does all three is:</p>
+<p><span class="math display">\[
+y_{st} \sim \mathrm{NegBin}(r, \mu = e^{\psi_{st}}), \qquad
+\psi_{st} = \mu_s + f_{st},
+\]</span></p>
+<p>with the <em>latent field</em> <span class="math inline">\(f\)</span>
+given a Gaussian process prior:</p>
+<p><span class="math display">\[
+f \sim \mathcal{N}(0, \; K_{\text{space}} \otimes K_{\text{time}}).
+\]</span></p>
+<p>In plain English:</p>
+<ul>
+<li>Each count is <strong>negative binomial</strong> with mean <span class="math inline">\(\lambda_{st} = e^{\psi_{st}}\)</span> and a
+dispersion parameter <span class="math inline">\(r\)</span> (small <span class="math inline">\(r\)</span> → heavy tails; <span class="math inline">\(r \to \infty\)</span> → Poisson).</li>
+<li>The log-mean <span class="math inline">\(\psi_{st}\)</span> is a
+<strong>site intercept</strong> <span class="math inline">\(\mu_s\)</span> plus a smooth <strong>latent
+surface</strong> <span class="math inline">\(f_{st}\)</span>.</li>
+<li>The surface <span class="math inline">\(f\)</span> has a
+Gaussian-process prior: it’s smooth in space <em>and</em> in time, with
+the smoothness controlled by three knobs (the kernel hyperparameters
+<span class="math inline">\(\theta\)</span>):
+<ul>
+<li><code>length_scale</code> — how quickly correlation decays with
+distance.</li>
+<li><code>periodic_scale</code> — how peaky the seasonal cycle is.</li>
+<li><code>long_term_scale</code> — how smooth the year-on-year trend
+is.</li>
+</ul></li>
+</ul>
+<p>The covariance is <strong>separable</strong>: it factorises as a
+Kronecker product of a small spatial kernel and a small temporal kernel.
+This is the structural assumption that makes the maths tractable — we
+never need to handle a <span class="math inline">\((n \cdot n_t) \times
+(n \cdot n_t)\)</span> matrix as a whole.</p>
+<p>The parameters we want to learn from the data are <span class="math inline">\(f\)</span>, <span class="math inline">\(\mu_s\)</span>, <span class="math inline">\(\theta\)</span>, and <span class="math inline">\(r\)</span>. “Learn” here means: get a sample of
+values that is representative of the <strong>posterior
+distribution</strong> <span class="math inline">\(p(f, \mu, \theta, r
+\mid y)\)</span>. Once we have such a sample we can answer any question
+we want — the posterior mean for a missing week, a 95% credible
+interval, a forecast — by summarising the sample.</p>
+<hr />
+</div>
+<div id="why-this-is-hard-and-what-we-do-instead" class="section level2">
+<h2>2. Why this is hard, and what we do instead</h2>
+<p>There are two reasons this is not a one-line maximum-likelihood
+problem.</p>
+<p><strong>Reason A: the latent field is enormous.</strong> For 1000
+facilities and 150 weeks, <span class="math inline">\(f\)</span> has
+150,000 entries. Standard tools like <code>Stan</code>’s NUTS can sample
+over that many parameters in principle, but the geometry is awful (the
+latent field is strongly correlated by construction), and you spend most
+of your time tuning step sizes.</p>
+<p><strong>Reason B: the likelihood is not Gaussian.</strong> If <span class="math inline">\(y_{st}\)</span> were Gaussian, we could write down
+the posterior of <span class="math inline">\(f\)</span> in closed form
+and be done. The negative-binomial likelihood doesn’t admit that, so
+we’d usually fall back on a Laplace approximation. But Laplace can be
+badly biased when counts are small, which is exactly the regime where
+routine HF data lives.</p>
+<p>The strategy <code>weave</code> uses sidesteps both problems:</p>
+<ul>
+<li>Treat the model as a <strong>Gibbs sampler</strong>: cycle through
+the parameters, updating each block from its conditional posterior given
+everything else.</li>
+<li>Make every block either <strong>exactly conjugate</strong>
+(closed-form Gaussian or conjugate update) or a <strong>simple
+one-dimensional sampler</strong> (univariate slice, random-walk
+Metropolis).</li>
+<li>The hard block — the 150,000-dim latent field <span class="math inline">\(f\)</span> — becomes conjugate-Gaussian after a
+clever data augmentation (next section), so it’s just one matrix-free
+linear solve per sweep.</li>
+</ul>
+<p>The result is a sampler with no hand-tuning, exact (no Laplace
+anywhere), and laptop-feasible for problem sizes in the thousands of
+sites and hundreds of weeks.</p>
+<hr />
+</div>
+<div id="the-pólya-gamma-identity" class="section level2">
+<h2>3. The Pólya-Gamma identity</h2>
+<p>This is the only piece of maths you need to keep in mind. Everything
+else follows from it.</p>
+<p>The negative-binomial density, written with the linear predictor
+<span class="math inline">\(\eta = \psi - \log r\)</span>, has an
+awkward denominator:</p>
+<p><span class="math display">\[
+P(y \mid r, \eta) \;\propto\; \frac{e^{y \eta}}{(1 + e^{\eta})^{\,y +
+r}}.
+\]</span></p>
+<p>The denominator is what stops the conditional posterior of <span class="math inline">\(\eta\)</span> from being Gaussian. The Pólya-Gamma
+identity (Polson, Scott, &amp; Windle 2013) says: there is an auxiliary
+random variable <span class="math inline">\(\omega\)</span> with the
+Pólya-Gamma distribution such that</p>
+<p><span class="math display">\[
+\frac{e^{y \eta}}{(1 + e^{\eta})^{\,y + r}}
+= \int_0^\infty \exp\!\left(\kappa \eta -
+\tfrac{\omega}{2}\eta^2\right)\,
+  p_{\mathrm{PG}}(\omega \mid y + r, 0)\, d\omega,
+\qquad \kappa = \frac{y - r}{2}.
+\]</span></p>
+<p>Read the integrand on the right as a function of <span class="math inline">\(\eta\)</span>. With <span class="math inline">\(\omega\)</span> held fixed it is <strong>exactly a
+Gaussian in <span class="math inline">\(\eta\)</span></strong>, with
+mean <span class="math inline">\(\kappa/\omega\)</span> and precision
+<span class="math inline">\(\omega\)</span>. The negative-binomial
+likelihood has been re-expressed as a <em>Gaussian observation of <span class="math inline">\(\eta\)</span></em>, conditional on a latent
+variable <span class="math inline">\(\omega\)</span> we can sample
+efficiently.</p>
+<p>Practical consequence: introducing one <span class="math inline">\(\omega\)</span> per observed cell turns the
+latent-field block from “non-Gaussian likelihood, no closed form” into
+“Gaussian likelihood, closed-form conditional”. The whole rest of the
+sampler is built on this.</p>
+<p>The <code>BayesLogit::rpg</code> function provides fast vectorised
+draws from the Pólya-Gamma distribution.</p>
+<hr />
+</div>
+<div id="inside-one-sweep" class="section level2">
+<h2>4. Inside one sweep</h2>
+<p>A single sweep of the sampler updates every parameter once, in the
+following order:</p>
+<ol style="list-style-type: decimal">
+<li><span class="math inline">\(\omega\)</span> given <span class="math inline">\((f, \mu, \theta, r, y)\)</span></li>
+<li><span class="math inline">\(f\)</span> given <span class="math inline">\((\omega, \mu, \theta, r, y)\)</span></li>
+<li><span class="math inline">\(\mu\)</span> given <span class="math inline">\((\omega, f, r, y)\)</span></li>
+<li><span class="math inline">\(\theta\)</span> given <span class="math inline">\(f\)</span></li>
+<li><span class="math inline">\(r\)</span> given <span class="math inline">\((y, \psi)\)</span></li>
+</ol>
+<p>We’ll go through each block, explaining both the <em>what</em> (the
+conditional distribution) and the <em>how</em> (the algorithm).</p>
+<div id="block-1-omega-mid-mathrmrest-the-auxiliary-refresh" class="section level3">
+<h3>4.1 Block 1: <span class="math inline">\(\omega \mid
+\mathrm{rest}\)</span> — the auxiliary refresh</h3>
+<p>For each observed cell <span class="math inline">\(i\)</span> we
+compute <span class="math inline">\(\eta_i = \psi_i - \log r = f_i +
+\mu_{s(i)} - \log r\)</span>, and draw</p>
+<p><span class="math display">\[
+\omega_i \sim \mathrm{PG}(y_i + r,\; \eta_i).
+\]</span></p>
+<p>This is one call to <code>BayesLogit::rpg</code> per sweep,
+vectorised over all observed cells. It is cheap (microseconds per draw)
+and trivially parallel.</p>
+<p><strong>Intuition</strong>: <span class="math inline">\(\omega_i\)</span> is the “weight” the
+Gaussian-disguised likelihood will give to cell <span class="math inline">\(i\)</span> in the next block. Cells where the
+likelihood is sharp get large <span class="math inline">\(\omega\)</span>; cells where the likelihood is
+flat get small <span class="math inline">\(\omega\)</span>.</p>
+</div>
+<div id="block-2-f-mid-mathrmrest-the-heavy-block" class="section level3">
+<h3>4.2 Block 2: <span class="math inline">\(f \mid
+\mathrm{rest}\)</span> — the heavy block</h3>
+<p>After conditioning on <span class="math inline">\(\omega\)</span>,
+the latent field has a Gaussian conditional posterior. Writing <span class="math inline">\(S\)</span> for the matrix that selects the
+observed cells out of the full <span class="math inline">\(n \times
+n_t\)</span> grid, and <span class="math inline">\(\Omega =
+\mathrm{diag}(\omega)\)</span>:</p>
+<p><span class="math display">\[
+\Sigma_{\text{post}}^{-1} = K^{-1} + S^{\!\top} \Omega S, \qquad
+\mu_{\text{post}} = \Sigma_{\text{post}}\, S^{\!\top} \Omega\, (y^* -
+\mu),
+\]</span></p>
+<p>where <span class="math inline">\(y^*_i = \kappa_i / \omega_i + \log
+r\)</span> is the <strong>pseudo-observation</strong> the PG identity
+gave us.</p>
+<p>We never form <span class="math inline">\(\Sigma_{\text{post}}\)</span> — it’s a
+150,000-dimensional dense matrix at production scale. Instead we use the
+<strong>perturbation sampler</strong> of Papandreou &amp; Yuille (2010)
+/ Bhattacharya et al. (2016), which produces an exact draw from the
+conditional Gaussian with one matrix-free linear solve:</p>
+<ol style="list-style-type: decimal">
+<li>Sample a <strong>prior draw</strong> <span class="math inline">\(u
+\sim \mathcal{N}(0, K)\)</span>. Because <span class="math inline">\(K\)</span> is Kronecker-separable, this is cheap
+(the existing <code>quick_mvnorm</code> does it in two Cholesky
+factorisations of small <span class="math inline">\(n \times n\)</span>
+and <span class="math inline">\(n_t \times
+n_t\)</span> matrices).</li>
+<li>Sample an <strong>observation-noise draw</strong> <span class="math inline">\(e_i \sim \mathcal{N}(0,
+1/\omega_i)\)</span> at each observed cell.</li>
+<li>Solve, by <strong>preconditioned conjugate gradient (PCG)</strong>,
+the small observation-space system <span class="math display">\[(K +
+S^{\!\top}\Omega^{-1}S)\,\gamma = (y^* - \mu) - S u - e.\]</span></li>
+<li>Return <span class="math inline">\(f = u + K\,
+S^{\!\top}\gamma\)</span>.</li>
+</ol>
+<p>The arithmetic to show this <span class="math inline">\(f\)</span>
+has exactly the right Gaussian distribution is a few lines of algebra.
+The intuition: <span class="math inline">\(u\)</span> is the right
+covariance but the wrong mean; the PCG solve is the precise correction
+that moves it to the posterior mean while <em>preserving</em> the
+covariance.</p>
+<p><strong>Why PCG is fast here.</strong> PCG only needs two things: a
+way to multiply by the system matrix, and a “preconditioner” — a fast
+approximation to its inverse. The system matrix never needs to exist as
+a matrix; the multiply is a sequence of small operations using the
+Kronecker structure. The preconditioner uses the eigendecomposition of
+the small <span class="math inline">\(K_{\text{space}}\)</span> and
+<span class="math inline">\(K_{\text{time}}\)</span> kernels — also
+cheap. Typical convergence is in 50–150 iterations even on the
+production-scale problem.</p>
+</div>
+<div id="block-3-mu_s-mid-mathrmrest-per-site-gaussian" class="section level3">
+<h3>4.3 Block 3: <span class="math inline">\(\mu_s \mid
+\mathrm{rest}\)</span> — per-site Gaussian</h3>
+<p>The pseudo-observation <span class="math inline">\(y^*_i\)</span> is
+a Gaussian observation of <span class="math inline">\(\psi_i = f_i
++ \mu_{s(i)}\)</span> with precision <span class="math inline">\(\omega_i\)</span>. Subtracting <span class="math inline">\(f_i\)</span> gives a Gaussian observation of <span class="math inline">\(\mu_{s(i)}\)</span> alone. Combined with the <span class="math inline">\(\mathcal{N}(m_0, v_0)\)</span> prior on <span class="math inline">\(\mu_s\)</span>, the conditional posterior is
+closed-form Normal per site:</p>
+<p><span class="math display">\[
+\text{prec} = \frac{1}{v_0} + \sum_{i\, \in\, \text{site } s} \omega_i,
+\qquad
+\text{mean} = \frac{m_0/v_0 + \sum_{i\, \in\, \text{site } s} \omega_i
+(y^*_i - f_i)}{\text{prec}}.
+\]</span></p>
+<p>Implemented as two <code>tapply</code> accumulations over sites and
+one vector of <code>rnorm</code> draws — fast and trivially correct.</p>
+</div>
+<div id="block-4-theta-mid-f-slice-on-the-kernel-hyperparameters" class="section level3">
+<h3>4.4 Block 4: <span class="math inline">\(\theta \mid f\)</span> —
+slice on the kernel hyperparameters</h3>
+<p>The three kernel hyperparameters <span class="math inline">\(\theta =
+(\ell_s, \ell_p, \ell_t)\)</span> each get a <strong>univariate slice
+sampler</strong> on the log scale. The target is the GP prior
+log-density of <span class="math inline">\(f\)</span> at the current
+value:</p>
+<p><span class="math display">\[
+\log p(\theta \mid f) = \log p(\theta) - \tfrac{1}{2}\log|K(\theta)|
+- \tfrac{1}{2}\, f^{\!\top} K(\theta)^{-1} f.
+\]</span></p>
+<p>We can compute both <span class="math inline">\(\log|K|\)</span> and
+<span class="math inline">\(f^{\!\top} K^{-1} f\)</span> cheaply because
+of the Kronecker structure: eigendecompose the small <span class="math inline">\(K_{\text{space}}\)</span> and <span class="math inline">\(K_{\text{time}}\)</span> separately, and the
+log-determinant is a sum of the log eigenvalues, while the quadratic
+form is a sum of squared entries of the rotated <span class="math inline">\(f\)</span> divided by the eigenvalues.</p>
+<p>The slice sampler itself (Neal 2003) needs no tuning. It picks a
+horizontal “slice” at a uniform height under the log-target, finds an
+interval bracketing the current value where the target is above the
+slice, and then samples uniformly from that interval (shrinking on
+rejection). Working on <span class="math inline">\(\log \theta\)</span>
+gives well-behaved stepping-out and keeps every value positive.</p>
+<p>This is the slowest block. Each accepted slice move requires an <span class="math inline">\(O(n^3)\)</span> eigendecomposition of the spatial
+kernel, which is a few seconds at <span class="math inline">\(n =
+1000\)</span>.</p>
+</div>
+<div id="block-5-r-mid-mathrmrest-random-walk-metropolis" class="section level3">
+<h3>4.5 Block 5: <span class="math inline">\(r \mid
+\mathrm{rest}\)</span> — random-walk Metropolis</h3>
+<p>The NB dispersion <span class="math inline">\(r\)</span> has no
+conjugate update, but it’s a single positive scalar and the posterior is
+well-behaved. We use a <strong>random-walk Metropolis-Hastings</strong>
+update on <span class="math inline">\(\log r\)</span>:</p>
+<ol style="list-style-type: decimal">
+<li>Propose <span class="math inline">\(\log r&#39; = \log r +
+\mathcal{N}(0, s^2)\)</span>.</li>
+<li>Accept with probability <span class="math display">\[\min\!\left\{1,\; \frac{p(y \mid \psi, r&#39;)
+p(r&#39;)}{p(y \mid \psi, r) p(r)} \cdot
+\frac{r&#39;}{r}\right\}.\]</span> (The trailing factor is the Jacobian
+for working on the log scale.)</li>
+</ol>
+<p>The proposal scale <span class="math inline">\(s\)</span> is tuned
+adaptively during burn-in using Robbins-Monro: nudge <span class="math inline">\(\log s\)</span> in the direction that brings the
+acceptance rate toward the gold-standard 0.44 for 1-D random walks.</p>
+<p>This is the only block with any “tuning”, and we hide it inside
+burn-in.</p>
+<hr />
+</div>
+</div>
+<div id="multiple-chains-diagnostics-and-posterior-output" class="section level2">
+<h2>5. Multiple chains, diagnostics, and posterior output</h2>
+<p>A single chain is enough for point estimates but not enough to be
+<em>confident</em>. To detect non-convergence we run multiple chains in
+parallel with deliberately different starting points, and compare
+them.</p>
+<div id="overdispersed-initial-values" class="section level3">
+<h3>5.1 Overdispersed initial values</h3>
+<p>With <code>n_chains &gt; 1</code>, <code>fit_bayes()</code> starts
+each chain after the first at random draws from the priors of <span class="math inline">\(\theta\)</span> and <span class="math inline">\(r\)</span>. The first chain still uses sensible
+deterministic starts so it converges quickly. The other chains are
+“overdispersed” — different enough that if they all collapse onto the
+same posterior region, we can trust the result.</p>
+</div>
+<div id="rhat-gelman-rubin-diagnostic" class="section level3">
+<h3>5.2 Rhat (Gelman-Rubin diagnostic)</h3>
+<p>For each parameter we compute the <strong>potential scale reduction
+factor</strong> <span class="math inline">\(\hat R\)</span>.
+Informally:</p>
+<p><span class="math display">\[
+\hat R \approx \sqrt{\frac{\text{total variance across all
+chains}}{\text{average within-chain variance}}}.
+\]</span></p>
+<p>If the chains have all found the same distribution, the numerator and
+denominator are equal and <span class="math inline">\(\hat R =
+1\)</span>. Values bigger than <span class="math inline">\(\sim
+1.05\)</span> are a sign chains haven’t merged — either the sampler is
+broken, the posterior is multimodal, or the chains need more sweeps.</p>
+<p><code>summary.weave_bayes()</code> reports <span class="math inline">\(\hat R\)</span> for <code>length_scale</code>,
+<code>periodic_scale</code>, <code>long_term_scale</code>, and
+<code>r</code> automatically when <code>n_chains &gt; 1</code>.</p>
+</div>
+<div id="effective-sample-size-ess" class="section level3">
+<h3>5.3 Effective sample size (ESS)</h3>
+<p>Chains are autocorrelated, so 1000 sweeps don’t give 1000 independent
+posterior draws. The effective sample size is the number of
+<em>equivalent independent</em> draws. Aim for ESS <span class="math inline">\(\geq 400\)</span> per parameter for anything you
+want to quote a credible interval on; <span class="math inline">\(\geq
+100\)</span> for exploration. <code>coda::effectiveSize</code> computes
+this from the trace.</p>
+</div>
+<div id="storage-of-the-latent-field" class="section level3">
+<h3>5.4 Storage of the latent field</h3>
+<p>Storing <span class="math inline">\(f\)</span> at every sweep is a
+memory bomb (150k × 5000 sweeps × 3 chains ≈ 18 GB at 8 bytes/double).
+By default <code>fit_bayes()</code> keeps only a <strong>running mean
+and variance</strong> of <span class="math inline">\(f\)</span>
+(Welford’s algorithm; numerically stable and <span class="math inline">\(O(N)\)</span> per update). For
+posterior-predictive draws you can opt in to keeping a <em>thinned</em>
+set of full <span class="math inline">\(f\)</span> vectors — the default
+of 100 evenly-spaced samples per chain is plenty for downstream
+plotting.</p>
+<hr />
+</div>
+</div>
+<div id="putting-it-together-a-worked-example" class="section level2">
+<h2>6. Putting it together: a worked example</h2>
+<p>Below is the minimal call that exercises everything we just
+discussed. For more depth see the full walkthrough at
+<code>implementation/test_walkthrough.R</code>.</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="fu">library</span>(weave)</span>
+<span id="cb1-2"><a href="#cb1-2" tabindex="-1"></a><span class="fu">source</span>(<span class="fu">system.file</span>(<span class="st">&quot;../implementation/simulation.R&quot;</span>, <span class="at">package =</span> <span class="st">&quot;weave&quot;</span>))</span>
+<span id="cb1-3"><a href="#cb1-3" tabindex="-1"></a></span>
+<span id="cb1-4"><a href="#cb1-4" tabindex="-1"></a><span class="co"># Simulate some HF count data.</span></span>
+<span id="cb1-5"><a href="#cb1-5" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">42</span>)</span>
+<span id="cb1-6"><a href="#cb1-6" tabindex="-1"></a>n  <span class="ot">&lt;-</span> <span class="dv">30</span>; nt <span class="ot">&lt;-</span> <span class="dv">104</span></span>
+<span id="cb1-7"><a href="#cb1-7" tabindex="-1"></a>coords <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb1-8"><a href="#cb1-8" tabindex="-1"></a>  <span class="at">id  =</span> <span class="fu">factor</span>(<span class="dv">1</span><span class="sc">:</span>n),</span>
+<span id="cb1-9"><a href="#cb1-9" tabindex="-1"></a>  <span class="at">lat =</span> <span class="fu">runif</span>(n, <span class="dv">0</span>, <span class="dv">5</span>),</span>
+<span id="cb1-10"><a href="#cb1-10" tabindex="-1"></a>  <span class="at">lon =</span> <span class="fu">runif</span>(n, <span class="dv">0</span>, <span class="dv">5</span>),</span>
+<span id="cb1-11"><a href="#cb1-11" tabindex="-1"></a>  <span class="at">mu  =</span> <span class="fu">log</span>(<span class="fu">runif</span>(n, <span class="dv">10</span>, <span class="dv">80</span>))</span>
+<span id="cb1-12"><a href="#cb1-12" tabindex="-1"></a>)</span>
+<span id="cb1-13"><a href="#cb1-13" tabindex="-1"></a>space_k <span class="ot">&lt;-</span> <span class="fu">space_kernel</span>(coords, <span class="at">length_scale =</span> <span class="dv">2</span>)</span>
+<span id="cb1-14"><a href="#cb1-14" tabindex="-1"></a>time_k  <span class="ot">&lt;-</span> <span class="fu">time_kernel</span>(<span class="dv">1</span><span class="sc">:</span>nt, <span class="at">periodic_scale =</span> <span class="dv">1</span>, <span class="at">long_term_scale =</span> <span class="dv">200</span>)</span>
+<span id="cb1-15"><a href="#cb1-15" tabindex="-1"></a>true    <span class="ot">&lt;-</span> <span class="fu">simulate_data</span>(n, nt, coords, space_k, time_k, <span class="at">r =</span> <span class="dv">15</span>)</span>
+<span id="cb1-16"><a href="#cb1-16" tabindex="-1"></a>obs     <span class="ot">&lt;-</span> <span class="fu">observed_data</span>(true, <span class="at">p_one =</span> <span class="fl">0.2</span>, <span class="at">p_switch =</span> <span class="fl">0.3</span>)</span>
+<span id="cb1-17"><a href="#cb1-17" tabindex="-1"></a></span>
+<span id="cb1-18"><a href="#cb1-18" tabindex="-1"></a><span class="co"># Fit.</span></span>
+<span id="cb1-19"><a href="#cb1-19" tabindex="-1"></a>fit <span class="ot">&lt;-</span> <span class="fu">fit_bayes</span>(</span>
+<span id="cb1-20"><a href="#cb1-20" tabindex="-1"></a>  obs,</span>
+<span id="cb1-21"><a href="#cb1-21" tabindex="-1"></a>  <span class="at">n_sweeps =</span> <span class="dv">1000</span>, <span class="at">burnin =</span> <span class="dv">400</span>,</span>
+<span id="cb1-22"><a href="#cb1-22" tabindex="-1"></a>  <span class="at">n_chains =</span> <span class="dv">3</span>,</span>
+<span id="cb1-23"><a href="#cb1-23" tabindex="-1"></a>  <span class="at">store_f  =</span> <span class="st">&quot;thin&quot;</span></span>
+<span id="cb1-24"><a href="#cb1-24" tabindex="-1"></a>)</span>
+<span id="cb1-25"><a href="#cb1-25" tabindex="-1"></a></span>
+<span id="cb1-26"><a href="#cb1-26" tabindex="-1"></a><span class="co"># Diagnostics + posterior summary with Rhat.</span></span>
+<span id="cb1-27"><a href="#cb1-27" tabindex="-1"></a><span class="fu">summary</span>(fit)</span></code></pre></div>
+<p>What to look at after the fit:</p>
+<ol style="list-style-type: decimal">
+<li><strong>Print the object</strong>: chain count, sweeps, observation
+count, median PCG iterations per sweep, MH acceptance for <span class="math inline">\(r\)</span> per chain.</li>
+<li><strong>Summary</strong>: posterior medians and 95% intervals for
+the kernel parameters and <span class="math inline">\(r\)</span>, plus
+<span class="math inline">\(\hat R\)</span>.</li>
+<li><strong>Posterior predictive</strong>:
+<code>posterior_predict(fit)</code> gives one count-scale draw per
+stored MCMC sample at every cell. Coverage on held-out cells should be
+close to nominal.</li>
+<li><strong>Run multiple chains</strong>: the only honest way to know
+the sampler has converged is to see chains overlap and <span class="math inline">\(\hat R\)</span> near 1.</li>
+</ol>
+<hr />
+</div>
+<div id="when-the-sampler-is-unhappy" class="section level2">
+<h2>7. When the sampler is unhappy</h2>
+<p>A short field guide:</p>
+<ul>
+<li><strong><span class="math inline">\(\hat R &gt;
+1.1\)</span></strong> on <code>long_term_scale</code> after a moderate
+run: usually just slow mixing on a weakly identified parameter. Add more
+sweeps before worrying about model misspecification.</li>
+<li><strong>MH acceptance for <span class="math inline">\(r\)</span>
+outside <span class="math inline">\([0.15, 0.6]\)</span></strong> after
+burn-in: the adaptive scale didn’t converge. Re-run with a longer
+burn-in.</li>
+<li><strong>PCG iteration count climbs across sweeps</strong>: this can
+happen when <span class="math inline">\(\omega\)</span> becomes very
+heterogeneous (e.g. small <span class="math inline">\(r\)</span> + lots
+of zero cells). Increase <code>pcg_maxit</code> or relax
+<code>pcg_tol</code>.</li>
+<li><strong>Posterior predictive coverage well under 95%</strong>: the
+model is mis- specified. The two usual culprits are (a) site-level
+deviation from the GP smoothness assumption — some sites really are
+different — and (b) the wrong period (e.g. you used
+<code>period = 52</code> for monthly data).</li>
+</ul>
+<hr />
+</div>
+<div id="further-reading" class="section level2">
+<h2>8. Further reading</h2>
+<ul>
+<li>Polson, N., Scott, J., &amp; Windle, J. (2013). <em>Bayesian
+inference for logistic models using Pólya-Gamma latent variables.</em>
+JASA 108(504).</li>
+<li>Bhattacharya, A., Chakraborty, A., &amp; Mallick, B. K. (2016).
+<em>Fast sampling with Gaussian scale-mixture priors in high-dimensional
+regression.</em> Biometrika 103(4).</li>
+<li>Papandreou, G., &amp; Yuille, A. (2010). <em>Gaussian sampling by
+local perturbations.</em> NeurIPS.</li>
+<li>Neal, R. (2003). <em>Slice sampling.</em> Annals of Statistics
+31(3).</li>
+<li>Gelman, A., &amp; Rubin, D. (1992). <em>Inference from iterative
+simulation using multiple sequences.</em> Statistical Science 7(4).</li>
+</ul>
+</div>
+
+
+
+<!-- code folding -->
+
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>

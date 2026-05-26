@@ -4,15 +4,25 @@
 \alias{space_kernel}
 \title{Estimate the spatial kernel}
 \usage{
-space_kernel(coordinates, length_scale, nugget = 1e-09)
+space_kernel(
+  coordinates,
+  length_scale,
+  nugget = 1e-09,
+  distance_fn = get_spatial_distance
+)
 }
 \arguments{
-\item{coordinates}{A data frame with columns `lon` and `lat` in degrees.}
+\item{coordinates}{A data frame with columns `lon` and `lat`.}
 
-\item{length_scale}{A positive numeric scalar for the spatial length scale.}
+\item{length_scale}{A positive numeric scalar for the spatial length scale.
+Interpreted in the units returned by `distance_fn` (degrees by default,
+kilometres with haversine).}
 
 \item{nugget}{A non-negative numeric scalar added to the diagonal for
 numerical stability.}
+
+\item{distance_fn}{Function taking `coordinates` and returning a symmetric
+distance matrix. Defaults to [get_spatial_distance()] (Euclidean).}
 }
 \value{
 A positive-definite matrix representing spatial covariance.
@@ -20,4 +30,9 @@ A positive-definite matrix representing spatial covariance.
 \description{
 Builds a spatial covariance matrix using an RBF kernel with a nugget
 term for numerical stability.
+}
+\details{
+By default uses Euclidean distance on `(lon, lat)`. Pass
+`distance_fn = haversine_distance` for real geographic coordinates in
+degrees.
 }

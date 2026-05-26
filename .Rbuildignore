@@ -7,3 +7,7 @@
 ^pkgdown$
 ^LICENSE\.md$
 implementation/
+^AGENTS\.md$
+^\.claude$
+^doc$
+^Meta$
