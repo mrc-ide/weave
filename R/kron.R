@@ -20,6 +20,81 @@
 # =============================================================================
 
 
+#' Cholesky with automatic relative jitter and retry on numerical failure
+#'
+#' `chol()` errors when a matrix is numerically indefinite. Inside the
+#' MCMC sampler we cannot tolerate a crash whenever theta wanders into a
+#' regime where K is near-singular -- it kills the entire chain. This
+#' wrapper adds a tiny relative jitter (`jitter * mean(diag(A))` per
+#' diagonal entry) and retries with the jitter doubled if the
+#' factorisation still fails, up to `max_jitter`. Returns the lower-
+#' triangular factor L such that `L L^T = A + j * mean(diag(A)) * I` for
+#' the smallest successful j.
+#'
+#' For well-conditioned matrices the perturbation is invisible (jitter of
+#' 1e-6 on diag entries of order 1 changes downstream quantities by less
+#' than machine precision in any practical metric).
+#'
+#' @param A A square symmetric numeric matrix.
+#' @param jitter Initial relative jitter (default 1e-6).
+#' @param max_jitter Maximum jitter to try before giving up (default 1e-2).
+#' @return Lower-triangular numeric matrix L with `L %*% t(L) = A + j*I_scaled`.
+safe_chol <- function(A, jitter = 1e-6, max_jitter = 1e-2) {
+  diag_scale <- mean(diag(A))
+  if (!is.finite(diag_scale) || diag_scale <= 0) diag_scale <- 1
+  n <- nrow(A)
+  j <- jitter
+  repeat {
+    Ar <- A + (j * diag_scale) * diag(n)
+    out <- tryCatch(t(chol(Ar)), error = function(e) NULL)
+    if (!is.null(out)) return(out)
+    if (j > max_jitter) {
+      stop("safe_chol: Cholesky failed even with jitter = ",
+           sprintf("%.1e", j),
+           ". The matrix is severely ill-conditioned.")
+    }
+    j <- j * 10
+  }
+}
+
+
+#' Symmetric eigendecomposition with automatic relative jitter
+#'
+#' Mirror of [safe_chol()] for symmetric eigendecomposition. Adds a tiny
+#' relative jitter before calling `eigen(_, symmetric = TRUE)`, retrying
+#' with bigger jitter if the call errors (rare but possible on extreme
+#' inputs). Also clamps the returned eigenvalues at `eig_floor` so that
+#' downstream code dividing by them stays finite.
+#'
+#' @param A A square symmetric numeric matrix.
+#' @param jitter Initial relative jitter (default 1e-6).
+#' @param max_jitter Maximum jitter to try (default 1e-2).
+#' @param eig_floor Lower bound applied to eigenvalues (default 1e-12).
+#' @return A list with `$values` (clamped) and `$vectors`, same shape
+#'   as [base::eigen()].
+safe_eigen <- function(A, jitter = 1e-6, max_jitter = 1e-2,
+                       eig_floor = 1e-12) {
+  diag_scale <- mean(diag(A))
+  if (!is.finite(diag_scale) || diag_scale <= 0) diag_scale <- 1
+  n <- nrow(A)
+  j <- jitter
+  repeat {
+    Ar <- A + (j * diag_scale) * diag(n)
+    out <- tryCatch(eigen(Ar, symmetric = TRUE), error = function(e) NULL)
+    if (!is.null(out)) {
+      out$values <- pmax(out$values, eig_floor)
+      return(out)
+    }
+    if (j > max_jitter) {
+      stop("safe_eigen: eigen() failed even with jitter = ",
+           sprintf("%.1e", j),
+           ". The matrix is severely ill-conditioned.")
+    }
+    j <- j * 10
+  }
+}
+
+
 #' Fast Kronecker-product matrix-vector multiply (times vary fastest)
 #'
 #' In plain terms: multiplies a big covariance K = K_space (x) K_time by a
@@ -66,9 +141,11 @@ kron_mv <- function(v, space, time) {
 #' @param eig_floor Lower bound for eigenvalues; defaults to 1e-12.
 #' @return A list with the cached components above.
 kron_eigen <- function(space, time, eig_floor = 1e-12) {
-  es <- eigen(space, symmetric = TRUE)
-  et <- eigen(time,  symmetric = TRUE)
+  es <- safe_eigen(space, eig_floor = eig_floor)
+  et <- safe_eigen(time,  eig_floor = eig_floor)
 
+  # safe_eigen already clamped the eigenvalues; pmax here is a no-op
+  # belt-and-braces.
   L_s <- pmax(es$values, eig_floor)
   L_t <- pmax(et$values, eig_floor)
 
@@ -137,6 +214,71 @@ kron_quad <- function(v, ke) {
   w <- as.vector(t(W))
 
   sum(w * w / ke$lam_full)
+}
+
+
+#' Cache Cholesky factors of the spatial and temporal kernels
+#'
+#' Returns lower-triangular `L_s`, `L_t` with `L_s L_s' = K_space`,
+#' `L_t L_t' = K_time`, plus the Kronecker log-determinant
+#'    log|K| = nt * 2*sum(log(diag(L_s))) + n * 2*sum(log(diag(L_t))).
+#'
+#' Used inside the theta-slice sampler in place of the full eigen cache.
+#' For an n x n matrix Cholesky is ~3-7x cheaper than eigen at the same n
+#' (with a typical optimised BLAS), and the slice only needs log|K| and
+#' v' K^-1 v -- both available cheaply from the Cholesky factor via
+#' [kron_quad_chol()]. The eigen cache is still needed once per sweep
+#' for the f-block preconditioner, so this is a *complement* to
+#' [kron_eigen()] rather than a replacement.
+#'
+#' @param space Spatial kernel matrix (n x n, symmetric PD).
+#' @param time Temporal kernel matrix (nt x nt, symmetric PD).
+#' @return A list with `L_s`, `L_t` (lower-triangular factors) and
+#'   `log_det` (scalar log-determinant of the Kronecker product).
+kron_chol <- function(space, time) {
+  # safe_chol returns lower-triangular L with L L' = A (after a tiny
+  # relative jitter on the diagonal if needed for numerical stability).
+  L_s <- safe_chol(space)
+  L_t <- safe_chol(time)
+  list(
+    L_s     = L_s,
+    L_t     = L_t,
+    log_det = nrow(time)  * 2 * sum(log(diag(L_s))) +
+              nrow(space) * 2 * sum(log(diag(L_t)))
+  )
+}
+
+
+#' Quadratic form `v' K^-1 v` via Kronecker Cholesky factors
+#'
+#' Given a Cholesky cache from [kron_chol()], computes `v' K^-1 v` via two
+#' triangular solves on the reshaped n x nt matrix:
+#'
+#'   `g = (L_s ⊗ L_t)^-1 v`,    `v' K^-1 v = ||g||^2`.
+#'
+#' Using the standard reshape identity
+#'   `(A ⊗ B) vec(t(X)) = vec(t(A X B^T))`
+#' with `A = L_s^-1`, `B = L_t^-1`:
+#'   `G1 = L_s^-1 F`    (apply L_s^-1 on the left via forwardsolve)
+#'   `G2 = G1 L_t^-T`   (apply L_t^-T on the right, equivalent to
+#'                       forwardsolve(L_t, t(G1)) transposed)
+#'   `||g||^2 = sum(G2^2)`
+#' (we never need to flatten G2; the row-major vec doesn't affect the norm.)
+#'
+#' Same O(n^2 nt + n nt^2) cost as [kron_quad()] via eigen, but a much
+#' smaller leading constant.
+#'
+#' @param v Numeric vector of length n * nt.
+#' @param kc Cholesky cache from [kron_chol()].
+#' @return Scalar `v' K^-1 v`.
+kron_quad_chol <- function(v, kc) {
+  n_sites <- nrow(kc$L_s)
+  n_times <- nrow(kc$L_t)
+
+  F_mat <- t(matrix(v, nrow = n_times, ncol = n_sites))   # n x nt
+  G1    <- forwardsolve(kc$L_s, F_mat)                    # n x nt
+  G2    <- t(forwardsolve(kc$L_t, t(G1)))                 # n x nt
+  sum(G2 * G2)
 }
 
 

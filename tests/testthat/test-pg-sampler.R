@@ -80,3 +80,50 @@ test_that("pg_draw_mu has the correct closed-form conditional", {
   expect_lt(abs(mean(draws) - mean_post) * sqrt(prec_post * M), 4)
   expect_lt(abs(stats::var(draws) - 1 / prec_post) * prec_post, 0.1)
 })
+
+
+test_that("pg_draw_theta is deterministic given identical state and seed", {
+  # The Cholesky-in-slice rewrite must preserve determinism: with the same
+  # state and the same RNG seed it should return the same theta, same
+  # log_post, and a refreshed eigen cache consistent with the new kernels.
+  skip_if_not_installed("BayesLogit")
+  set.seed(50)
+  n  <- 5; nt <- 6; N <- n * nt
+  coords <- data.frame(
+    id  = factor(seq_len(n)),
+    lat = runif(n), lon = runif(n)
+  )
+  state <- list(
+    f         = rnorm(N) * 0.5,
+    mu        = rep(0, n),
+    theta     = list(length_scale = 1, periodic_scale = 1, long_term_scale = 20),
+    r         = 10,
+    omega     = rep(1, N),
+    r_fixed   = FALSE,
+    space_mat = space_kernel(coords, length_scale = 1),
+    time_mat  = time_kernel(seq_len(nt), periodic_scale = 1,
+                            long_term_scale = 20, period = 52)
+  )
+  state$ke <- kron_eigen(state$space_mat, state$time_mat)
+  design <- list(
+    coords = coords, n = n, nt = nt, period = 52, N = N,
+    obs_idx = seq_len(N), y_obs = rep(0, N), site_idx_obs = rep(seq_len(n), each = nt)
+  )
+  priors <- bayes_priors(c(design, list(y_obs = rep(1, N))))
+  slice_widths <- list(length_scale = 0.5, periodic_scale = 0.5,
+                       long_term_scale = 0.5)
+
+  set.seed(99)
+  out1 <- pg_draw_theta(state, design, priors$theta, slice_widths)
+  set.seed(99)
+  out2 <- pg_draw_theta(state, design, priors$theta, slice_widths)
+
+  expect_equal(out1$theta,    out2$theta)
+  expect_equal(out1$log_post, out2$log_post)
+
+  # Eigen cache should reflect the returned kernels: rebuilding from
+  # out1$space_mat / out1$time_mat must give the same eigenvalues.
+  ke_recheck <- kron_eigen(out1$space_mat, out1$time_mat)
+  expect_equal(sort(out1$ke$L_s), sort(ke_recheck$L_s), tolerance = 1e-8)
+  expect_equal(sort(out1$ke$L_t), sort(ke_recheck$L_t), tolerance = 1e-8)
+})

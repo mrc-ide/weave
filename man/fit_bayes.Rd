@@ -8,6 +8,7 @@ fit_bayes(
   obs_data,
   n_sweeps = 1000,
   burnin = 500,
+  n_chains = 1L,
   thin = 1,
   priors = NULL,
   init = NULL,
@@ -18,7 +19,8 @@ fit_bayes(
   slice_widths = list(length_scale = 0.5, periodic_scale = 0.5, long_term_scale = 0.5),
   store_f = c("summary", "thin", "all"),
   n_thin_f = 100L,
-  verbose = TRUE
+  verbose = TRUE,
+  parallel = FALSE
 )
 }
 \arguments{
@@ -26,9 +28,15 @@ fit_bayes(
 count column (`y_obs` if present, else `n`). NA in the count column
 denotes missing.}
 
-\item{n_sweeps}{Total number of sweeps to run.}
+\item{n_sweeps}{Total number of sweeps per chain.}
 
-\item{burnin}{Number of sweeps to discard. r-MH adapts during burn-in.}
+\item{burnin}{Number of sweeps to discard per chain. r-MH adapts during
+burn-in.}
+
+\item{n_chains}{Number of independent chains (default 1). Chains use
+overdispersed initial values drawn from the priors so Gelman-Rubin
+Rhat is informative; the first chain still starts at deterministic
+"reasonable" inits to give a fast warm-up.}
 
 \item{thin}{Keep every `thin`-th post-burnin sweep in stored f samples.}
 
@@ -36,10 +44,11 @@ denotes missing.}
 override individual entries.}
 
 \item{init}{Optional init list (`f`, `mu`, `theta`, `r`); any missing
-entry is filled with sensible defaults.}
+entry is filled with sensible defaults. Applied identically to every
+chain (disables overdispersion if `theta` is set).}
 
-\item{fix}{Optional `list(r = <value>)` to fix r (e.g. `Inf` for Poisson
-limit; in practice use a large finite number like 1e6).}
+\item{fix}{Optional `list(r = <value>)` to fix r (e.g. a large finite
+number for the Poisson limit).}
 
 \item{period}{Periodic kernel period (default 52).}
 
@@ -53,17 +62,23 @@ at the cost of more PCG iterations per sweep.}
 
 \item{slice_widths}{Initial slice widths for the three theta components.}
 
-\item{store_f}{One of `"summary"` (Welford running mean+var only),
-`"thin"` (Welford summary plus `n_thin_f` evenly-spaced full f samples),
-or `"all"` (every post-burnin sweep -- memory-heavy, gated for safety).}
+\item{store_f}{One of `"summary"`, `"thin"`, `"all"`.}
 
-\item{n_thin_f}{Number of full f samples to retain when
+\item{n_thin_f}{Number of full f samples to retain per chain when
 `store_f = "thin"`. Default 100.}
 
-\item{verbose}{Show a progress bar.}
+\item{verbose}{Show a progress bar per chain.}
+
+\item{parallel}{If TRUE and `n_chains > 1`, run chains in parallel via
+`future.apply::future_lapply()`. The user is responsible for the
+`future::plan()` (eg `future::plan("multisession", workers = 4)`);
+without one the default sequential plan is used and you'll see no
+speedup. Requires the `future.apply` package; falls back to serial
+with a warning if it's not installed. Default FALSE.}
 }
 \value{
-A `weave_bayes` S3 object.
+A `weave_bayes` S3 object. Per-chain traces are stored with the
+  chain as the last array dimension, eg `theta_trace[sweep, param, chain]`.
 }
 \description{
 Samples from the posterior over (f, mu, theta, r) under the NB-GP model
@@ -73,7 +88,5 @@ scale; r by adaptive random-walk MH; no Laplace approximation anywhere.
 }
 \details{
 For a 1000-site, 150-week dataset on a laptop, expect ~2-5 seconds per
-sweep with the default settings; a 5000-sweep run is therefore in the
-few-hours range. Use a small `n_sweeps` for exploration, increase once
-you trust the model.
+sweep per chain with the default settings. Multiple chains run serially.
 }

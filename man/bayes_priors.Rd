@@ -11,16 +11,20 @@ bayes_priors(design)
 to the data scale).}
 }
 \description{
-Each entry is a list with a single `logp(x)` closure that returns the log
-prior density at `x`. Replace any single entry to swap in a custom prior.
+Each prior entry exposes two closures:
+  * `logp(x)` -- log prior density at `x`
+  * `sample()` -- one draw from the prior (used to overdisperse chain inits)
 }
 \details{
+Replace any single entry to swap in a custom prior; the only contract is
+that `logp` and `sample` are consistent.
+
 Defaults are weakly informative:
   * length_scale     ~ LogNormal(meanlog = log(median_dist), sdlog = 1)
-  * periodic_scale   ~ LogNormal(meanlog = 0, sdlog = 1)            (= mode 1)
-  * long_term_scale  ~ LogNormal(meanlog = log(n_times), sdlog = 1)
+  * periodic_scale   ~ LogNormal(meanlog = 0,                sdlog = 1)
+  * long_term_scale  ~ LogNormal(meanlog = log(n_times),     sdlog = 1)
   * mu_s             ~ Normal(m0 = log(median count + 1), v0 = 4)
-  * r                ~ Gamma(shape = 2, rate = 0.1)                  (mean 20)
+  * r                ~ Gamma(shape = 2, rate = 0.1)            (mean 20)
 
 All three length scales are positive; their LogNormal priors keep the
 slice samplers from wandering into negative territory.

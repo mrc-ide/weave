@@ -87,20 +87,39 @@ pg_draw_f <- function(state, design, control) {
   noise_var <- 1 / omega
   b <- (y_star - mu_per_obs) - u[obs_idx] - e
 
-  # 4. PCG solve with Kron-eigen preconditioner.
+  # 4. PCG solve. Choose preconditioner based on omega heterogeneity:
+  # the Kron-eigen preconditioner assumes a roughly uniform noise level
+  # (encoded by the scalar sigma2 proxy), which breaks down when omega
+  # varies by orders of magnitude across cells. In that regime, the
+  # Jacobi (diagonal) preconditioner is far more robust because each
+  # row's preconditioning is independent of others. The 100x ratio
+  # threshold is conservative: Jacobi is slower in the homogeneous case,
+  # so we only switch when Kron-eigen is genuinely hurting.
+  omega_ratio <- max(omega) / max(min(omega), 1e-12)
+  use_jacobi  <- isTRUE(omega_ratio > 100)
   Amv_fun <- function(v) Amv(v, obs_idx, N, state$space_mat, state$time_mat,
                              noise_var)
-  Minv    <- kron_eigen_preconditioner(state$ke,
-                                       sigma2 = mean(noise_var),
-                                       obs_idx, N)
+  if (use_jacobi) {
+    kdiag_full <- as.vector(t(outer(diag(state$space_mat),
+                                    diag(state$time_mat))))
+    Minv <- jacobi_preconditioner(kdiag_full, obs_idx, noise_var)
+  } else {
+    Minv <- kron_eigen_preconditioner(state$ke,
+                                      sigma2 = mean(noise_var),
+                                      obs_idx, N)
+  }
   pcg_res <- pcg(b, Amv_fun, Minv,
-                 tol = control$pcg_tol, maxit = control$pcg_maxit)
+                 tol = control$pcg_tol, maxit = control$pcg_maxit,
+                 warn = FALSE)        # silent; caller tracks convergence
 
   # 5. Sample.
   f <- u + kron_mv(fill_vector(pcg_res$x, obs_idx, N),
                    state$space_mat, state$time_mat)
 
-  list(f = f, pcg_iters = pcg_res$iters, pcg_converged = pcg_res$converged)
+  list(f = f,
+       pcg_iters     = pcg_res$iters,
+       pcg_converged = pcg_res$converged,
+       used_jacobi   = use_jacobi)
 }
 
 
@@ -148,99 +167,173 @@ pg_draw_mu <- function(state, design, mu_prior) {
 # Target log-density (up to constants in theta):
 #     log p(theta | f) = log prior(theta) - 0.5 log|K(theta)| - 0.5 f' K(theta)^-1 f
 #
-# Every slice evaluation rebuilds the relevant kernel and its eigendecomp.
-# We accept the cost (n x n eigen ~ 1s for n=1000) once per *accepted* slice
-# proposal; rejected proposals re-use the cached log-density at the original
-# theta. Sample on the log scale: the support is (0, infty) and the
-# posterior tends to be heavy-tailed.
+# Two performance optimisations vs a naive implementation:
+#
+#   1. Off-axis cache. Slicing `length_scale` only changes K_space; slicing
+#      `periodic_scale` or `long_term_scale` only changes K_time. The
+#      unaffected side's factorisation is reused. With K_space being the
+#      expensive n x n factorisation (eigen ~0.9s at n=1000), this saves
+#      ~2/3 of the work per sweep.
+#
+#   2. Cholesky-in-slice. The slice only needs log|K(theta)| and
+#      f' K(theta)^-1 v, both available cheaply from a Cholesky factor
+#      via kron_quad_chol (~7x faster than going through an eigendecomp).
+#      We compute the eigendecomposition ONCE at the end of the block --
+#      only on kernels whose theta actually moved -- to refresh the
+#      f-block preconditioner for the next sweep.
+#
+# Sample on the log scale: the support is (0, infty) and the posterior
+# tends to be heavy-tailed.
 # -----------------------------------------------------------------------------
 pg_draw_theta <- function(state, design, theta_priors, slice_widths) {
 
-  # Build a closure that, given a candidate theta value for one component,
-  # rebuilds the kernels and evaluates the log target.
-  build_kernels <- function(theta) {
-    space_mat <- space_kernel(
-      coordinates  = design$coords,
-      length_scale = theta$length_scale
-    )
-    time_mat <- time_kernel(
-      times           = seq_len(design$nt),
-      periodic_scale  = theta$periodic_scale,
-      long_term_scale = theta$long_term_scale,
-      period          = design$period
-    )
-    ke <- kron_eigen(space_mat, time_mat)
-    list(space_mat = space_mat, time_mat = time_mat, ke = ke)
-  }
-  log_target <- function(theta, mats) {
-    -0.5 * mats$ke$log_det -
-      0.5 * kron_quad(state$f, mats$ke) +
+  # Working state -- separate spatial and temporal pieces so each side can
+  # be invalidated independently.
+  theta     <- state$theta
+  space_mat <- state$space_mat
+  time_mat  <- state$time_mat
+
+  # Initial Cholesky factors. (The eigen cache `state$ke` from the previous
+  # sweep is still valid here, but the slice uses the cheaper Cholesky.)
+  # safe_chol adds a tiny relative jitter if the input is near-singular --
+  # important during the slice's stepping-out phase, which can briefly
+  # propose extreme theta values for which K is ill-conditioned.
+  L_s <- safe_chol(space_mat)
+  L_t <- safe_chol(time_mat)
+  log_det_s <- 2 * sum(log(diag(L_s)))   # log|K_space|
+  log_det_t <- 2 * sum(log(diag(L_t)))   # log|K_time|
+
+  # Track whether each side has actually moved during this block. Used at
+  # the end to decide which eigen factorisation(s) to refresh.
+  changed_space <- FALSE
+  changed_time  <- FALSE
+
+  # Log-target evaluator, factored to take the kernel pieces explicitly so
+  # the off-axis cache is obvious.
+  log_target <- function(theta, log_det_s, log_det_t, L_s, L_t) {
+    log_det_K <- design$nt * log_det_s + design$n * log_det_t
+    # The Cholesky cache structure expected by kron_quad_chol.
+    kc <- list(L_s = L_s, L_t = L_t, log_det = log_det_K)
+    -0.5 * log_det_K -
+      0.5 * kron_quad_chol(state$f, kc) +
       theta_priors$length_scale$logp(theta$length_scale) +
       theta_priors$periodic_scale$logp(theta$periodic_scale) +
       theta_priors$long_term_scale$logp(theta$long_term_scale)
   }
+  current_lp <- log_target(theta, log_det_s, log_det_t, L_s, L_t)
 
-  # Current cached values.
-  theta <- state$theta
-  mats  <- list(space_mat = state$space_mat, time_mat = state$time_mat,
-                ke = state$ke)
-  current_lp <- log_target(theta, mats)
+  # Build a kernel + Cholesky for a candidate theta on the relevant side.
+  # Returns a list with whatever the side that moved needs to update.
+  rebuild_side <- function(component, value) {
+    if (component == "length_scale") {
+      sm <- space_kernel(coordinates  = design$coords, length_scale = value)
+      Ls <- safe_chol(sm)
+      list(space_mat = sm, L_s = Ls, log_det_s = 2 * sum(log(diag(Ls))))
+    } else {
+      th <- theta
+      th[[component]] <- value
+      tm <- time_kernel(
+        times           = seq_len(design$nt),
+        periodic_scale  = th$periodic_scale,
+        long_term_scale = th$long_term_scale,
+        period          = design$period
+      )
+      Lt <- safe_chol(tm)
+      list(time_mat = tm, L_t = Lt, log_det_t = 2 * sum(log(diag(Lt))))
+    }
+  }
+
+  # Evaluate the log target with one side replaced by candidate factors.
+  eval_with <- function(component, value, side) {
+    th <- theta
+    th[[component]] <- value
+    if (component == "length_scale") {
+      log_target(th, side$log_det_s, log_det_t, side$L_s, L_t)
+    } else {
+      log_target(th, log_det_s, side$log_det_t, L_s, side$L_t)
+    }
+  }
 
   # Component-wise slice on the log scale.
   for (component in c("length_scale", "periodic_scale", "long_term_scale")) {
     w <- slice_widths[[component]]
 
-    # Stepping-out + shrinkage slice on log(theta[[component]]).
-    x_cur  <- log(theta[[component]])
-    log_y  <- current_lp + log(stats::runif(1))
+    x_cur <- log(theta[[component]])
+    log_y <- current_lp + log(stats::runif(1))
 
     # Stepping-out.
     u <- stats::runif(1)
-    L <- x_cur - w * u
-    R <- L + w
-    # Cap the number of stepping-out steps to keep cost bounded.
+    L_bd <- x_cur - w * u
+    R_bd <- L_bd + w
     max_steps <- 25L
+
     steps <- 0L
     repeat {
-      th_try <- theta
-      th_try[[component]] <- exp(L)
-      mats_try <- build_kernels(th_try)
-      if (log_target(th_try, mats_try) <= log_y || steps >= max_steps) break
-      L <- L - w
+      side <- rebuild_side(component, exp(L_bd))
+      if (eval_with(component, exp(L_bd), side) <= log_y || steps >= max_steps) break
+      L_bd <- L_bd - w
       steps <- steps + 1L
     }
     steps <- 0L
     repeat {
-      th_try <- theta
-      th_try[[component]] <- exp(R)
-      mats_try <- build_kernels(th_try)
-      if (log_target(th_try, mats_try) <= log_y || steps >= max_steps) break
-      R <- R + w
+      side <- rebuild_side(component, exp(R_bd))
+      if (eval_with(component, exp(R_bd), side) <= log_y || steps >= max_steps) break
+      R_bd <- R_bd + w
       steps <- steps + 1L
     }
 
     # Shrinkage.
     repeat {
-      x_new <- stats::runif(1, L, R)
-      th_try <- theta
-      th_try[[component]] <- exp(x_new)
-      mats_try <- build_kernels(th_try)
-      lp_new  <- log_target(th_try, mats_try)
+      x_new <- stats::runif(1, L_bd, R_bd)
+      side  <- rebuild_side(component, exp(x_new))
+      lp_new <- eval_with(component, exp(x_new), side)
       if (lp_new > log_y) {
-        theta      <- th_try
-        mats       <- mats_try
+        # Accept: commit the new value and the rebuilt side.
+        theta[[component]] <- exp(x_new)
+        if (component == "length_scale") {
+          space_mat     <- side$space_mat
+          L_s           <- side$L_s
+          log_det_s     <- side$log_det_s
+          changed_space <- TRUE
+        } else {
+          time_mat     <- side$time_mat
+          L_t          <- side$L_t
+          log_det_t    <- side$log_det_t
+          changed_time <- TRUE
+        }
         current_lp <- lp_new
         break
       }
-      if (x_new < x_cur) L <- x_new else R <- x_new
+      if (x_new < x_cur) L_bd <- x_new else R_bd <- x_new
     }
+  }
+
+  # Refresh the eigen cache ONLY for whichever sides actually moved.
+  # This is the one expensive O(n^3) eigen of the sweep; the slice did the
+  # rest of its work cheaply via Cholesky.
+  ke <- state$ke
+  if (changed_space) {
+    es <- safe_eigen(space_mat)
+    ke$U_s <- es$vectors
+    ke$L_s <- es$values        # safe_eigen already clamped at eig_floor
+  }
+  if (changed_time) {
+    et <- safe_eigen(time_mat)
+    ke$U_t <- et$vectors
+    ke$L_t <- et$values
+  }
+  if (changed_space || changed_time) {
+    # Rebuild the flattened Kronecker eigenvalues + log-det.
+    ke$lam_full <- as.vector(t(outer(ke$L_s, ke$L_t)))
+    ke$log_det  <- design$nt * sum(log(ke$L_s)) +
+                   design$n  * sum(log(ke$L_t))
   }
 
   list(
     theta     = theta,
-    space_mat = mats$space_mat,
-    time_mat  = mats$time_mat,
-    ke        = mats$ke,
+    space_mat = space_mat,
+    time_mat  = time_mat,
+    ke        = ke,
     log_post  = current_lp
   )
 }
@@ -337,9 +430,10 @@ pg_sweep <- function(state, design, priors, control, adapt_r = TRUE) {
     state   = state,
     control = control,
     diag    = list(
-      pcg_iters   = f_out$pcg_iters,
+      pcg_iters     = f_out$pcg_iters,
       pcg_converged = f_out$pcg_converged,
-      r_accepted  = r_out$accepted
+      used_jacobi   = f_out$used_jacobi,
+      r_accepted    = r_out$accepted
     )
   )
 }

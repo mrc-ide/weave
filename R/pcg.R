@@ -50,10 +50,15 @@ Amv <- function(v, obs_idx, N, space_mat, time_mat, noise_var) {
 #' @param tol Relative residual tolerance, default 1e-8.
 #' @param maxit Maximum number of iterations, default 500.
 #' @param verbose If TRUE, prints the residual every 25 iterations.
+#' @param warn If TRUE (default), `warning()` is emitted when PCG runs out
+#'   of iterations or hits non-positive curvature. Pass `warn = FALSE`
+#'   when calling from inside an MCMC loop where these conditions are
+#'   handled by the caller (eg via a fallback preconditioner) -- otherwise
+#'   a long run produces thousands of duplicate warnings.
 #' @return A list with `x` (solution), `iters` (iterations used), `converged`
 #'   (logical), `rel_resid` (final relative residual).
 pcg <- function(b, Amv_fun, Minv_fun = identity,
-                tol = 1e-8, maxit = 500, verbose = FALSE) {
+                tol = 1e-8, maxit = 500, verbose = FALSE, warn = TRUE) {
   bnorm <- sqrt(sum(b * b))
   if (bnorm == 0) {
     return(list(x = numeric(length(b)), iters = 0L,
@@ -75,8 +80,10 @@ pcg <- function(b, Amv_fun, Minv_fun = identity,
     if (pAp <= 0) {
       # Loss of positive-definiteness -- A or M is misbehaving. Bail with
       # the current iterate rather than dividing by zero.
-      warning("pcg: non-positive curvature encountered at iter ", it,
-              "; returning current iterate.")
+      if (warn) {
+        warning("pcg: non-positive curvature encountered at iter ", it,
+                "; returning current iterate.")
+      }
       break
     }
     alpha  <- rz_old / pAp
@@ -100,7 +107,7 @@ pcg <- function(b, Amv_fun, Minv_fun = identity,
     rz_old <- rz_new
   }
 
-  if (!converged) {
+  if (!converged && warn) {
     warning(sprintf(
       "pcg: failed to converge in %d iters (rel_resid %.3e, tol %.1e)",
       maxit, rel_resid, tol

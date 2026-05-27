@@ -73,6 +73,85 @@ bayes_priors <- function(design) {
 }
 
 
+# Internal: validate the user-facing fit_bayes() inputs. Called at the very
+# top of fit_bayes() so problems surface with a clear, single message
+# instead of an obscure crash inside the inner loop.
+validate_fit_bayes_inputs <- function(obs_data, n_sweeps, burnin, n_chains,
+                                      fix, period, slice_widths, n_thin_f) {
+
+  # obs_data must be a data frame / tibble with the required structure.
+  if (!is.data.frame(obs_data)) {
+    stop("`obs_data` must be a data frame.")
+  }
+  required <- c("id", "t", "lat", "lon")
+  miss <- setdiff(required, names(obs_data))
+  if (length(miss) > 0) {
+    stop("`obs_data` is missing required column(s): ",
+         paste(miss, collapse = ", "), ".")
+  }
+  count_col <- if ("y_obs" %in% names(obs_data)) "y_obs" else "n"
+  if (!count_col %in% names(obs_data)) {
+    stop("`obs_data` must contain a count column named `y_obs` or `n`.")
+  }
+  y <- obs_data[[count_col]]
+  # Counts must be non-negative integers (NA allowed for missingness).
+  y_present <- y[!is.na(y)]
+  if (length(y_present) > 0 &&
+      (any(y_present < 0) || any(y_present != floor(y_present)))) {
+    stop("`", count_col, "` must contain non-negative integers ",
+         "(NA for missing).")
+  }
+
+  # Scalar integer checks for sampling-loop dimensions.
+  for (nm in c("n_sweeps", "burnin", "n_chains")) {
+    v <- get(nm)
+    if (!is.numeric(v) || length(v) != 1L || !is.finite(v) || v < 0 ||
+        v != floor(v)) {
+      stop("`", nm, "` must be a single non-negative integer.")
+    }
+  }
+  if (n_chains < 1L) stop("`n_chains` must be >= 1.")
+  if (burnin >= n_sweeps) {
+    stop("`burnin` (", burnin, ") must be < `n_sweeps` (", n_sweeps, ").")
+  }
+  if (!is.numeric(n_thin_f) || length(n_thin_f) != 1L || n_thin_f < 1) {
+    stop("`n_thin_f` must be a positive integer.")
+  }
+
+  # period must be a positive integer; we'll separately check period <= nt
+  # once design has been built.
+  if (!is.numeric(period) || length(period) != 1L || !is.finite(period) ||
+      period <= 0 || period != floor(period)) {
+    stop("`period` must be a positive integer.")
+  }
+
+  # fix$r, if supplied, must be a finite positive scalar.
+  if (!is.null(fix$r)) {
+    if (!is.numeric(fix$r) || length(fix$r) != 1L || !is.finite(fix$r) ||
+        fix$r <= 0) {
+      stop("`fix$r` must be a single positive finite number; got ",
+           format(fix$r), ".")
+    }
+  }
+
+  # slice_widths must have exactly the three expected components and all
+  # be positive scalars.
+  needed_sw <- c("length_scale", "periodic_scale", "long_term_scale")
+  if (!is.list(slice_widths) || !all(needed_sw %in% names(slice_widths))) {
+    stop("`slice_widths` must be a named list with entries ",
+         paste(needed_sw, collapse = ", "), ".")
+  }
+  for (nm in needed_sw) {
+    v <- slice_widths[[nm]]
+    if (!is.numeric(v) || length(v) != 1L || !is.finite(v) || v <= 0) {
+      stop("`slice_widths$", nm, "` must be a single positive number.")
+    }
+  }
+
+  invisible(TRUE)
+}
+
+
 # Internal: run a single PG-Gibbs chain. Returns the per-chain storage that
 # fit_bayes() pools across chains.
 run_one_chain <- function(design, priors, init_state, n_sweeps, burnin,
@@ -111,6 +190,11 @@ run_one_chain <- function(design, priors, init_state, n_sweeps, burnin,
   r_trace        <- numeric(n_sweeps)
   logpost_trace  <- numeric(n_sweeps)
   pcg_iter_trace <- integer(n_sweeps)
+  # Health counters for the f-block PCG. We track these per chain so
+  # summary.weave_bayes() can flag a sampler that has been quietly
+  # struggling rather than burying it in 5000 warnings.
+  pcg_fails      <- 0L
+  jacobi_uses    <- 0L
 
   f_summary <- welford_new(design$N)
 
@@ -145,6 +229,8 @@ run_one_chain <- function(design, priors, init_state, n_sweeps, burnin,
     r_trace[sw]        <- state$r
     logpost_trace[sw]  <- state$log_post
     pcg_iter_trace[sw] <- step$diag$pcg_iters
+    if (isFALSE(step$diag$pcg_converged)) pcg_fails   <- pcg_fails   + 1L
+    if (isTRUE(step$diag$used_jacobi))    jacobi_uses <- jacobi_uses + 1L
 
     if (sw > burnin) {
       f_summary <- welford_update(f_summary, state$f)
@@ -164,6 +250,8 @@ run_one_chain <- function(design, priors, init_state, n_sweeps, burnin,
     r_trace        = r_trace,
     logpost_trace  = logpost_trace,
     pcg_iter_trace = pcg_iter_trace,
+    pcg_fails      = pcg_fails,
+    jacobi_uses    = jacobi_uses,
     f_summary      = f_summary,
     f_samples      = f_samples,
     thin_idx       = thin_idx,
@@ -255,6 +343,12 @@ init_state_for_chain <- function(chain_id, n_chains, design, priors,
 #' @param n_thin_f Number of full f samples to retain per chain when
 #'   `store_f = "thin"`. Default 100.
 #' @param verbose Show a progress bar per chain.
+#' @param parallel If TRUE and `n_chains > 1`, run chains in parallel via
+#'   `future.apply::future_lapply()`. The user is responsible for the
+#'   `future::plan()` (eg `future::plan("multisession", workers = 4)`);
+#'   without one the default sequential plan is used and you'll see no
+#'   speedup. Requires the `future.apply` package; falls back to serial
+#'   with a warning if it's not installed. Default FALSE.
 #' @return A `weave_bayes` S3 object. Per-chain traces are stored with the
 #'   chain as the last array dimension, eg `theta_trace[sweep, param, chain]`.
 #' @export
@@ -274,29 +368,82 @@ fit_bayes <- function(obs_data,
                                           long_term_scale = 0.5),
                       store_f      = c("summary", "thin", "all"),
                       n_thin_f     = 100L,
-                      verbose      = TRUE) {
+                      verbose      = TRUE,
+                      parallel     = FALSE) {
 
   store_f <- match.arg(store_f)
   n_chains <- as.integer(n_chains)
-  if (n_chains < 1L) stop("n_chains must be >= 1.")
-  if (n_sweeps - burnin <= 0L) stop("burnin must be < n_sweeps.")
+
+  # Validate user inputs up front and produce a clear error per category,
+  # rather than letting a malformed input crash a hot inner loop with a
+  # cryptic "non-conformable arguments" message twenty minutes in.
+  validate_fit_bayes_inputs(
+    obs_data     = obs_data,
+    n_sweeps     = n_sweeps,
+    burnin       = burnin,
+    n_chains     = n_chains,
+    fix          = fix,
+    period       = period,
+    slice_widths = slice_widths,
+    n_thin_f     = n_thin_f
+  )
 
   design  <- build_design(obs_data)
   design$period <- period
   if (is.null(priors)) priors <- bayes_priors(design)
+  # period vs nt is a check that needs the design to be built first.
+  if (period > design$nt) {
+    stop("period (", period, ") must be <= nt (", design$nt, ").")
+  }
 
-  # ---- Run chains -----------------------------------------------------------
-  chain_results <- vector("list", n_chains)
-  for (ch in seq_len(n_chains)) {
+  # Decide on parallel vs serial. We need future.apply available and we
+  # need more than one chain for parallel to be meaningful.
+  use_parallel <- isTRUE(parallel) && n_chains > 1L
+  if (use_parallel && !requireNamespace("future.apply", quietly = TRUE)) {
+    warning("`parallel = TRUE` requested but future.apply is not installed; ",
+            "falling back to serial execution.")
+    use_parallel <- FALSE
+  }
+
+  # Per-chain integer seeds derived from the user's RNG state.
+  # `sample.int()` consumes one position from the user's RNG (so they retain
+  # full control via set.seed before calling fit_bayes), then each chain
+  # set.seed()s with its assigned integer before any sampling happens.
+  # This gives bit-identical results across serial and parallel execution
+  # and across any order the parallel scheduler dispatches chains.
+  chain_seeds <- sample.int(.Machine$integer.max, n_chains)
+
+  # Run a single chain. Used both in the serial loop and the future.apply
+  # call. Encapsulates "set seed, build init state, call run_one_chain".
+  run_chain <- function(ch) {
+    set.seed(chain_seeds[ch])
     init_st <- init_state_for_chain(ch, n_chains, design, priors, init, fix)
-    chain_results[[ch]] <- run_one_chain(
+    run_one_chain(
       design = design, priors = priors, init_state = init_st,
       n_sweeps = n_sweeps, burnin = burnin,
       period = period, pcg_tol = pcg_tol, pcg_maxit = pcg_maxit,
       slice_widths = slice_widths,
       store_f = store_f, n_thin_f = n_thin_f,
-      chain_id = ch, n_chains = n_chains, verbose = verbose
+      chain_id = ch, n_chains = n_chains,
+      # Per-chain progress bars interleave noisily across workers, so
+      # silence them when running in parallel.
+      verbose = verbose && !use_parallel
     )
+  }
+
+  # ---- Run chains -----------------------------------------------------------
+  if (use_parallel) {
+    if (verbose) {
+      message(sprintf("Running %d chains in parallel via future.apply (%s).",
+                      n_chains, class(future::plan())[1]))
+    }
+    chain_results <- future.apply::future_lapply(
+      seq_len(n_chains), run_chain,
+      future.seed     = NULL,           # we've handled RNG ourselves above
+      future.packages = "weave"          # workers need package functions
+    )
+  } else {
+    chain_results <- lapply(seq_len(n_chains), run_chain)
   }
 
   # ---- Pool per-chain traces into arrays with chain as last dim -------------
@@ -311,6 +458,8 @@ fit_bayes <- function(obs_data,
   logpost_trace  <- matrix(NA_real_, nrow = n_sweeps, ncol = n_chains)
   pcg_iter_trace <- matrix(NA_integer_, nrow = n_sweeps, ncol = n_chains)
   mh_acceptance  <- numeric(n_chains)
+  pcg_fails      <- integer(n_chains)
+  jacobi_uses    <- integer(n_chains)
 
   for (ch in seq_len(n_chains)) {
     cr <- chain_results[[ch]]
@@ -320,6 +469,10 @@ fit_bayes <- function(obs_data,
     logpost_trace[, ch]   <- cr$logpost_trace
     pcg_iter_trace[, ch]  <- cr$pcg_iter_trace
     mh_acceptance[ch]     <- cr$mh_acceptance
+    # Defensive: an older worker (loaded from an installed package) may
+    # not yet include these fields. Default to 0 in that case.
+    pcg_fails[ch]         <- if (is.null(cr$pcg_fails))   0L else cr$pcg_fails
+    jacobi_uses[ch]       <- if (is.null(cr$jacobi_uses)) 0L else cr$jacobi_uses
   }
 
   # ---- Pool Welford summaries across chains (post-burnin samples only) -----
@@ -356,6 +509,8 @@ fit_bayes <- function(obs_data,
     r_trace         = r_trace,
     logpost_trace   = logpost_trace,
     pcg_iter_trace  = pcg_iter_trace,
+    pcg_fails       = pcg_fails,
+    jacobi_uses     = jacobi_uses,
     f_mean          = pooled$mean,
     f_var           = welford_var(pooled),
     f_samples       = f_samples,
@@ -440,6 +595,21 @@ summary.weave_bayes <- function(object, ...) {
   } else {
     cat(sprintf("\nMH acceptance for r (per chain): %s\n",
                 paste(sprintf("%.2f", object$mh_acceptance), collapse = ", ")))
+  }
+
+  # PCG-block health summary. Show a one-line summary always; warn if
+  # more than 10% of sweeps were unhealthy (non-converged PCG or fallback
+  # to Jacobi). This makes a quietly-struggling sampler hard to miss.
+  if (!is.null(object$pcg_fails)) {
+    total_sweeps <- object$n_sweeps * object$n_chains
+    n_fail   <- sum(object$pcg_fails)
+    n_jacobi <- sum(object$jacobi_uses)
+    cat(sprintf("PCG: %d non-converged, %d Jacobi fallback (of %d sweeps).\n",
+                n_fail, n_jacobi, total_sweeps))
+    if (n_fail + n_jacobi > 0.10 * total_sweeps) {
+      warning("More than 10% of sweeps had a PCG failure or Jacobi ",
+              "fallback. Consider increasing pcg_maxit or relaxing pcg_tol.")
+    }
   }
   invisible(out)
 }

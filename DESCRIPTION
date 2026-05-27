@@ -1,7 +1,7 @@
 Package: weave
 Type: Package
 Title: Health facility malaria data interpolation
-Version: 0.2.0
+Version: 0.2.1
 Authors@R: c(
     person("Pete", "Winskill", email = "p.winskill@imperial.ac.uk", role = c("aut", "cre")),
     person("Robert", "Verity", email = "r.verity@imperial.ac.uk", role = c("aut"))
@@ -28,6 +28,8 @@ Suggests:
     testthat (>= 3.0.0),
     coda,
     lifecycle,
-    ggplot2
+    ggplot2,
+    future,
+    future.apply
 Config/testthat/edition: 3
 VignetteBuilder: knitr

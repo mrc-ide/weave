@@ -4,7 +4,15 @@
 \alias{pcg}
 \title{Generic preconditioned conjugate gradient solver}
 \usage{
-pcg(b, Amv_fun, Minv_fun = identity, tol = 1e-08, maxit = 500, verbose = FALSE)
+pcg(
+  b,
+  Amv_fun,
+  Minv_fun = identity,
+  tol = 1e-08,
+  maxit = 500,
+  verbose = FALSE,
+  warn = TRUE
+)
 }
 \arguments{
 \item{b}{Right-hand side (numeric vector).}
@@ -19,6 +27,12 @@ applied to v). Pass `identity` to fall back to plain CG.}
 \item{maxit}{Maximum number of iterations, default 500.}
 
 \item{verbose}{If TRUE, prints the residual every 25 iterations.}
+
+\item{warn}{If TRUE (default), `warning()` is emitted when PCG runs out
+of iterations or hits non-positive curvature. Pass `warn = FALSE`
+when calling from inside an MCMC loop where these conditions are
+handled by the caller (eg via a fallback preconditioner) -- otherwise
+a long run produces thousands of duplicate warnings.}
 }
 \value{
 A list with `x` (solution), `iters` (iterations used), `converged`
