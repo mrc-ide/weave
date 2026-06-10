@@ -98,8 +98,8 @@ observed_data <- function(data, p_one, p_switch) {
 # -----------------------------------------------------------------------------
 # 1. Controls
 # -----------------------------------------------------------------------------
-n <- 100 # number of sites (health facilities)
-nt <- 52 * 5 # number of time points (3 yrs weekly)
+n <- 32 # number of sites (health facilities)
+nt <- 52 * 8 # number of time points (3 yrs weekly)
 period <- 52 # seasonal period (weeks/cycle)
 
 true_length_scale <- 2 # spatial smoothness (distance units)
@@ -177,24 +177,37 @@ missing_df <- missing_df[is.na(missing_df$y_obs), ] # held-out truth
 sub <- function(d) d[d$id %in% plot_sites, ]
 
 base_plot <- ggplot() +
-geom_line(
-  data = sub(truth_df),
-  aes(t, lambda),
-  colour = "black",
-  linewidth = 0.4
-) +
-geom_point(data = sub(obs_df), aes(t, y_obs), size = 0.5, colour = "grey20") +
-facet_wrap(~id, scales = "free_y", labeller = labeller(id = hf_labeller)) +
-labs(
-  x = "Week",
-  y = "Cases",
-  title = "Simulated truth: black line = true mean, points = observed counts"
-) +
-theme_bw() +
-theme(
-  strip.background = element_rect(fill = "white", colour = "grey60"),
-  strip.text = element_text(size = 7, face = "bold")
-)
+  geom_line(
+    data = sub(truth_df),
+    aes(t, lambda),
+    colour = "black",
+    linewidth = 0.4
+  ) +
+  geom_point(data = sub(obs_df), aes(t, y_obs), size = 0.5, colour = "grey20") +
+  facet_wrap(~id, scales = "free_y", labeller = labeller(id = hf_labeller)) +
+  labs(
+    x = "Week",
+    y = "Cases",
+    title = "Simulated truth: black line = true mean, points = observed counts"
+  ) +
+  theme_bw() +
+  theme(
+    strip.background = element_rect(fill = "white", colour = "grey60"),
+    strip.text = element_text(size = 7, face = "bold")
+  )
+
+# Held-out truth at the missing cells, in red (carried into Plot 3 too, since
+# the prediction plot is built on base_plot).
+if (show_missingness) {
+  base_plot <- base_plot +
+    geom_point(
+      data = sub(missing_df),
+      aes(t, y),
+      size = 0.6,
+      colour = "red"
+    ) +
+    labs(subtitle = "red = held-out truth at missing cells")
+}
 
 print(base_plot)
 
@@ -247,7 +260,7 @@ kernel_curves <- function(
     alpha = periodic_scale,
     period = period
   ) *
-  rbf_kernel(tm$lag, theta = long_term_scale)
+    rbf_kernel(tm$lag, theta = long_term_scale)
   list(space = sp, time = tm)
 }
 
@@ -273,30 +286,30 @@ space_kernel_plot <- ggplot(
   space_curve,
   aes(distance, correlation, colour = type, linetype = type)
 ) +
-geom_line(linewidth = 1) +
-scale_colour_manual(values = kernel_cols, name = NULL) +
-scale_linetype_manual(values = kernel_ltys, name = NULL) +
-labs(
-  x = "Spatial distance",
-  y = "Correlation",
-  title = "Spatial kernel: estimated (pink) vs true (black dashed)"
-) +
-ylim(0, 1) +
-theme_bw()
+  geom_line(linewidth = 1) +
+  scale_colour_manual(values = kernel_cols, name = NULL) +
+  scale_linetype_manual(values = kernel_ltys, name = NULL) +
+  labs(
+    x = "Spatial distance",
+    y = "Correlation",
+    title = "Spatial kernel: estimated (pink) vs true (black dashed)"
+  ) +
+  ylim(0, 1) +
+  theme_bw()
 
 time_kernel_plot <- ggplot(
   time_curve,
   aes(lag, correlation, colour = type, linetype = type)
 ) +
-geom_line(linewidth = 1) +
-scale_colour_manual(values = kernel_cols, name = NULL) +
-scale_linetype_manual(values = kernel_ltys, name = NULL) +
-labs(
-  x = "Temporal lag (weeks)",
-  y = "Correlation",
-  title = "Temporal kernel: estimated (pink) vs true (black dashed)"
-) +
-theme_bw()
+  geom_line(linewidth = 1) +
+  scale_colour_manual(values = kernel_cols, name = NULL) +
+  scale_linetype_manual(values = kernel_ltys, name = NULL) +
+  labs(
+    x = "Temporal lag (weeks)",
+    y = "Correlation",
+    title = "Temporal kernel: estimated (pink) vs true (black dashed)"
+  ) +
+  theme_bw()
 
 print(space_kernel_plot)
 print(time_kernel_plot)
@@ -338,7 +351,7 @@ gp_smoother <- function(
   ids <- sort(unique(obs_data$id))
   times <- sort(unique(obs_data$t))
   coordinates <- coordinates[match(ids, coordinates$id), , drop = FALSE]
-  
+
   # Plug-in field + per-site centring/scaling (kept so we can undo it).
   M <- matrix(NA_real_, n, nt)
   M[cbind(
@@ -352,7 +365,7 @@ gp_smoother <- function(
   row_sd[!is.finite(row_sd) | row_sd == 0] <- 1
   G <- Mc / row_sd
   G[is.na(G)] <- 0
-  
+
   # Eigendecompositions of the fitted correlation kernels.
   eig_s <- eig_sym(space_kernel(coordinates, length_scale = est$length_scale))
   eig_t <- eig_sym(time_kernel(
@@ -363,15 +376,15 @@ gp_smoother <- function(
   ))
   eta <- est$nugget_ratio
   s2 <- est$sigma2
-  
+
   lam <- outer(eig_s$values, eig_t$values) # n x nt Kronecker eigenvalues
   shrink <- lam / (lam + eta)
   pv <- s2 * lam * eta / (lam + eta) # posterior var per mode
-  
+
   ghat <- crossprod(eig_s$vectors, G) %*% eig_t$vectors # U_s' G U_t
   Ghat <- eig_s$vectors %*% (shrink * ghat) %*% t(eig_t$vectors) # smoothed (std)
   Vstd <- (eig_s$vectors^2) %*% pv %*% t(eig_t$vectors^2) # per-cell var (std)
-  
+
   # Undo standardisation -> log-rate scale (mu_s + f_st). Return the posterior
   # mean and variance of the log-rate so the caller can build a prediction
   # interval that also folds in observation noise.
@@ -431,30 +444,31 @@ pred_df <- data.frame(
 # -----------------------------------------------------------------------------
 # 7. Plot 3: predictions on top of the truth
 # -----------------------------------------------------------------------------
-# Blue line  = predicted mean rate; blue ribbon = 95% credible interval for the
-# latent rate. Compare against the black true-mean line and the points.
+# Blue line = predicted mean; blue ribbon = 95% prediction interval for counts.
+# Compare against the black true-mean line, the grey observed points, and the
+# red held-out truth.
 # -----------------------------------------------------------------------------
 prediction_plot <- base_plot +
-geom_ribbon(
-  data = sub(pred_df),
-  aes(t, ymin = lower, ymax = upper),
-  fill = "steelblue",
-  alpha = 0.25
-) +
-geom_line(
-  data = sub(pred_df),
-  aes(t, mean),
-  colour = "steelblue",
-  linewidth = 0.6
-) +
-labs(
-  title = "Prediction vs truth: blue = predicted mean + 95% prediction interval (counts)",
-  subtitle = if (show_missingness) {
-    "black line = true mean; red = held-out truth"
-  } else {
-    "black line = true mean"
-  }
-)
+  geom_ribbon(
+    data = sub(pred_df),
+    aes(t, ymin = lower, ymax = upper),
+    fill = "steelblue",
+    alpha = 0.25
+  ) +
+  geom_line(
+    data = sub(pred_df),
+    aes(t, mean),
+    colour = "steelblue",
+    linewidth = 0.6
+  ) +
+  labs(
+    title = "Prediction vs truth: blue = predicted mean + 95% prediction interval (counts)",
+    subtitle = if (show_missingness) {
+      "black line = true mean; red = held-out truth"
+    } else {
+      "black line = true mean"
+    }
+  )
 
 print(prediction_plot)
 
@@ -494,5 +508,3 @@ cat(sprintf(
   "95%% prediction-interval coverage of held-out COUNTS:    %.2f  (target ~0.95)\n",
   coverage
 ))
-
-)
