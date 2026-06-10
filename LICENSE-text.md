@@ -1,0 +1,4 @@
+# License
+
+    YEAR: 2024
+    COPYRIGHT HOLDER: MRC Centre for Outbreak Analysis and Modelling
