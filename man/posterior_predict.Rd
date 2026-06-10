@@ -2,19 +2,27 @@
 % Please edit documentation in R/posterior.R
 \name{posterior_predict}
 \alias{posterior_predict}
-\title{Posterior predictive draws from a weave_bayes fit}
+\alias{posterior_predict.weave_bayes}
+\title{Posterior predictive draws}
 \usage{
-posterior_predict(fit, cells = NULL)
+posterior_predict(object, ...)
+
+\method{posterior_predict}{weave_bayes}(object, cells = NULL, ...)
 }
 \arguments{
-\item{fit}{A `weave_bayes` object returned by [fit_bayes()].}
+\item{object}{A fit object (`weave_bayes` or `weave_pfn`).}
+
+\item{...}{Method-specific arguments (e.g. `cells` for `weave_bayes`).}
 
 \item{cells}{Integer vector of cell indices (positions in the full
 times-vary-fastest grid). Default is all cells.}
 }
 \value{
-A matrix with one row per retained MCMC sample and one column per cell.
+A matrix with one row per retained posterior sample and one column
+  per cell.
 }
 \description{
-Posterior predictive draws from a weave_bayes fit
+S3 generic. Dispatches on the fit class -- `weave_bayes` for `fit_bayes()`
+output, `weave_pfn` for `fit_pfn()` output. Both methods return the same
+shape so callers don't have to branch on the sampler.
 }

@@ -1,0 +1,71 @@
+Geometry: n = 8, nt = 26, period = 13
+
+=== Warm-up timing for fit_pfn_hybrid ===
+Hybrid (n_post=200, n_inner=10) per dataset: 9.4s
+  inner PCG mean iters: 56.6
+Planned SBC: 50 datasets => ~7.8 min
+
+=== SBC: hybrid path ===
+
+Hybrid SBC KS p-values vs Uniform(0,1) (lower => miscalibrated):
+  length_scale        0.570
+  periodic_scale      0.061
+  long_term_scale     0.123
+  log_r               0.016  *  borderline
+  mu_s                0.037  *  borderline
+  f                   0.000  *** miscalibrated
+
+=== Comparison: PFN / hybrid / fit_bayes on 5 fresh datasets ===
+
+-- Dataset 1/5 --
+  truth: length=4.57, periodic=3.39, long_term=32.32, r=11.10
+  fit_pfn         : 0.07s
+  fit_pfn_hybrid  : 107.82s
+  fit_bayes       : 11.60s
+
+-- Dataset 2/5 --
+  truth: length=4.60, periodic=0.82, long_term=44.39, r=18.02
+  fit_pfn         : 0.06s
+InvertY.cpp, v_eval: reached max_iter: 1000
+  fit_pfn_hybrid  : 57.93s
+  fit_bayes       : 12.42s
+
+-- Dataset 3/5 --
+  truth: length=1.16, periodic=2.73, long_term=22.07, r=12.60
+  fit_pfn         : 0.09s
+  fit_pfn_hybrid  : 79.36s
+  fit_bayes       : 15.09s
+
+-- Dataset 4/5 --
+  truth: length=3.08, periodic=0.70, long_term=132.20, r=26.11
+  fit_pfn         : 0.11s
+  fit_pfn_hybrid  : 66.27s
+  fit_bayes       : 13.11s
+
+-- Dataset 5/5 --
+  truth: length=1.08, periodic=0.52, long_term=73.32, r=25.41
+  fit_pfn         : 0.11s
+  fit_pfn_hybrid  : 52.47s
+  fit_bayes       : 10.45s
+
+=== Aggregate coverage (5 datasets) ===
+           param pfn_cover hybrid_cover bayes_cover  pfn_width hybrid_width
+    length_scale         1            1         1.0  23.340190    21.466219
+  periodic_scale         1            1         0.8   3.797855     3.558954
+ long_term_scale         1            1         1.0 180.615092   181.598006
+               r         1            1         1.0  30.615551    30.287490
+ bayes_width
+   2.5385638
+   0.9462676
+  67.2476392
+  19.1298319
+
+=== Runtime + PPC coverage ===
+ dataset pfn_sec hybrid_sec bayes_sec pfn_ppc hybrid_ppc bayes_ppc
+       1    0.07     107.82     11.60       1  0.9942857 0.9600000
+       2    0.06      57.93     12.42       1  1.0000000 0.9943820
+       3    0.09      79.36     15.09       1  0.9938650 0.9815951
+       4    0.11      66.27     13.11       1  1.0000000 0.9938272
+       5    0.11      52.47     10.45       1  1.0000000 1.0000000
+
+Wrote implementation/pfn_smoke/hybrid_findings.md

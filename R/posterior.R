@@ -61,14 +61,26 @@ welford_combine <- function(summaries) {
 # y_rep at those cells: for each retained MCMC sample s and each cell c,
 # sample y_rep ~ NB(size = r^{(s)}, mu = exp(f^{(s)}_c + mu^{(s)}_{site(c)})).
 # -----------------------------------------------------------------------------
-#' Posterior predictive draws from a weave_bayes fit
+#' Posterior predictive draws
 #'
-#' @param fit A `weave_bayes` object returned by [fit_bayes()].
+#' S3 generic. Dispatches on the fit class -- `weave_bayes` for `fit_bayes()`
+#' output, `weave_pfn` for `fit_pfn()` output. Both methods return the same
+#' shape so callers don't have to branch on the sampler.
+#'
+#' @param object A fit object (`weave_bayes` or `weave_pfn`).
+#' @param ... Method-specific arguments (e.g. `cells` for `weave_bayes`).
+#' @return A matrix with one row per retained posterior sample and one column
+#'   per cell.
+#' @export
+posterior_predict <- function(object, ...) UseMethod("posterior_predict")
+
+
+#' @rdname posterior_predict
 #' @param cells Integer vector of cell indices (positions in the full
 #'   times-vary-fastest grid). Default is all cells.
-#' @return A matrix with one row per retained MCMC sample and one column per cell.
 #' @export
-posterior_predict <- function(fit, cells = NULL) {
+posterior_predict.weave_bayes <- function(object, cells = NULL, ...) {
+  fit <- object
   if (is.null(fit$f_samples)) {
     stop("This fit was run with store_f = 'summary'; posterior predict needs",
          " store_f = 'thin' or 'all'. Re-fit with a different store_f setting.")

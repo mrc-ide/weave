@@ -1,0 +1,10 @@
+Truth: length=1.67, periodic=0.79, long_term=41.49, r=25.10
+Running fit_pfn_hybrid (n_post=500, n_inner=20)...
+  36.0s
+Running fit_bayes (500 sweeps, 200 burnin, 2 chains)...
+  4.9s
+Wrote implementation/pfn_smoke/hybrid_diagnostic.png
+
+Per-cell mean correlation (hybrid vs Bayes): 0.956
+Per-cell sd ratio (hybrid / Bayes): median 0.98, IQR [0.77, 1.14]
+Truth-in-95%-interval rate: hybrid 0.96, Bayes 0.97

@@ -1,0 +1,56 @@
+Model geometry: n = 8 sites, nt = 26, period = 13
+
+=== SBC (200 fresh datasets) ===
+SBC took 0.2s
+<pfn_sbc: 200 synthetic datasets>
+KS p-value vs Uniform(0, 1) (lower => miscalibrated):
+  length_scale        0.121
+  periodic_scale      0.046  *  borderline
+  long_term_scale     0.097
+  log_r               0.176
+  mu_s                0.163
+  f                   0.000  *** miscalibrated
+
+=== Comparison: PFN vs fit_bayes() on 5 fresh datasets ===
+
+-- Dataset 1/5 --
+  truth: length=14.98, periodic=0.69, long_term=7.51, r=5.75
+  fit_pfn: 0.07s
+  fit_bayes: 7.03s
+
+-- Dataset 2/5 --
+  truth: length=0.49, periodic=1.26, long_term=113.81, r=27.72
+  fit_pfn: 0.08s
+  fit_bayes: 7.77s
+
+-- Dataset 3/5 --
+  truth: length=1.16, periodic=1.37, long_term=213.99, r=28.45
+  fit_pfn: 0.04s
+  fit_bayes: 6.08s
+
+-- Dataset 4/5 --
+  truth: length=1.49, periodic=3.67, long_term=12.06, r=10.39
+  fit_pfn: 0.04s
+  fit_bayes: 7.08s
+
+-- Dataset 5/5 --
+  truth: length=23.89, periodic=0.49, long_term=31.18, r=18.22
+  fit_pfn: 0.06s
+  fit_bayes: 7.43s
+
+=== Aggregate coverage (5 datasets) ===
+           param pfn_cover bayes_cover  pfn_width bayes_width
+    length_scale       1.0         0.4  28.770539   3.3384082
+  periodic_scale       1.0         1.0   3.131633   0.7817091
+ long_term_scale       0.8         1.0 187.303012  78.1967441
+               r       1.0         0.8  27.631620  10.4945518
+
+=== Runtime + PPC coverage ===
+ dataset pfn_sec bayes_sec pfn_ppc bayes_ppc
+       1    0.07      7.03       1 0.9889503
+       2    0.08      7.77       1 0.9934641
+       3    0.04      6.08       1 0.9782609
+       4    0.04      7.08       1 0.9668508
+       5    0.06      7.43       1 0.9710983
+
+Wrote implementation/pfn_smoke/findings.md

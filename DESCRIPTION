@@ -30,6 +30,7 @@ Suggests:
     lifecycle,
     ggplot2,
     future,
-    future.apply
+    future.apply,
+    torch
 Config/testthat/edition: 3
 VignetteBuilder: knitr
