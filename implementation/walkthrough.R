@@ -1,28 +1,39 @@
 # =============================================================================
-# weave -- method walkthrough / diagnostic harness
+# weave -- kernel-hyperparameter walkthrough
 # =============================================================================
 #
-# PURPOSE
-#   A single, git-tracked (but Rbuild-ignored) script for eyeballing how well a
-#   fitting method works on simulated data where the truth is known. Tweak the
-#   "FIT THE MODEL" and "PREDICT" sections per branch as you try new methods;
-#   keep the simulate / plot scaffolding the same so results are comparable.
+# WHAT THIS DOES
+#   Estimates the separable-GP kernel hyperparameters from count data, then uses
+#   them to predict the latent rate. The steps:
 #
-#   It runs end to end and PRINTS (does not save) four things:
+#     1. Build a plug-in latent field from the counts: the per-site centred and
+#        scaled log1p(y).
+#     2. Fit (length_scale, periodic_scale, long_term_scale) plus a noise/nugget
+#        ratio by maximising the GP marginal likelihood of that field. The
+#        Kronecker eigendecomposition gives the exact log-determinant and
+#        quadratic form in O(n^3 + nt^3), so the full (n*nt)-square covariance is
+#        never formed and the global variance is profiled out analytically.
+#     3. Predict the latent rate with a closed-form separable-GP smoother and
+#        turn it into a count prediction interval.
+#
+#   The script simulates data with a known truth and PRINTS (does not save):
 #     Plot 1  simulated true mean + observations (held-out cells in red)
-#     Plot 2  the fitted spatial and temporal kernels
-#     Plot 3  Plot 1 with the predicted mean (line) + 95% interval (ribbon)
+#     Plot 2  fitted vs true spatial and temporal kernels
+#     Plot 3  Plot 1 with the predicted mean (line) + 95% prediction interval
 #     A short numeric report (estimated vs true hyperparameters, coverage)
 #
-# WHAT THIS BRANCH IS TESTING
-#   infer_kernel_params(): a quick, deterministic kernel-hyperparameter estimate
-#   that maximises the exact GP marginal likelihood of a plug-in latent field
-#   (Kronecker eigendecomposition, profiled variance, estimated noise nugget).
-#   No MCMC, no PCG. See R/hyperparameters.R.
-#
-#   Prediction below uses a matching no-PCG Kronecker GP smoother (gp_smoother),
-#   defined locally in this script so the whole pipeline stays self-contained
-#   and easy to swap.
+# CAVEATS / APPROXIMATIONS
+#   - Plug-in, not fully Bayesian: it conditions on a single noisy estimate of
+#     the latent field rather than integrating the field out. This attenuates
+#     the length scales (periodic_scale / long_term_scale tend to come out low);
+#     the nugget mitigates but does not remove it.
+#   - log1p(y) is a crude stand-in for the latent log-rate (poor at low counts).
+#   - Per-site scaling folds all per-site variance into one global sigma^2 and
+#     amplifies noise at low-count sites.
+#   - The nugget is a single homoscedastic noise term; real count noise is
+#     heteroscedastic.
+#   - Missing cells are mean-imputed, so they contribute no uncertainty.
+#   - It returns a point (MAP) estimate -- no hyperparameter uncertainty.
 #
 # HOW TO RUN
 #   From the project root:  source("implementation/walkthrough.R")
@@ -31,11 +42,7 @@
 # -----------------------------------------------------------------------------
 # 0. Setup
 # -----------------------------------------------------------------------------
-# Source the individual R files we need (rather than devtools::load_all()) so the
-# script runs even when package Imports used elsewhere are not installed.
-for (f in c("R/kernel.R", "R/sample.R", "R/hyperparameters.R")) {
-  source(f)
-}
+devtools::load_all(quiet = TRUE)
 
 suppressPackageStartupMessages(library(ggplot2))
 
@@ -91,7 +98,7 @@ observed_data <- function(data, p_one, p_switch) {
 # -----------------------------------------------------------------------------
 # 1. Controls
 # -----------------------------------------------------------------------------
-n <- 200 # number of sites (health facilities)
+n <- 100 # number of sites (health facilities)
 nt <- 52 * 5 # number of time points (3 yrs weekly)
 period <- 52 # seasonal period (weeks/cycle)
 
@@ -103,7 +110,7 @@ true_r <- 15 # NB dispersion (smaller = heavier tail)
 show_missingness <- TRUE # draw held-out (missing) truth in red
 p_one <- 0.1 # missingness controls (see observed_data)
 p_switch <- 0.3
-plot_sites <- 1:36 # sites shown in the per-site panels (default: all; set e.g. 1:12 to subset)
+plot_sites <- 1:50 # sites shown in the per-site panels (default: all; set e.g. 1:12 to subset)
 
 
 # -----------------------------------------------------------------------------
@@ -170,39 +177,33 @@ missing_df <- missing_df[is.na(missing_df$y_obs), ] # held-out truth
 sub <- function(d) d[d$id %in% plot_sites, ]
 
 base_plot <- ggplot() +
-  geom_line(
-    data = sub(truth_df),
-    aes(t, lambda),
-    colour = "black",
-    linewidth = 0.4
-  ) +
-  geom_point(data = sub(obs_df), aes(t, y_obs), size = 0.5, colour = "grey20") +
-  facet_wrap(~id, scales = "free_y", labeller = labeller(id = hf_labeller)) +
-  labs(
-    x = "Week",
-    y = "Cases",
-    title = "Simulated truth: black line = true mean, points = observed counts"
-  ) +
-  theme_bw() +
-  theme(
-    strip.background = element_rect(fill = "white", colour = "grey60"),
-    strip.text = element_text(size = 7, face = "bold")
-  )
-
-if (show_missingness) {
-  base_plot <- base_plot +
-    geom_point(data = sub(missing_df), aes(t, y), size = 0.6, colour = "red") +
-    labs(subtitle = "red = held-out truth at missing cells")
-}
+geom_line(
+  data = sub(truth_df),
+  aes(t, lambda),
+  colour = "black",
+  linewidth = 0.4
+) +
+geom_point(data = sub(obs_df), aes(t, y_obs), size = 0.5, colour = "grey20") +
+facet_wrap(~id, scales = "free_y", labeller = labeller(id = hf_labeller)) +
+labs(
+  x = "Week",
+  y = "Cases",
+  title = "Simulated truth: black line = true mean, points = observed counts"
+) +
+theme_bw() +
+theme(
+  strip.background = element_rect(fill = "white", colour = "grey60"),
+  strip.text = element_text(size = 7, face = "bold")
+)
 
 print(base_plot)
 
 
 # -----------------------------------------------------------------------------
-# 4. FIT THE MODEL  <-- swap this section per branch
+# 4. Fit the kernel hyperparameters
 # -----------------------------------------------------------------------------
-# This branch: estimate the kernel hyperparameters by maximising the exact GP
-# marginal likelihood of a plug-in field (no MCMC, no PCG).
+# Maximise the GP marginal likelihood of the plug-in field to estimate the three
+# length scales and the noise/nugget ratio (profiled global variance).
 # -----------------------------------------------------------------------------
 fit_time <- system.time(
   est <- infer_kernel_params(obs_data, coordinates, nt = nt, period = period)
@@ -246,7 +247,7 @@ kernel_curves <- function(
     alpha = periodic_scale,
     period = period
   ) *
-    rbf_kernel(tm$lag, theta = long_term_scale)
+  rbf_kernel(tm$lag, theta = long_term_scale)
   list(space = sp, time = tm)
 }
 
@@ -272,42 +273,42 @@ space_kernel_plot <- ggplot(
   space_curve,
   aes(distance, correlation, colour = type, linetype = type)
 ) +
-  geom_line(linewidth = 1) +
-  scale_colour_manual(values = kernel_cols, name = NULL) +
-  scale_linetype_manual(values = kernel_ltys, name = NULL) +
-  labs(
-    x = "Spatial distance",
-    y = "Correlation",
-    title = "Spatial kernel: estimated (pink) vs true (black dashed)"
-  ) +
-  ylim(0, 1) +
-  theme_bw()
+geom_line(linewidth = 1) +
+scale_colour_manual(values = kernel_cols, name = NULL) +
+scale_linetype_manual(values = kernel_ltys, name = NULL) +
+labs(
+  x = "Spatial distance",
+  y = "Correlation",
+  title = "Spatial kernel: estimated (pink) vs true (black dashed)"
+) +
+ylim(0, 1) +
+theme_bw()
 
 time_kernel_plot <- ggplot(
   time_curve,
   aes(lag, correlation, colour = type, linetype = type)
 ) +
-  geom_line(linewidth = 1) +
-  scale_colour_manual(values = kernel_cols, name = NULL) +
-  scale_linetype_manual(values = kernel_ltys, name = NULL) +
-  labs(
-    x = "Temporal lag (weeks)",
-    y = "Correlation",
-    title = "Temporal kernel: estimated (pink) vs true (black dashed)"
-  ) +
-  theme_bw()
+geom_line(linewidth = 1) +
+scale_colour_manual(values = kernel_cols, name = NULL) +
+scale_linetype_manual(values = kernel_ltys, name = NULL) +
+labs(
+  x = "Temporal lag (weeks)",
+  y = "Correlation",
+  title = "Temporal kernel: estimated (pink) vs true (black dashed)"
+) +
+theme_bw()
 
 print(space_kernel_plot)
 print(time_kernel_plot)
 
 
 # -----------------------------------------------------------------------------
-# 6. PREDICT  <-- no-PCG Kronecker GP smoother
+# 6. Predict the latent rate and a count prediction interval
 # -----------------------------------------------------------------------------
-# Given the fitted hyperparameters, denoise the plug-in field with an exact
-# separable-GP smoother. Because the noise is a scalar multiple of the identity
-# and the grid is completed (missing cells mean-imputed), the smoother is closed
-# form in the Kronecker eigenbasis -- no iterative solver:
+# Given the fitted hyperparameters, denoise the plug-in field with a closed-form
+# separable-GP smoother. The noise is a scalar multiple of the identity and the
+# grid is completed (missing cells mean-imputed), so everything diagonalises in
+# the Kronecker eigenbasis:
 #
 #   posterior mean of mode (i,j):  S_ij * ghat_ij,   S_ij = lambda_ij/(lambda_ij+eta)
 #   posterior var  of mode (i,j):  sigma^2 * lambda_ij * eta / (lambda_ij + eta)
@@ -318,13 +319,12 @@ print(time_kernel_plot)
 #
 # The ribbon is a PREDICTION INTERVAL for counts (not a credible interval on the
 # mean): we fold observation noise into the rate posterior via the law of total
-# variance and moment-match a lognormal to read off 2.5/97.5%. Because this
-# branch does not estimate the NB dispersion r, we estimate it by method of
-# moments from the observed counts (override via r_pred below).
+# variance and moment-match a lognormal to read off 2.5/97.5%. The NB dispersion
+# r is estimated by method of moments from the observed counts (override via
+# r_pred below).
 #
-# NB: this is an APPROXIMATION for missing cells (homoscedastic noise on a
-# completed grid). Good enough as a diagnostic; not a substitute for a proper
-# missing-data posterior.
+# NB: mean-imputing missing cells with homoscedastic noise understates their
+# uncertainty -- fine as a diagnostic, not a proper missing-data posterior.
 # -----------------------------------------------------------------------------
 gp_smoother <- function(
   obs_data,
@@ -338,7 +338,7 @@ gp_smoother <- function(
   ids <- sort(unique(obs_data$id))
   times <- sort(unique(obs_data$t))
   coordinates <- coordinates[match(ids, coordinates$id), , drop = FALSE]
-
+  
   # Plug-in field + per-site centring/scaling (kept so we can undo it).
   M <- matrix(NA_real_, n, nt)
   M[cbind(
@@ -352,7 +352,7 @@ gp_smoother <- function(
   row_sd[!is.finite(row_sd) | row_sd == 0] <- 1
   G <- Mc / row_sd
   G[is.na(G)] <- 0
-
+  
   # Eigendecompositions of the fitted correlation kernels.
   eig_s <- eig_sym(space_kernel(coordinates, length_scale = est$length_scale))
   eig_t <- eig_sym(time_kernel(
@@ -363,15 +363,15 @@ gp_smoother <- function(
   ))
   eta <- est$nugget_ratio
   s2 <- est$sigma2
-
+  
   lam <- outer(eig_s$values, eig_t$values) # n x nt Kronecker eigenvalues
   shrink <- lam / (lam + eta)
   pv <- s2 * lam * eta / (lam + eta) # posterior var per mode
-
+  
   ghat <- crossprod(eig_s$vectors, G) %*% eig_t$vectors # U_s' G U_t
   Ghat <- eig_s$vectors %*% (shrink * ghat) %*% t(eig_t$vectors) # smoothed (std)
   Vstd <- (eig_s$vectors^2) %*% pv %*% t(eig_t$vectors^2) # per-cell var (std)
-
+  
   # Undo standardisation -> log-rate scale (mu_s + f_st). Return the posterior
   # mean and variance of the log-rate so the caller can build a prediction
   # interval that also folds in observation noise.
@@ -435,26 +435,26 @@ pred_df <- data.frame(
 # latent rate. Compare against the black true-mean line and the points.
 # -----------------------------------------------------------------------------
 prediction_plot <- base_plot +
-  geom_ribbon(
-    data = sub(pred_df),
-    aes(t, ymin = lower, ymax = upper),
-    fill = "steelblue",
-    alpha = 0.25
-  ) +
-  geom_line(
-    data = sub(pred_df),
-    aes(t, mean),
-    colour = "steelblue",
-    linewidth = 0.6
-  ) +
-  labs(
-    title = "Prediction vs truth: blue = predicted mean + 95% prediction interval (counts)",
-    subtitle = if (show_missingness) {
-      "black line = true mean; red = held-out truth"
-    } else {
-      "black line = true mean"
-    }
-  )
+geom_ribbon(
+  data = sub(pred_df),
+  aes(t, ymin = lower, ymax = upper),
+  fill = "steelblue",
+  alpha = 0.25
+) +
+geom_line(
+  data = sub(pred_df),
+  aes(t, mean),
+  colour = "steelblue",
+  linewidth = 0.6
+) +
+labs(
+  title = "Prediction vs truth: blue = predicted mean + 95% prediction interval (counts)",
+  subtitle = if (show_missingness) {
+    "black line = true mean; red = held-out truth"
+  } else {
+    "black line = true mean"
+  }
+)
 
 print(prediction_plot)
 
@@ -494,3 +494,5 @@ cat(sprintf(
   "95%% prediction-interval coverage of held-out COUNTS:    %.2f  (target ~0.95)\n",
   coverage
 ))
+
+)
