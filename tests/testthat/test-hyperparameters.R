@@ -1,0 +1,89 @@
+test_that("gp_marginal_loglik matches a dense brute-force computation", {
+  set.seed(1)
+  n <- 4; nt <- 6; N <- n * nt
+  coords <- data.frame(id = 1:n, lon = runif(n), lat = runif(n))
+  times  <- seq_len(nt)
+
+  Ks <- space_kernel(coords, length_scale = 1.5)
+  Kt <- time_kernel(times, periodic_scale = 1, long_term_scale = 80, period = 52)
+  eig_s <- eig_sym(Ks)
+  eig_t <- eig_sym(Kt)
+
+  g <- rnorm(N)
+
+  for (eta in c(0.05, 0.5, 2)) {
+    # Kronecker (sites slow, times fast) + scalar nugget.
+    Bracket <- kronecker(Ks, Kt) + eta * diag(N)
+    quad    <- as.numeric(t(g) %*% solve(Bracket, g))
+    logdet  <- as.numeric(determinant(Bracket, logarithm = TRUE)$modulus)
+    sigma2  <- quad / N
+    ll_dense <- -0.5 * (N * log(2 * pi) + logdet + N * log(sigma2) + N)
+
+    ll_fast <- gp_marginal_loglik(g, n, nt, eig_s, eig_t, eta = eta)
+
+    expect_equal(as.numeric(ll_fast), ll_dense, tolerance = 1e-8)
+    expect_equal(attr(ll_fast, "sigma2"), sigma2, tolerance = 1e-8)
+  }
+})
+
+
+test_that("build_plugin_field has the right shape, ordering and NA handling", {
+  n <- 3; nt <- 4
+  obs <- expand.grid(t = 1:nt, id = 1:n)        # time fastest within site
+  obs <- obs[order(obs$id, obs$t), ]
+  obs$y_obs <- c(
+    1, 2, 3, 4,        # site 1
+    10, 20, NA, 40,    # site 2 (one missing)
+    5, 5, 5, 5         # site 3 (constant -> sd 0)
+  )
+
+  g <- build_plugin_field(obs, n, nt)
+  expect_length(g, n * nt)
+
+  M <- t(matrix(g, nrow = nt, ncol = n))         # back to n x nt
+  # Missing cell imputed to 0 (the per-site mean after centring).
+  expect_equal(M[2, 3], 0)
+  # Constant site -> centred to all zeros (sd guard prevents divide-by-zero).
+  expect_true(all(M[3, ] == 0))
+  # Observed cells of a varying site are finite and centred (mean ~ 0).
+  expect_true(all(is.finite(M[1, ])))
+  expect_equal(mean(M[1, ]), 0, tolerance = 1e-8)
+})
+
+
+test_that("infer_kernel_params recovers known kernel params and the nugget helps", {
+  skip_on_cran()
+  set.seed(123)
+  n <- 25; nt <- 104; period <- 52
+  coords <- data.frame(id = 1:n, lon = runif(n, 0, 5), lat = runif(n, 0, 5))
+  true_ls <- 2; true_ps <- 1.2; true_lts <- 150; true_r <- 15
+
+  Ks <- space_kernel(coords, length_scale = true_ls)
+  Kt <- time_kernel(1:nt, periodic_scale = true_ps, long_term_scale = true_lts,
+                    period = period)
+  f  <- quick_mvnorm(Ks, Kt)
+  mu <- log(runif(n, 15, 70))
+  psi <- f + rep(mu, each = nt)
+  y   <- rnbinom(n * nt, size = true_r, mu = exp(psi))
+  obs <- data.frame(id = rep(1:n, each = nt), t = rep(1:nt, n), y_obs = y)
+
+  est <- infer_kernel_params(obs, coords, nt = nt, period = period)
+
+  # With the nugget, the spatial length scale should land in a sensible band
+  # around the truth (this is a plug-in estimate, so allow generous tolerance).
+  expect_gt(est$length_scale, 1)
+  expect_lt(est$length_scale, 3.5)
+  expect_gt(est$nugget_ratio, 0)          # a real noise component is detected
+  expect_equal(est$convergence, 0)
+
+  # Pinning the nugget ~0 distorts the length scale badly -- the fit with the
+  # nugget must be closer to the truth than the fit without it.
+  priors0 <- default_kernel_priors()
+  priors0$nugget_ratio <- list(meanlog = log(1e-8), sdlog = 1e-4)
+  est0 <- infer_kernel_params(obs, coords, nt = nt, period = period,
+                              priors = priors0,
+                              start = c(1, 1, 100, 1e-8))
+
+  expect_lt(abs(est$length_scale  - true_ls),
+            abs(est0$length_scale - true_ls))
+})

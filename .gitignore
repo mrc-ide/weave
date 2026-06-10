@@ -3,5 +3,6 @@
 .RData
 .Ruserdata
 docs
-implementation/
+implementation/*
+!implementation/walkthrough.R
 inst/doc
