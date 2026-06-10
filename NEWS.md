@@ -1,3 +1,15 @@
+# weave 0.3.0
+
+## Breaking changes
+
+* **Removed `fit()`**, the legacy fast point estimator under a linearised-
+  Gaussian surrogate likelihood. `fit_bayes()` is now the only inference
+  entry point. The Kronecker linear-algebra primitives (`kron_*` in
+  `R/kron.R`) and the PCG solver (`R/pcg.R`) that `fit()` shared with
+  `fit_bayes()` are retained; only the public estimator is gone.
+* Removed the `weave:::hutchinson_diag()` internal helper that powered the
+  stochastic posterior-variance estimate inside `fit()`.
+
 # weave 0.2.0
 
 ## New features

@@ -141,17 +141,16 @@ data_process <- function(data, ...){
 }
 
 
-#' Pack a tidy data frame into the compact design list the fitters consume
+#' Pack a tidy data frame into the compact design list the fitter consumes
 #'
 #' Given a long data frame with columns `id` (factor), `t`, `lat`, `lon`, and
-#' a count column (`y_obs` if present, else `n`), returns the fields needed by
-#' fit() and fit_bayes(): a flat length-N vector of counts in the
-#' times-vary-fastest order, the indices of the observed (non-NA) cells, the
-#' per-site coordinates, and the per-site initial intercept `mu_init`.
+#' a count column (`y_obs` if present, else `n`), returns the fields needed
+#' by `fit_bayes()`: a flat length-N vector of counts in the times-vary-
+#' fastest order, the indices of the observed (non-NA) cells, the per-site
+#' coordinates, and the per-site initial intercept `mu_init`.
 #'
 #' This is the single source of truth for the data shape passed to the
-#' fitters; both fit() and fit_bayes() call it internally if given a raw
-#' data frame.
+#' sampler; `fit_bayes()` calls it internally if given a raw data frame.
 #'
 #' @param data Tidy data frame; must include columns id, t, lat, lon and
 #'   one of (y_obs, n).

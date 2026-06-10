@@ -6,8 +6,8 @@
 # never has to be formed: every operation we need can be implemented as a
 # small matrix multiply on a reshaped vector.
 #
-# This file collects all the Kronecker primitives used by the deterministic
-# fit() and the PG-Gibbs sampler:
+# This file collects all the Kronecker primitives used by the PG-Gibbs
+# sampler:
 #
 #   kron_mv()         -- matrix-vector multiply K v
 #   kron_eigen()      -- cached eigendecompositions of K_space and K_time

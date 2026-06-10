@@ -1,6 +1,6 @@
 # =============================================================================
 # Preconditioned conjugate gradient (PCG) solver and the "observed system"
-# matrix-vector multiply that both fit() and fit_bayes() use.
+# matrix-vector multiply used by the PG-Gibbs f-block (R/pg_sampler.R).
 #
 # This is the only linear-system solver in the package. The observed-data
 # covariance system is
@@ -9,12 +9,13 @@
 #
 # where K = K_space (x) K_time is the GP covariance, S selects the observed
 # cells out of the n*nt full grid, and D is a diagonal noise / nugget term
-# (per-observation; in the PG sampler D = diag(1/omega)).
+# (D = diag(1/omega) in the PG sampler).
 #
 # We never form A. Each PCG iteration only needs a routine that computes A v
 # and a preconditioner that approximates A^{-1}. Both are passed in as
-# closures so the same solver serves the deterministic fit() (with the
-# Kron-eigen preconditioner) and the PG sampler's f-block.
+# closures; the sampler swaps between the Kronecker-eigen and the Jacobi
+# preconditioner depending on how heterogeneous `omega` is (see
+# `pg_draw_f()`).
 # =============================================================================
 
 
