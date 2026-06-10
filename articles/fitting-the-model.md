@@ -6,11 +6,19 @@ library(weave)
 library(ggplot2)
 ```
 
-This vignette walks through, step by step, how `weave` estimates the
-**kernel hyperparameters** — the handful of numbers that say how quickly
-counts become uncorrelated as you move apart in space and in time. We
-use a small simulated example with a *known* answer so you can see the
-method recover it.
+This vignette is a full walkthrough of how `weave` turns noisy, gappy
+count data into a smooth estimate of the underlying rate. It has two
+halves:
+
+1.  **Estimate the kernel hyperparameters** — the handful of numbers
+    that say how quickly counts become uncorrelated as you move apart in
+    space and in time.
+2.  **Use them to predict** — denoise the observed counts, *fill in the
+    missing weeks*, and put an honest **prediction interval** around
+    each estimate.
+
+We use a small simulated example with a *known* answer (including known
+missing weeks) so you can see the method recover the truth.
 
 At each stage we give: the **maths**, a **plain-language** explanation,
 and the **worked example**.
@@ -68,8 +76,8 @@ for the example — they are not part of the package.)
 ``` r
 
 # --- example controls --------------------------------------------------------
-n      <- 15          # sites
-nt     <- 104         # weeks (2 years)
+n      <- 30          # sites
+nt     <- 52 * 3      # weeks (3 years)
 period <- 52          # weeks per seasonal cycle
 
 true_length_scale    <- 2     # spatial smoothness
@@ -88,9 +96,20 @@ simulate_data <- function(n, nt, coordinates, space_k, time_k, r) {
     y      = stats::rnbinom(n * nt, size = r, mu = lambda)
   )
 }
-observed_data <- function(data, p_missing = 0.2) {
+
+# Missing weeks arrive in CLUSTERS (whole stretches gone), as in real routine
+# data, rather than one-off cells: a 0/1 sequence that tends to stay put.
+generate_clustered_binary <- function(n, p_one, p_switch) {
+  out <- numeric(n)
+  out[1] <- stats::rbinom(1, 1, p_one)
+  for (i in 2:n) {
+    out[i] <- if (stats::runif(1) < p_switch) stats::rbinom(1, 1, p_one) else out[i - 1]
+  }
+  out
+}
+observed_data <- function(data, p_one = 0.15, p_switch = 0.2) {
   y_obs <- data$y
-  y_obs[sample(length(y_obs), floor(p_missing * length(y_obs)))] <- NA
+  y_obs[generate_clustered_binary(nrow(data), p_one, p_switch) == 1] <- NA
   cbind(data["id"], data["t"], y_obs = y_obs)
 }
 
@@ -110,25 +129,36 @@ time_k  <- time_kernel(1:nt,
 )
 
 true_data <- simulate_data(n, nt, coordinates, space_k, time_k, r = true_r)
-obs_data  <- observed_data(true_data, p_missing = 0.2)
+obs_data  <- observed_data(true_data)
+
+cat(sprintf("%.0f%% of weeks are missing\n", 100 * mean(is.na(obs_data$y_obs))))
+#> 15% of weeks are missing
 ```
 
-Here are the first four sites: the black line is the true underlying
-mean ($`\lambda = e^{\mu_s + f_{st}}`$) and the points are the noisy
-observed counts.
+Here are the first four sites. The **black line** is the true underlying
+mean ($`\lambda = e^{\mu_s + f_{st}}`$); **grey points** are the counts
+we actually observe; and **red points** are the *held-out truth* at the
+weeks that went missing — what the model will have to reconstruct, but
+never gets to see.
 
 ``` r
 
-show <- 1:4
+show     <- 1:4
 df_truth <- transform(true_data, id = as.integer(id))
 df_obs   <- transform(obs_data,  id = as.integer(id))
+df_miss  <- merge(df_truth[, c("id", "t", "y")], df_obs, by = c("id", "t"))
+df_miss  <- df_miss[is.na(df_miss$y_obs), ]          # held-out truth
 
 ggplot() +
   geom_line(data = subset(df_truth, id %in% show), aes(t, lambda)) +
   geom_point(data = subset(df_obs, id %in% show), aes(t, y_obs),
-             size = 0.7, colour = "grey30") +
+             size = 0.7, colour = "grey40") +
+  geom_point(data = subset(df_miss, id %in% show), aes(t, y),
+             size = 0.8, colour = "red") +
   facet_wrap(~ id, scales = "free_y", labeller = label_both) +
-  labs(x = "Week", y = "Cases", title = "Simulated counts (4 of the sites)") +
+  labs(x = "Week", y = "Cases",
+       title = "Simulated counts (4 of the sites)",
+       subtitle = "black = true mean, grey = observed, red = held-out truth") +
   theme_bw()
 ```
 
@@ -164,7 +194,7 @@ all of them. It’s noisy — but it’s instant.
 
 g <- build_plugin_field(obs_data, n = n, nt = nt)   # length n * nt, time fastest
 str(g)
-#>  num [1:1560] 0 0.481 0 0.211 -0.138 ...
+#>  num [1:4680] 0.962 0.389 1.4 0.281 1.087 ...
 ```
 
 For one site, the plug-in field tracks the true latent field, just with
@@ -237,7 +267,7 @@ scales.
 #### The maths
 
 The full covariance is $`(n \cdot n_t) \times (n \cdot n_t)`$ — here
-1560 square. We never form it. Because it is a Kronecker product,
+4680 square. We never form it. Because it is a Kronecker product,
 eigendecomposing the *small* factors $`R_{\text{space}} = U_s
 \Lambda_s U_s^\top`$ (size $`n`$) and $`R_{\text{time}} = U_t
 \Lambda_t U_t^\top`$ (size $`n_t`$) is enough:
@@ -279,16 +309,16 @@ data.frame(
   estimate  = round(c(est$length_scale, est$periodic_scale, est$long_term_scale), 2)
 )
 #>         parameter truth estimate
-#> 1    length_scale   2.0     1.68
+#> 1    length_scale   2.0     1.62
 #> 2  periodic_scale   1.1     0.82
-#> 3 long_term_scale 150.0   129.04
+#> 3 long_term_scale 150.0    83.71
 ```
 
 ``` r
 
 cat(sprintf("nugget ratio (noise/signal) = %.2f;  profiled sigma^2 = %.2f\n",
             est$nugget_ratio, est$sigma2))
-#> nugget ratio (noise/signal) = 0.45;  profiled sigma^2 = 0.61
+#> nugget ratio (noise/signal) = 0.49;  profiled sigma^2 = 0.66
 ```
 
 The clearest check is to draw the **fitted** kernels (pink) on top of
@@ -339,29 +369,38 @@ ggplot(rbind(fit$time, true$time),
 
 ------------------------------------------------------------------------
 
-## 6. Using the estimate: smoothing and filling gaps
+## 6. Using the estimate: smoothing, gap-filling, and prediction intervals
+
+Now we put the fitted kernels to work: clean up the noise, fill in the
+missing weeks, and say how *uncertain* each estimate is.
+
+### 6.1 Smoothing the latent rate (the best guess)
 
 #### The maths
 
 With the kernels fixed, denoising the plug-in field is a closed-form
-Gaussian-process *smoother*. In the same Kronecker eigenbasis, each mode
-$`(i,j)`$ is simply shrunk towards zero:
+Gaussian-process *smoother*. In the same Kronecker eigenbasis every mode
+$`(i,j)`$ is shrunk towards zero, and we also get its posterior
+variance:
 
 ``` math
-\widehat{G}_{ij} = \frac{a_i b_j}{a_i b_j + \eta}\, G_{ij},
+\widehat{G}_{ij} = \underbrace{\frac{a_i b_j}{a_i b_j + \eta}}_{\text{shrink } S_{ij}}\, G_{ij},
+\qquad
+\operatorname{Var}(\widehat{G}_{ij}) = \sigma^2\,\frac{a_i b_j\,\eta}{a_i b_j + \eta}.
 ```
 
-so modes with strong signal (large $`a_i b_j`$) are kept and noisy modes
-(small) are damped. Undo the per-site standardisation, exponentiate, and
-you have an estimated rate $`\widehat\lambda`$ at *every* cell —
-including the missing ones.
+Strong-signal modes (large $`a_i b_j`$) are kept; noisy modes (small)
+are damped. Undo the per-site standardisation and exponentiate to get
+the posterior **mean** and **variance** of the log-rate at *every* cell
+— missing ones included.
 
 #### In plain language
 
 The fitted kernels tell us which wiggles are real signal and which are
 noise. The smoother keeps the real ones and irons out the rest,
-borrowing strength from neighbouring sites and weeks to fill the gaps
-where data is missing.
+borrowing strength from neighbouring sites and weeks to fill the gaps.
+It also keeps track of how confident it is at each point — wider where
+data is sparse or missing.
 
 #### The worked example
 
@@ -371,6 +410,7 @@ gp_smoother <- function(obs_data, coordinates, est, n, nt, period) {
   ids <- sort(unique(obs_data$id)); times <- sort(unique(obs_data$t))
   coordinates <- coordinates[match(ids, coordinates$id), , drop = FALSE]
 
+  # plug-in field, kept un-standardised so we can put it back afterwards
   M <- matrix(NA_real_, n, nt)
   M[cbind(match(obs_data$id, ids), match(obs_data$t, times))] <- log1p(obs_data$y_obs)
   row_mean <- rowMeans(M, na.rm = TRUE); row_mean[!is.finite(row_mean)] <- 0
@@ -384,35 +424,145 @@ gp_smoother <- function(obs_data, coordinates, est, n, nt, period) {
                           long_term_scale = est$long_term_scale, period = period),
               symmetric = TRUE)
   a <- pmax(es$values, 1e-12); b <- pmax(et$values, 1e-12)
+  lam <- outer(a, b)
 
-  shrink <- outer(a, b) / (outer(a, b) + est$nugget_ratio)
-  ghat   <- crossprod(es$vectors, G) %*% et$vectors
-  Ghat   <- es$vectors %*% (shrink * ghat) %*% t(et$vectors)
+  shrink <- lam / (lam + est$nugget_ratio)                       # posterior mean
+  pv     <- est$sigma2 * lam * est$nugget_ratio / (lam + est$nugget_ratio) # posterior var
 
-  exp(row_mean + row_sd * Ghat)            # estimated rate, n x nt
+  ghat <- crossprod(es$vectors, G) %*% et$vectors
+  Ghat <- es$vectors %*% (shrink * ghat) %*% t(et$vectors)       # smoothed field
+  Vstd <- (es$vectors^2) %*% pv %*% t(et$vectors^2)              # per-cell variance
+
+  # undo standardisation -> posterior mean (Z) and variance (Vz) of the log-rate
+  Z  <- row_mean + row_sd * Ghat
+  Vz <- (row_sd^2) * Vstd
+  list(Z = Z, Vz = Vz, mean = exp(Z + Vz / 2))                   # mean = E[lambda]
 }
 
-lambda_hat <- gp_smoother(obs_data, coordinates, est, n, nt, period)
+sm <- gp_smoother(obs_data, coordinates, est, n, nt, period)     # Z, Vz, mean (n x nt)
+```
 
-# Overlay the smoothed rate (blue) on the truth for the first four sites.
+### 6.2 A prediction interval for the counts
+
+#### The maths
+
+`sm` gives the rate $`\lambda`$: a lognormal posterior with
+$`\log\lambda \sim \mathcal{N}(Z, V_z)`$. But an actual *count* also
+bounces around its rate via the Negative-Binomial observation noise,
+$`y \mid \lambda \sim \text{NegBin}(r, \lambda)`$. We combine the two
+with the **law of total variance**:
+
+``` math
+\mathbb{E}[y] = \mathbb{E}[\lambda], \qquad
+\operatorname{Var}[y] = \underbrace{\mathbb{E}\!\big[\lambda + \tfrac{\lambda^2}{r}\big]}_{\text{average count noise}}
+                       + \underbrace{\operatorname{Var}[\lambda]}_{\text{rate uncertainty}} .
+```
+
+We then moment-match a lognormal to
+$`(\mathbb{E}[y], \operatorname{Var}[y])`$ and read off the 2.5% and
+97.5% points. The dispersion $`r`$ is the one thing this quick method
+does not estimate, so we recover it by method of moments from the
+observed cells (using $`\operatorname{Var}(y\mid\lambda)
+= \lambda + \lambda^2/r`$).
+
+#### In plain language
+
+There are two reasons a future count is uncertain: we are not sure of
+the underlying rate (the smoother’s wider/narrower confidence), **and**
+counts scatter around any given rate (more so when the data is
+overdispersed). A genuine prediction interval has to include both. We
+add them up and draw a band that should contain about 95% of real
+counts. The “how overdispersed” number $`r`$ is read straight off the
+data.
+
+#### The worked example
+
+``` r
+
+# 1. estimate the NB dispersion r by method of moments (observed cells only)
+ids <- sort(unique(obs_data$id)); times <- sort(unique(obs_data$t))
+lam_at <- sm$mean[cbind(match(obs_data$id, ids), match(obs_data$t, times))]
+keep   <- !is.na(obs_data$y_obs)
+yk <- obs_data$y_obs[keep]; lk <- lam_at[keep]
+den   <- sum((yk - lk)^2 - lk)
+r_hat <- if (den > 0) max(sum(lk^2) / den, 0.1) else 1e6          # large r -> ~Poisson
+cat(sprintf("estimated dispersion r = %.1f  (true = %.0f)\n", r_hat, true_r))
+#> estimated dispersion r = 10.6  (true = 15)
+
+# 2. predictive mean & variance of counts, then lognormal 2.5/97.5% bounds
+Elam  <- exp(sm$Z + sm$Vz / 2)
+Elam2 <- exp(2 * sm$Z + 2 * sm$Vz)
+Vlam  <- exp(2 * sm$Z + sm$Vz) * (exp(sm$Vz) - 1)
+pmean <- Elam
+pvar  <- Elam + Elam2 / r_hat + Vlam
+ss    <- log(1 + pvar / pmax(pmean, 1e-8)^2)
+mln   <- log(pmax(pmean, 1e-8)) - ss / 2
+
 pred_df <- data.frame(
-  id    = rep(seq_len(n), each = nt),   # site-major, time-fastest -- matches
-  t     = rep(seq_len(nt), times = n),  # as.vector(t(lambda_hat)) below
-  lhat  = as.vector(t(lambda_hat))
+  id    = rep(seq_len(n), each = nt),       # site-major, time-fastest --
+  t     = rep(seq_len(nt), times = n),      # matches as.vector(t(.)) below
+  mean  = as.vector(t(pmean)),
+  lower = as.vector(t(stats::qlnorm(0.025, mln, sqrt(ss)))),
+  upper = as.vector(t(stats::qlnorm(0.975, mln, sqrt(ss))))
 )
+```
+
+The blue line is the predicted mean and the blue band the 95% prediction
+interval. It should track the black true-mean line and cover the points
+— including the red held-out weeks it never saw.
+
+``` r
+
 ggplot() +
-  geom_line(data = subset(df_truth, id %in% show), aes(t, lambda)) +
+  geom_ribbon(data = subset(pred_df, id %in% show),
+              aes(t, ymin = lower, ymax = upper), fill = "steelblue", alpha = 0.25) +
+  geom_line(data = subset(pred_df, id %in% show), aes(t, mean),
+            colour = "steelblue", linewidth = 0.7) +
+  geom_line(data = subset(df_truth, id %in% show), aes(t, lambda),
+            colour = "black", linewidth = 0.4) +
   geom_point(data = subset(df_obs, id %in% show), aes(t, y_obs),
-             size = 0.7, colour = "grey30") +
-  geom_line(data = subset(pred_df, id %in% show), aes(t, lhat),
-            colour = "steelblue", linewidth = 0.8) +
+             size = 0.7, colour = "grey40") +
+  geom_point(data = subset(df_miss, id %in% show), aes(t, y),
+             size = 0.8, colour = "red") +
   facet_wrap(~ id, scales = "free_y", labeller = label_both) +
   labs(x = "Week", y = "Cases",
-       title = "Smoothed rate (blue) vs true mean (black) and observations") +
+       title = "Prediction vs truth",
+       subtitle = "blue = predicted mean + 95% interval; black = true mean; red = held-out truth") +
   theme_bw()
 ```
 
-![](fitting-the-model_files/figure-html/unnamed-chunk-9-1.png)
+![](fitting-the-model_files/figure-html/unnamed-chunk-11-1.png)
+
+### 6.3 Did we fill the gaps well?
+
+#### The worked example
+
+The honest test is the **held-out** weeks: does the 95% interval contain
+the counts the model never saw? It should, about 95% of the time.
+
+``` r
+
+# held-out cells only, with the true rate (lambda) and held-out count (y)
+chk <- merge(df_truth[, c("id", "t", "lambda", "y")], pred_df, by = c("id", "t"))
+chk <- merge(chk, df_miss[, c("id", "t")], by = c("id", "t"))   # keep held-out cells
+
+cat(sprintf("Held-out weeks: %d\n", nrow(chk)))
+#> Held-out weeks: 716
+cat(sprintf("95%% interval covers the held-out count: %.0f%% of the time\n",
+            100 * mean(chk$y >= chk$lower & chk$y <= chk$upper)))
+#> 95% interval covers the held-out count: 91% of the time
+cat(sprintf("correlation of predicted mean with true rate: %.2f\n",
+            cor(chk$mean, chk$lambda)))
+#> correlation of predicted mean with true rate: 0.94
+```
+
+#### In plain language
+
+If the coverage lands near 95% the bands are honest; if the predicted
+mean correlates strongly with the true rate, the gap-filling is doing
+its job. Both can drift a little here because this is a small example
+and the quick method does not propagate every source of uncertainty (see
+below).
 
 ------------------------------------------------------------------------
 
@@ -432,7 +582,10 @@ shortcuts that make it quick also limit it:
 - **One homoscedastic nugget.** Real count noise is heteroscedastic (it
   grows with the rate); we summarise it with a single ratio $`\eta`$.
 - **Missing cells are mean-imputed**, so they add no uncertainty of
-  their own.
+  their own — the prediction interval can therefore be a little
+  optimistic over long gaps.
+- **The dispersion $`r`$** is recovered by a rough method of moments, so
+  the *width* of the count prediction interval inherits that error.
 - **A point estimate.** We report the maximiser, with no uncertainty on
   the hyperparameters themselves.
 
