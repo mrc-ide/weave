@@ -98,19 +98,19 @@ observed_data <- function(data, p_one, p_switch) {
 # -----------------------------------------------------------------------------
 # 1. Controls
 # -----------------------------------------------------------------------------
-n <- 32 # number of sites (health facilities)
-nt <- 52 * 8 # number of time points (3 yrs weekly)
+n <- 50 # number of sites (health facilities)
+nt <- 52 * 5 # number of time points (3 yrs weekly)
 period <- 52 # seasonal period (weeks/cycle)
 
-true_length_scale <- 2 # spatial smoothness (distance units)
-true_periodic_scale <- 1.1 # how "peaky" the season is
+true_length_scale <- 0.5 # spatial smoothness (distance units)
+true_periodic_scale <- 7 # how "peaky" the season is
 true_long_term_scale <- 150 # long-run trend smoothness
 true_r <- 15 # NB dispersion (smaller = heavier tail)
 
 show_missingness <- TRUE # draw held-out (missing) truth in red
 p_one <- 0.1 # missingness controls (see observed_data)
-p_switch <- 0.3
-plot_sites <- 1:50 # sites shown in the per-site panels (default: all; set e.g. 1:12 to subset)
+p_switch <- 0.2
+plot_sites <- 1:min(n, 100) # sites shown in the per-site panels (default: all; set e.g. 1:12 to subset)
 
 
 # -----------------------------------------------------------------------------
@@ -507,4 +507,177 @@ cat(sprintf(
 cat(sprintf(
   "95%% prediction-interval coverage of held-out COUNTS:    %.2f  (target ~0.95)\n",
   coverage
+))
+
+
+# -----------------------------------------------------------------------------
+# 9. OPTIONAL: PCG posterior -- the "balloon" version   <-- play with this
+# -----------------------------------------------------------------------------
+# The closed-form smoother above treats every cell as observed (homoscedastic
+# noise on a completed grid), so its intervals do NOT widen over gaps. Here we
+# instead draw from the GP posterior that conditions on the OBSERVED set only,
+# using the matrix-free perturbation sampler (one PCG solve per draw, as in
+# gp_draw()). Missing cells relax back toward the prior, so the interval can
+# balloon over gaps -- at the cost of one linear solve per draw.
+#
+# NOTE ON SPEED: cost scales steeply with the number of sites; each draw is a
+# full PCG solve (~O(n^2 nt + n nt^2) per iteration). At n in the hundreds this
+# is seconds per draw. To experiment quickly, reduce `n` at the top of the
+# script and/or `n_pcg_draws` here.
+#
+# NOTE ON THE BALLOON: with a separable space x time kernel, a gap at one site
+# is largely filled by other sites still reporting at those weeks, so it barely
+# widens. The balloon is large only where data is missing across the whole
+# spatial field at once (a region-wide blackout) or for an isolated site.
+# -----------------------------------------------------------------------------
+n_pcg_draws <- 100 # more = smoother interval, slower
+pcg_tol <- 1e-6
+
+ids <- sort(unique(obs_data$id))
+times <- sort(unique(obs_data$t))
+
+# Standardised plug-in field on the full grid, keeping the per-site mean/sd so
+# we can undo the standardisation on each draw (same recipe as gp_smoother()).
+M <- matrix(NA_real_, n, nt)
+M[cbind(match(obs_data$id, ids), match(obs_data$t, times))] <- log1p(
+  obs_data$y_obs
+)
+row_mean <- rowMeans(M, na.rm = TRUE)
+row_mean[!is.finite(row_mean)] <- 0
+Mc <- M - row_mean
+row_sd <- apply(Mc, 1, stats::sd, na.rm = TRUE)
+row_sd[!is.finite(row_sd) | row_sd == 0] <- 1
+G <- Mc / row_sd
+G[is.na(G)] <- 0
+
+# GP with sigma^2 folded into the spatial factor and a scalar homoscedastic
+# nugget = sigma^2 * nugget_ratio (the model the hyperparameters were fit under).
+space_mat <- est$sigma2 *
+  space_kernel(coordinates, length_scale = est$length_scale)
+time_mat <- time_kernel(
+  times,
+  periodic_scale = est$periodic_scale,
+  long_term_scale = est$long_term_scale,
+  period = period
+)
+noise_var <- est$sigma2 * est$nugget_ratio
+Rs_chol <- chol(space_mat)
+Rt_chol <- chol(time_mat)
+kdiag <- kdiag_from_factors(diag(space_mat), diag(time_mat), n, nt)
+N <- n * nt
+
+# observed cells in the full (site-major, time-fastest) vector layout
+obs_grid <- matrix(FALSE, n, nt)
+ok <- !is.na(obs_data$y_obs)
+obs_grid[cbind(
+  match(obs_data$id[ok], ids),
+  match(obs_data$t[ok], times)
+)] <- TRUE
+obs_idx <- which(as.vector(t(obs_grid)))
+g_obs <- as.vector(t(G))[obs_idx]
+
+# one exact posterior draw of the standardised field (perturbation sampler):
+#   u ~ N(0, K); solve (S K S^T + nu I) over observed cells; f = u - K S^T alpha
+pcg_draw_f <- function() {
+  u <- quick_mvnorm_chol(Rs_chol, Rt_chol)
+  eps <- stats::rnorm(length(obs_idx), sd = sqrt(noise_var))
+  alpha <- pcg(
+    (u[obs_idx] + eps) - g_obs,
+    obs_idx,
+    N,
+    space_mat,
+    time_mat,
+    noise_var,
+    kdiag,
+    tol = pcg_tol
+  )
+  u - kron_mv(fill_vector(alpha, obs_idx, N), space_mat, time_mat)
+}
+
+# --- posterior MEAN of the field from ONE PCG solve (smooth, deterministic) ---
+# E[f] = K S^T (S K S^T + nu I)^{-1} g_obs -- no Monte Carlo, so the mean line is
+# exactly smooth. Only the VARIANCE (below) needs draws.
+alpha0 <- pcg(
+  g_obs,
+  obs_idx,
+  N,
+  space_mat,
+  time_mat,
+  noise_var,
+  kdiag,
+  tol = pcg_tol
+)
+f_mean <- kron_mv(fill_vector(alpha0, obs_idx, N), space_mat, time_mat)
+Zmat <- row_mean + row_sd * t(matrix(f_mean, nrow = nt, ncol = n)) # n x nt log-rate mean
+
+# --- posterior VARIANCE of the log-rate from draws (the expensive part) -------
+# Each draw is one PCG solve; we only need their spread, so the mean line is
+# unaffected by how many we take.
+pcg_time <- system.time({
+  Fd <- vapply(seq_len(n_pcg_draws), function(i) pcg_draw_f(), numeric(N))
+})
+cat(sprintf(
+  "\nPCG: 1 solve for the mean + %d draws for the variance in %.1f s (%.2f s/draw)\n",
+  n_pcg_draws,
+  pcg_time[3],
+  pcg_time[3] / n_pcg_draws
+))
+vstd <- apply(Fd, 1, stats::var) # per-cell variance of the standardised field
+Vzmat <- (row_sd^2) * t(matrix(vstd, nrow = nt, ncol = n)) # n x nt log-rate variance
+
+# --- count prediction interval: fold NB observation noise over the rate
+# posterior via the law of total variance, then a lognormal moment-match for
+# smooth 2.5/97.5% bounds (exactly as in section 6, but with the PCG Z and Vz).
+Elam <- exp(Zmat + Vzmat / 2)
+Elam2 <- exp(2 * Zmat + 2 * Vzmat)
+Vlam <- exp(2 * Zmat + Vzmat) * (exp(Vzmat) - 1)
+pred_var <- Elam + Elam2 / r_pred + Vlam
+mean_safe <- pmax(Elam, 1e-8)
+ss <- log(1 + pred_var / mean_safe^2)
+mln <- log(mean_safe) - ss / 2
+
+# The LINE is the smooth posterior-mean rate exp(Z) (from the single solve); the
+# RIBBON is the count prediction interval (site-major, time-fastest -> id/t).
+pred_df_pcg <- data.frame(
+  id = rep(seq_len(n), each = nt),
+  t = rep(seq_len(nt), times = n),
+  mean = as.vector(t(exp(Zmat))),
+  lower = as.vector(t(stats::qlnorm(0.025, mln, sqrt(ss)))),
+  upper = as.vector(t(stats::qlnorm(0.975, mln, sqrt(ss))))
+)
+
+# Replicate the prediction plot, now with the PCG outputs (orange).
+prediction_plot_pcg <- base_plot +
+  geom_ribbon(
+    data = sub(pred_df_pcg),
+    aes(t, ymin = lower, ymax = upper),
+    fill = "darkorange",
+    alpha = 0.25
+  ) +
+  geom_line(
+    data = sub(pred_df_pcg),
+    aes(t, mean),
+    colour = "darkorange",
+    linewidth = 0.6
+  ) +
+  labs(
+    title = "PCG prediction: conditions on observed cells (interval can widen over gaps)",
+    subtitle = if (show_missingness) {
+      "orange = PCG mean + 95% interval; black = true mean; red = held-out truth"
+    } else {
+      "orange = PCG mean + 95% interval; black = true mean"
+    }
+  )
+
+print(prediction_plot_pcg)
+
+# Held-out coverage for the PCG version, to compare against the closed-form one.
+chk_pcg <- merge(
+  missing_df[, c("id", "t", "lambda", "y")],
+  pred_df_pcg,
+  by = c("id", "t")
+)
+cat(sprintf(
+  "PCG 95%% prediction-interval coverage of held-out COUNTS: %.2f  (target ~0.95)\n",
+  mean(chk_pcg$y >= chk_pcg$lower & chk_pcg$y <= chk_pcg$upper)
 ))
