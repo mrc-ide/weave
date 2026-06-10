@@ -6,3 +6,5 @@ docs
 implementation/*
 !implementation/walkthrough.R
 inst/doc
+doc/
+Meta/
