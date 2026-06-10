@@ -396,8 +396,8 @@ lambda_hat <- gp_smoother(obs_data, coordinates, est, n, nt, period)
 
 # Overlay the smoothed rate (blue) on the truth for the first four sites.
 pred_df <- data.frame(
-  id    = rep(seq_len(n), times = nt),
-  t     = rep(seq_len(nt), each = n),
+  id    = rep(seq_len(n), each = nt),   # site-major, time-fastest -- matches
+  t     = rep(seq_len(nt), times = n),  # as.vector(t(lambda_hat)) below
   lhat  = as.vector(t(lambda_hat))
 )
 ggplot() +
