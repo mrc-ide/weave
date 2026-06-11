@@ -1,0 +1,37 @@
+/* ===========================================================================
+   pkgdown site extras for weave.
+
+   The site's colours and fonts come from the bslib theme in _pkgdown.yml; this
+   file adds the callout boxes used in the articles (pandoc fenced divs such as
+   ::: {.callout .maths}) so they match the standalone vignettes. pkgdown
+   includes pkgdown/extra.css automatically.
+   =========================================================================== */
+
+.callout, .maths, .intuition, .caveat {
+  border-radius: 8px;
+  padding: 0.85em 1.15em;
+  margin: 1.5em 0;
+  border-left: 4px solid;
+}
+.maths > :first-child, .intuition > :first-child, .caveat > :first-child { margin-top: 0; }
+.maths > :last-child,  .intuition > :last-child,  .caveat > :last-child  { margin-bottom: 0; }
+.maths::before, .intuition::before, .caveat::before {
+  display: block;
+  font-weight: 600;
+  font-size: 0.74em;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: 0.5em;
+}
+
+.maths { background: #f4f6fb; border-color: #2e7fff; }
+.maths::before { content: "The maths"; color: #2e7fff; }
+
+.intuition { background: #f7f1e8; border-color: #1dd1a1; }
+.intuition::before { content: "In plain language"; color: #0f9d76; }
+
+.caveat { background: #fdf6e3; border-color: #feca57; }
+.caveat::before { content: "Good to know"; color: #b8860b; }
+
+/* a little warmth on tables and the woven hero border */
+table th { background: #1b2a4a; color: #fff; }
