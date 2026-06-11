@@ -51,6 +51,25 @@ test_that("build_plugin_field has the right shape, ordering and NA handling", {
 })
 
 
+test_that("infer_kernel_params n_sites subsamples sites and is seed-reproducible", {
+  n <- 8; nt <- 12; period <- 6
+  coords <- data.frame(id = factor(1:n), lon = runif(n, 0, 5), lat = runif(n, 0, 5))
+  obs <- expand.grid(t = seq_len(nt), id = factor(1:n))
+  obs$y_obs <- stats::rpois(nrow(obs), lambda = 5)
+
+  # Same seed -> same subsample -> identical estimate.
+  set.seed(42); e1 <- infer_kernel_params(obs, coords, nt = nt, period = period, n_sites = 4)
+  set.seed(42); e2 <- infer_kernel_params(obs, coords, nt = nt, period = period, n_sites = 4)
+  expect_equal(e1$length_scale, e2$length_scale)
+  expect_equal(e1$log_posterior, e2$log_posterior)
+
+  # n_sites >= number of sites is a no-op (matches using all sites).
+  e_all  <- infer_kernel_params(obs, coords, nt = nt, period = period)
+  e_full <- infer_kernel_params(obs, coords, nt = nt, period = period, n_sites = n)
+  expect_equal(e_all$log_posterior, e_full$log_posterior)
+})
+
+
 test_that("infer_kernel_params recovers known kernel params and the nugget helps", {
   skip_on_cran()
   set.seed(123)

@@ -203,6 +203,16 @@ kernel_log_posterior <- function(log_pars, g, n, nt, coordinates, times, period,
 #' @param priors Log-normal priors, see [default_kernel_priors()].
 #' @param start Named/length-4 starting values on the natural scale
 #'   (`length_scale`, `periodic_scale`, `long_term_scale`, `nugget_ratio`).
+#' @param n_sites Optional integer. If supplied and smaller than the number of
+#'   sites, the hyperparameters are estimated from a random subsample of this
+#'   many sites. The kernel hyperparameters are shared, population-level
+#'   quantities, so a representative site subsample estimates the same length
+#'   scales at a fraction of the \eqn{O(n^3)} cost -- useful for very large site
+#'   counts. Default `NULL` uses all sites. The subsample is drawn from the
+#'   current RNG state, so set a seed beforehand (e.g. [set.seed()]) for a
+#'   reproducible estimate. Note: this subsamples *sites* only, not time points
+#'   (the temporal kernel needs the full series to resolve the periodic and
+#'   long-term scales).
 #'
 #' @return A list with `length_scale`, `periodic_scale`, `long_term_scale`,
 #'   `nugget_ratio`, the profiled `sigma2`, the maximised `log_posterior`, and
@@ -212,7 +222,16 @@ infer_kernel_params <- function(obs_data, coordinates, nt, period,
                                 value = "y_obs", standardise = TRUE,
                                 priors = default_kernel_priors(),
                                 start = c(length_scale = 1, periodic_scale = 1,
-                                          long_term_scale = 100, nugget_ratio = 0.1)) {
+                                          long_term_scale = 100, nugget_ratio = 0.1),
+                                n_sites = NULL) {
+  if (!is.null(n_sites)) {
+    site_ids <- sort(unique(obs_data$id))
+    if (n_sites < length(site_ids)) {
+      keep <- sample(site_ids, n_sites)
+      obs_data <- obs_data[obs_data$id %in% keep, , drop = FALSE]
+    }
+  }
+
   n <- length(unique(obs_data$id))
   coordinates <- coordinates[match(sort(unique(obs_data$id)), coordinates$id), , drop = FALSE]
 
