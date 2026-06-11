@@ -59,7 +59,20 @@
 </h1></div>
 <!-- badges: start -->
 
-<p><code>weave</code> interpolates noisy, gappy spatio-temporal count data — such as malaria cases reported by health facilities — with a separable Gaussian process. It estimates how quickly counts become uncorrelated across space and time, then predicts the underlying rate at every site and week, fills in missing observations, and attaches an honest prediction interval.</p>
+<p><code>weave</code> turns noisy, gappy spatio-temporal count data — such as malaria cases reported by health facilities — into smooth estimates of the underlying rate. It fills in missing weeks and attaches an honest prediction interval to every estimate.</p>
+<div class="section level2">
+<h2 id="how-it-works">How it works<a class="anchor" aria-label="anchor" href="#how-it-works"></a>
+</h2>
+<p><code>weave</code> treats the counts as arising from a smooth latent surface that varies across space and time, modelled as a separable Gaussian process — a spatial kernel combined with a temporal kernel (periodic season × long-term drift). In three steps it:</p>
+<ol style="list-style-type: decimal">
+<li>
+<strong>builds a quick plug-in field</strong> from the counts (per-site standardised <code>log(1 + y)</code>);</li>
+<li>
+<strong>estimates the kernel hyperparameters</strong> — how fast counts decorrelate across space, within the season, and over the long term — by maximising the Gaussian-process marginal likelihood, kept fast by the kernel’s Kronecker structure; and</li>
+<li>
+<strong>predicts the latent rate</strong> at every site and week, conditioning on the observed cells (so gaps are genuinely interpolated rather than guessed) and combining rate uncertainty with Negative-Binomial count noise to form a 95% prediction interval.</li>
+</ol>
+</div>
 <div class="section level2">
 <h2 id="installation">Installation<a class="anchor" aria-label="anchor" href="#installation"></a>
 </h2>
@@ -69,28 +82,28 @@
 <span><span class="fu">pak</span><span class="fu">::</span><span class="fu"><a href="https://pak.r-lib.org/reference/pak.html" class="external-link">pak</a></span><span class="op">(</span><span class="st">"mrc-ide/weave"</span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level2">
-<h2 id="quick-start">Quick start<a class="anchor" aria-label="anchor" href="#quick-start"></a>
+<h2 id="getting-started">Getting started<a class="anchor" aria-label="anchor" href="#getting-started"></a>
 </h2>
-<p>Estimate the kernel hyperparameters from observed counts, then predict the latent rate (with a 95% prediction interval) at every site-week:</p>
+<p><code>weave</code> needs two inputs: <code>obs_data</code>, a data frame with columns <code>id</code> (site), <code>t</code> (week) and <code>y_obs</code> (the count, <code>NA</code> where missing); and <code>coordinates</code>, giving each site’s <code>lon</code>/<code>lat</code>. The workflow is two calls — estimate the kernels, then predict:</p>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://mrc-ide.github.io/weave/">weave</a></span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># estimate the spatial + temporal kernel length-scales</span></span>
+<span><span class="co"># 1. estimate the spatial + temporal kernel length-scales</span></span>
 <span><span class="va">est</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/infer_kernel_params.html">infer_kernel_params</a></span><span class="op">(</span><span class="va">obs_data</span>, <span class="va">coordinates</span>, nt <span class="op">=</span> <span class="va">nt</span>, period <span class="op">=</span> <span class="fl">52</span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># predict the rate, fill the gaps, and attach a prediction interval</span></span>
+<span><span class="co"># 2. predict the rate, fill the gaps, and attach a 95% prediction interval</span></span>
 <span><span class="va">pred</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/gp_predict.html">gp_predict</a></span><span class="op">(</span><span class="va">obs_data</span>, <span class="va">coordinates</span>, hyperparameters <span class="op">=</span> <span class="va">est</span>,</span>
 <span>                   nt <span class="op">=</span> <span class="va">nt</span>, period <span class="op">=</span> <span class="fl">52</span>, n_draws <span class="op">=</span> <span class="fl">100</span><span class="op">)</span></span></code></pre></div>
-<p>Here <code>obs_data</code> has columns <code>id</code> (site), <code>t</code> (week) and <code>y_obs</code> (count, <code>NA</code> where missing), and <code>coordinates</code> gives each site’s <code>lon</code>/<code>lat</code>.</p>
+<p><code>pred</code> has one row per site-week, with the posterior <code>rate</code> and a <code>lower</code>/<code>upper</code> prediction interval.</p>
 </div>
 <div class="section level2">
 <h2 id="learn-more">Learn more<a class="anchor" aria-label="anchor" href="#learn-more"></a>
 </h2>
 <ul>
 <li>
-<a href="https://mrc-ide.github.io/weave/articles/gaussian-processes.html">Gaussian processes: a gentle introduction</a> — what a GP is, the role of the kernel, and conditioning on data.</li>
+<a href="https://mrc-ide.github.io/weave/articles/gaussian-processes.html">Gaussian processes: a gentle introduction</a> — what a Gaussian process is, the role of the kernel, and conditioning on data.</li>
 <li>
-<a href="https://mrc-ide.github.io/weave/articles/walkthrough.html">The weave walkthrough</a> — the full method, from estimating the kernels to predicting rates with honest uncertainty.</li>
+<a href="https://mrc-ide.github.io/weave/articles/walkthrough.html">The weave walkthrough</a> — the full method worked end to end, from estimating the kernels to predicting rates with honest uncertainty.</li>
 </ul>
 </div>
 </div>
