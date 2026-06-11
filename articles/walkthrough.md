@@ -65,50 +65,24 @@ data.
 ### The worked example
 
 We simulate data with *chosen* true knobs, so we can check the answer.
-(`simulate_data()` and `observed_data()` are small helpers for the
-example — they are not part of the package.)
+The small helpers that draw the counts and punch clustered gaps into
+them (`simulate_data()`, `observed_data()`) are example scaffolding, not
+part of the package, so they are hidden here.
 
 ``` r
 
-# --- example controls --------------------------------------------------------
-n      <- 20          # sites
+# example dimensions
+n      <- 20          # sites (health facilities)
 nt     <- 52 * 3      # weeks (3 years)
 period <- 52          # weeks per seasonal cycle
 
+# the "true" kernel knobs we will try to recover
 true_length_scale    <- 2     # spatial smoothness
 true_periodic_scale  <- 1.1   # how sharp the season is
 true_long_term_scale <- 150   # long-run drift
-true_r               <- 15    # NB dispersion
+true_r               <- 15    # Negative-Binomial dispersion
 
-# --- small simulation helpers (for the example only) -------------------------
-simulate_data <- function(n, nt, coordinates, space_k, time_k, r) {
-  f      <- quick_mvnorm(space_k, time_k)        # latent field, time fastest
-  lambda <- exp(rep(coordinates$mu, each = nt) + f)
-  data.frame(
-    id     = factor(rep(seq_len(n), each = nt), levels = seq_len(n)),
-    t      = rep(seq_len(nt), times = n),
-    lambda = lambda,
-    y      = stats::rnbinom(n * nt, size = r, mu = lambda)
-  )
-}
-
-# Missing weeks arrive in CLUSTERS (whole stretches gone), as in real routine
-# data, rather than one-off cells: a 0/1 sequence that tends to stay put.
-generate_clustered_binary <- function(n, p_one, p_switch) {
-  out <- numeric(n)
-  out[1] <- stats::rbinom(1, 1, p_one)
-  for (i in 2:n) {
-    out[i] <- if (stats::runif(1) < p_switch) stats::rbinom(1, 1, p_one) else out[i - 1]
-  }
-  out
-}
-observed_data <- function(data, p_one = 0.15, p_switch = 0.2) {
-  y_obs <- data$y
-  y_obs[generate_clustered_binary(nrow(data), p_one, p_switch) == 1] <- NA
-  cbind(data["id"], data["t"], y_obs = y_obs)
-}
-
-# --- draw the data -----------------------------------------------------------
+# site coordinates and per-site baseline log-rate (mu_s)
 coordinates <- data.frame(
   id  = factor(1:n),
   lon = runif(n, 0, 5),
@@ -116,13 +90,11 @@ coordinates <- data.frame(
   mu  = log(runif(n, 10, 80))
 )
 
-space_k <- space_kernel(coordinates, length_scale = true_length_scale)
-time_k  <- time_kernel(1:nt,
-  periodic_scale  = true_periodic_scale,
-  long_term_scale = true_long_term_scale,
-  period          = period
-)
-
+# build the true kernels, draw counts, then hide clustered gaps.
+# `obs_data` is all that weave sees: columns id, t, y_obs (NA = missing).
+space_k   <- space_kernel(coordinates, length_scale = true_length_scale)
+time_k    <- time_kernel(1:nt, periodic_scale = true_periodic_scale,
+                         long_term_scale = true_long_term_scale, period = period)
 true_data <- simulate_data(n, nt, coordinates, space_k, time_k, r = true_r)
 obs_data  <- observed_data(true_data)
 
@@ -135,35 +107,6 @@ mean ($`\lambda = e^{\mu_s + f_{st}}`$); **grey points** are the counts
 we actually observe; and **magenta points** are the *held-out truth* at
 the weeks that went missing — what the model must reconstruct but never
 gets to see.
-
-``` r
-
-show     <- 1:4
-df_truth <- data.frame(id = as.integer(true_data$id), t = true_data$t,
-                       lambda = true_data$lambda, y = true_data$y)
-df_obs   <- data.frame(id = as.integer(obs_data$id), t = obs_data$t,
-                       y_obs = obs_data$y_obs)
-df_miss  <- merge(df_truth, df_obs, by = c("id", "t"))
-df_miss  <- df_miss[is.na(df_miss$y_obs), ]          # held-out truth
-
-sub <- function(d) d[d$id %in% show, ]
-```
-
-``` r
-
-ggplot() +
-  geom_line(data = sub(df_truth), aes(t, lambda),
-            colour = weave_cols[["truth"]], linewidth = 0.5) +
-  geom_point(data = sub(df_obs), aes(t, y_obs),
-             size = 0.7, colour = weave_cols[["observed"]]) +
-  geom_point(data = sub(df_miss), aes(t, y),
-             size = 0.9, colour = weave_cols[["held_out"]]) +
-  facet_wrap(~ id, scales = "free_y", labeller = label_both) +
-  labs(x = "Week", y = "Cases",
-       title = "Simulated counts (4 of the sites)",
-       subtitle = "navy = true mean · grey = observed · magenta = held-out truth") +
-  theme_weave()
-```
 
 ![](walkthrough_files/figure-html/truth-plot-1.png)
 
@@ -189,32 +132,15 @@ all of them. It is noisy — but it is instant.
 
 ``` r
 
-g <- build_plugin_field(obs_data, n = n, nt = nt)   # length n * nt, time fastest
+# the plug-in field: per-site centred & scaled log(1 + y), as one long vector
+# (length n * nt, with time varying fastest)
+g <- build_plugin_field(obs_data, n = n, nt = nt)
 str(g)
 #>  num [1:3120] 1.008 1.094 1.391 1.692 0.603 ...
 ```
 
 For one site, the plug-in field tracks the true latent field, just with
 observation noise layered on top:
-
-``` r
-
-G        <- t(matrix(g, nrow = nt, ncol = n))        # n x nt
-f_true_m <- t(matrix(log(true_data$lambda) - rep(coordinates$mu, each = nt),
-                     nrow = nt, ncol = n))           # true f, centred per site
-
-site <- 1
-plot_df <- rbind(
-  data.frame(t = 1:nt, value = scale(f_true_m[site, ])[, 1], type = "true f (scaled)"),
-  data.frame(t = 1:nt, value = G[site, ],                    type = "plug-in g")
-)
-ggplot(plot_df, aes(t, value, colour = type)) +
-  geom_line(linewidth = 0.8) +
-  scale_colour_manual(values = unname(weave_pal[c("violet", "blue")]), name = NULL) +
-  labs(x = "Week", y = "Standardised latent field",
-       title = "Site 1: plug-in field vs the truth") +
-  theme_weave()
-```
 
 ![](walkthrough_files/figure-html/plugin-plot-1.png)
 
@@ -280,8 +206,11 @@ marginal likelihood over the three length-scales plus the nugget ratio.
 
 ``` r
 
+# maximise the GP marginal likelihood to recover the three length-scales
+# (plus a noise/nugget ratio); the global variance sigma^2 is profiled out.
 est <- infer_kernel_params(obs_data, coordinates, nt = nt, period = period)
 
+# did we recover the knobs we simulated from?
 data.frame(
   parameter = c("length_scale", "periodic_scale", "long_term_scale"),
   truth     = c(true_length_scale, true_periodic_scale, true_long_term_scale),
@@ -295,6 +224,7 @@ data.frame(
 
 ``` r
 
+# the other two pieces estimation returns: the nugget and the profiled variance
 cat(sprintf("nugget ratio (noise/signal) = %.2f;  profiled sigma^2 = %.2f\n",
             est$nugget_ratio, est$sigma2))
 #> nugget ratio (noise/signal) = 0.49;  profiled sigma^2 = 0.51
@@ -303,48 +233,7 @@ cat(sprintf("nugget ratio (noise/signal) = %.2f;  profiled sigma^2 = %.2f\n",
 The clearest check is to draw the **fitted** kernels (blue) on top of
 the **true** ones (navy, dashed). If the method worked, they overlap.
 
-``` r
-
-kernel_curves <- function(ls, ps, lts, label) {
-  sp <- data.frame(distance = seq(0, 5, length.out = 200), type = label)
-  sp$correlation <- rbf_kernel(sp$distance, theta = ls)
-  tm <- data.frame(lag = seq(0, nt - 1, length.out = 400), type = label)
-  tm$correlation <- periodic_kernel(tm$lag, alpha = ps, period = period) *
-    rbf_kernel(tm$lag, theta = lts)
-  list(space = sp, time = tm)
-}
-fit  <- kernel_curves(est$length_scale, est$periodic_scale, est$long_term_scale, "Estimated")
-true <- kernel_curves(true_length_scale, true_periodic_scale, true_long_term_scale, "True")
-
-cols <- c(Estimated = weave_cols[["estimate"]], True = weave_cols[["truth"]])
-ltys <- c(Estimated = "solid",                  True = "dashed")
-
-ggplot(rbind(fit$space, true$space),
-       aes(distance, correlation, colour = type, linetype = type)) +
-  geom_line(linewidth = 1) +
-  scale_colour_manual(values = cols, name = NULL) +
-  scale_linetype_manual(values = ltys, name = NULL) +
-  labs(x = "Spatial distance", y = "Correlation",
-       title = "Spatial kernel: estimated vs true") +
-  ylim(0, 1) + theme_weave()
-```
-
-![](walkthrough_files/figure-html/kernel-check-1.png)
-
-``` r
-
-
-ggplot(rbind(fit$time, true$time),
-       aes(lag, correlation, colour = type, linetype = type)) +
-  geom_line(linewidth = 1) +
-  scale_colour_manual(values = cols, name = NULL) +
-  scale_linetype_manual(values = ltys, name = NULL) +
-  labs(x = "Temporal lag (weeks)", y = "Correlation",
-       title = "Temporal kernel: estimated vs true") +
-  theme_weave()
-```
-
-![](walkthrough_files/figure-html/kernel-check-2.png)
+![](walkthrough_files/figure-html/kernel-check-1.png)![](walkthrough_files/figure-html/kernel-check-2.png)
 
 ## 6. Predict: smoothing, gap-filling, and prediction intervals
 
@@ -393,11 +282,12 @@ dispersion `r` used is attached as an attribute.
 
 ``` r
 
+# condition the GP on the observed cells and predict every site-week.
+# n_draws controls how many posterior draws estimate the interval width.
 pred <- gp_predict(obs_data, coordinates, hyperparameters = est,
                    nt = nt, period = period, n_draws = 100)
 
-pred_df <- transform(pred, id = as.integer(id))
-head(pred_df)
+head(pred)            # one row per cell: id, t, rate, and the 95% interval
 #>   id t     rate    lower    upper
 #> 1  1 1 20.74727 9.167142 41.93390
 #> 2  1 2 19.82157 8.916195 39.25267
@@ -405,34 +295,13 @@ head(pred_df)
 #> 4  1 4 15.86018 7.056011 31.39392
 #> 5  1 5 13.33049 5.769388 26.84454
 #> 6  1 6 10.89283 4.532828 22.49001
-cat(sprintf("dispersion r used for the interval = %.1f  (true = %.0f)\n",
-            attr(pred, "r"), true_r))
-#> dispersion r used for the interval = 13.5  (true = 15)
+attr(pred, "r")       # the NB dispersion used for the interval (estimated)
+#> [1] 13.48056
 ```
 
 The blue line is the predicted mean rate and the blue band the 95%
 prediction interval. It should track the navy true-mean line and cover
 the points — including the magenta held-out weeks it never saw.
-
-``` r
-
-ggplot() +
-  geom_ribbon(data = sub(pred_df), aes(t, ymin = lower, ymax = upper),
-              fill = weave_cols[["prediction"]], alpha = 0.18) +
-  geom_line(data = sub(pred_df), aes(t, rate),
-            colour = weave_cols[["prediction"]], linewidth = 0.7) +
-  geom_line(data = sub(df_truth), aes(t, lambda),
-            colour = weave_cols[["truth"]], linewidth = 0.4) +
-  geom_point(data = sub(df_obs), aes(t, y_obs),
-             size = 0.7, colour = weave_cols[["observed"]]) +
-  geom_point(data = sub(df_miss), aes(t, y),
-             size = 0.9, colour = weave_cols[["held_out"]]) +
-  facet_wrap(~ id, scales = "free_y", labeller = label_both) +
-  labs(x = "Week", y = "Cases",
-       title = "Prediction vs truth",
-       subtitle = "blue = predicted mean + 95% interval · navy = true mean · magenta = held-out truth") +
-  theme_weave()
-```
 
 ![](walkthrough_files/figure-html/predict-plot-1.png)
 
@@ -443,16 +312,17 @@ the counts the model never saw? It should, about 95% of the time.
 
 ``` r
 
-chk <- merge(df_miss[, c("id", "t", "lambda", "y")], pred_df, by = c("id", "t"))
+# keep only the held-out weeks (those the model never saw), with the true rate
+held_out <- merge(df_miss[, c("id", "t", "lambda", "y")], pred_df,
+                  by = c("id", "t"))
 
-cat(sprintf("Held-out weeks: %d\n", nrow(chk)))
-#> Held-out weeks: 451
-cat(sprintf("95%% interval covers the held-out count: %.0f%% of the time\n",
-            100 * mean(chk$y >= chk$lower & chk$y <= chk$upper)))
-#> 95% interval covers the held-out count: 93% of the time
-cat(sprintf("correlation of predicted rate with true rate: %.2f\n",
-            cor(chk$rate, chk$lambda)))
-#> correlation of predicted rate with true rate: 0.99
+# coverage: fraction of held-out counts inside the 95% interval (target ~0.95)
+mean(held_out$y >= held_out$lower & held_out$y <= held_out$upper)
+#> [1] 0.9290466
+
+# how well the predicted rate tracks the true rate at those weeks
+cor(held_out$rate, held_out$lambda)
+#> [1] 0.9853691
 ```
 
 If the coverage lands near 95% the bands are honest; if the predicted
