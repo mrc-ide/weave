@@ -46,10 +46,10 @@ named by `value` (`NA` where missing).}
 
 \item{pcg_tol}{Convergence tolerance for the PCG solves.}
 
-\item{progress}{Logical; show a `cli` progress bar over the posterior-draw
-loop (the expensive part). Defaults to `TRUE`; set `FALSE` to silence it
-(e.g. in scripts or logs). In non-interactive sessions `cli` degrades to
-periodic text updates.}
+\item{progress}{Logical; show a progress bar over the posterior-draw loop
+(the expensive part). Defaults to `TRUE`, but the bar is drawn only in an
+interactive UTF-8 / truecolor terminal -- it stays silent in scripts,
+knitr, logs and CI. Set `FALSE` to disable it entirely.}
 }
 \value{
 A data frame with one row per cell and columns `id`, `t`, `rate`

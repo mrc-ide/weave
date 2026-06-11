@@ -56,6 +56,29 @@ test_that("gp_predict progress bar is cosmetic (same numbers, no error)", {
 })
 
 
+test_that("make_curve_bar draws a braille wave and tracks progress", {
+  out <- utils::capture.output({
+    pb <- make_curve_bar(total = 10, width = 12)
+    for (i in 1:10) pb$tick()
+    pb$done()
+  })
+  txt <- paste(out, collapse = "")
+
+  expect_true(grepl("[⠀-⣿]", txt))   # contains braille glyphs
+  expect_true(grepl("100%", txt))              # reaches 100%
+  expect_true(grepl("10/10", txt))             # final n/n count
+
+  # set() jumps to an arbitrary value without error
+  expect_no_error(
+    utils::capture.output({
+      pb2 <- make_curve_bar(total = 100, width = 8)
+      pb2$set(50)
+      pb2$done()
+    })
+  )
+})
+
+
 test_that("gp_predict posterior mean matches a dense GP computation", {
   n <- 4; nt <- 6; period <- 52
   coords <- data.frame(id = factor(1:n), lon = runif(n), lat = runif(n))
