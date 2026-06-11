@@ -29,12 +29,12 @@ regularise <- function(x, lambda = 1e-5) {
 #'
 #' @return A numeric vector the same length as `v`.
 kron_mv <- function(v, space, time) {
-  n_sites <- nrow(space); n_times <- nrow(time)
-  # Reconstruct X (sites × times) from vec(t(X)) = v
-  X <- t(matrix(v, nrow = n_times, ncol = n_sites))
-  # Apply K to X: vec(t(space %*% X %*% t(time))) = (space ⊗ time) vec(t(X))
-  Y <- space %*% X %*% t(time)
-  as.vector(t(Y))
+  # We want vec(t(Y)) where Y = space %*% X %*% t(time) and X = sites × times.
+  # Since matrix(v, n_times, n_sites) is already t(X), and
+  #   t(Y) = time %*% t(X) %*% t(space),
+  # we can compute the result with NO length-N transposes (only the tiny t(space)):
+  Xt <- matrix(v, nrow = nrow(time), ncol = nrow(space))  # = t(X)
+  as.vector(time %*% Xt %*% t(space))
 }
 
 #' Fill observed values into a full vector
@@ -121,9 +121,12 @@ M_inv <- function(v, kdiag_full, obs_idx, noise_var) {
 #'
 #' @return Numeric solution vector `x` of length \eqn{m}.
 pcg <- function(b, obs_idx, N, space_mat, time_mat, noise_var, kdiag_full, tol = 1e-8, maxit = 10000) {
+  # Jacobi preconditioner diagonal: constant across iterations, so gather once.
+  precond <- kdiag_full[obs_idx] + noise_var + 1e-12
+  b_norm  <- sqrt(sum(b * b))
   x <- numeric(length(b))
   r <- b - Amv(x, obs_idx, N, space_mat, time_mat, noise_var)
-  z <- M_inv(r, kdiag_full, obs_idx, noise_var)
+  z <- r / precond
   p <- z
   rz_old <- sum(r * z)
   for (it in seq_len(maxit)) {
@@ -134,8 +137,8 @@ pcg <- function(b, obs_idx, N, space_mat, time_mat, noise_var, kdiag_full, tol =
     alpha <- rz_old / sum(p * Ap)
     x <- x + alpha * p
     r <- r - alpha * Ap
-    if (sqrt(sum(r * r)) <= tol * sqrt(sum(b * b))) break
-    z <- M_inv(r, kdiag_full, obs_idx, noise_var)
+    if (sqrt(sum(r * r)) <= tol * b_norm) break
+    z <- r / precond
     rz_new <- sum(r * z)
     beta <- rz_new / rz_old
     p <- z + beta * p
