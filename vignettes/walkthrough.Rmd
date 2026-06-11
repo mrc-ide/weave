@@ -85,22 +85,14 @@ time. Our whole task is to read those three numbers off the data.
 
 ### The worked example
 
-We simulate data with *chosen* true knobs, so we can check the answer.
-(`simulate_data()` and `observed_data()` are small helpers for the example —
-they are not part of the package.)
+We simulate data with *chosen* true knobs, so we can check the answer. The
+small helpers that draw the counts and punch clustered gaps into them
+(`simulate_data()`, `observed_data()`) are example scaffolding, not part of the
+package, so they are hidden here.
 
-```{r controls}
-# --- example controls --------------------------------------------------------
-n      <- 20          # sites
-nt     <- 52 * 3      # weeks (3 years)
-period <- 52          # weeks per seasonal cycle
-
-true_length_scale    <- 2     # spatial smoothness
-true_periodic_scale  <- 1.1   # how sharp the season is
-true_long_term_scale <- 150   # long-run drift
-true_r               <- 15    # NB dispersion
-
-# --- small simulation helpers (for the example only) -------------------------
+```{r sim-helpers, echo = FALSE}
+# Example-only helpers (NOT part of weave). They draw a Negative-Binomial GP and
+# then knock out clustered runs of weeks, mimicking real reporting dropouts.
 simulate_data <- function(n, nt, coordinates, space_k, time_k, r) {
   f      <- quick_mvnorm(space_k, time_k)        # latent field, time fastest
   lambda <- exp(rep(coordinates$mu, each = nt) + f)
@@ -111,9 +103,6 @@ simulate_data <- function(n, nt, coordinates, space_k, time_k, r) {
     y      = stats::rnbinom(n * nt, size = r, mu = lambda)
   )
 }
-
-# Missing weeks arrive in CLUSTERS (whole stretches gone), as in real routine
-# data, rather than one-off cells: a 0/1 sequence that tends to stay put.
 generate_clustered_binary <- function(n, p_one, p_switch) {
   out <- numeric(n)
   out[1] <- stats::rbinom(1, 1, p_one)
@@ -127,8 +116,21 @@ observed_data <- function(data, p_one = 0.15, p_switch = 0.2) {
   y_obs[generate_clustered_binary(nrow(data), p_one, p_switch) == 1] <- NA
   cbind(data["id"], data["t"], y_obs = y_obs)
 }
+```
 
-# --- draw the data -----------------------------------------------------------
+```{r controls}
+# example dimensions
+n      <- 20          # sites (health facilities)
+nt     <- 52 * 3      # weeks (3 years)
+period <- 52          # weeks per seasonal cycle
+
+# the "true" kernel knobs we will try to recover
+true_length_scale    <- 2     # spatial smoothness
+true_periodic_scale  <- 1.1   # how sharp the season is
+true_long_term_scale <- 150   # long-run drift
+true_r               <- 15    # Negative-Binomial dispersion
+
+# site coordinates and per-site baseline log-rate (mu_s)
 coordinates <- data.frame(
   id  = factor(1:n),
   lon = runif(n, 0, 5),
@@ -136,13 +138,11 @@ coordinates <- data.frame(
   mu  = log(runif(n, 10, 80))
 )
 
-space_k <- space_kernel(coordinates, length_scale = true_length_scale)
-time_k  <- time_kernel(1:nt,
-  periodic_scale  = true_periodic_scale,
-  long_term_scale = true_long_term_scale,
-  period          = period
-)
-
+# build the true kernels, draw counts, then hide clustered gaps.
+# `obs_data` is all that weave sees: columns id, t, y_obs (NA = missing).
+space_k   <- space_kernel(coordinates, length_scale = true_length_scale)
+time_k    <- time_kernel(1:nt, periodic_scale = true_periodic_scale,
+                         long_term_scale = true_long_term_scale, period = period)
 true_data <- simulate_data(n, nt, coordinates, space_k, time_k, r = true_r)
 obs_data  <- observed_data(true_data)
 
@@ -154,7 +154,7 @@ Here are the first four sites. The **navy line** is the true underlying mean
 actually observe; and **magenta points** are the *held-out truth* at the weeks
 that went missing — what the model must reconstruct but never gets to see.
 
-```{r truth-frames}
+```{r truth-frames, echo = FALSE}
 show     <- 1:4
 df_truth <- data.frame(id = as.integer(true_data$id), t = true_data$t,
                        lambda = true_data$lambda, y = true_data$y)
@@ -166,7 +166,7 @@ df_miss  <- df_miss[is.na(df_miss$y_obs), ]          # held-out truth
 sub <- function(d) d[d$id %in% show, ]
 ```
 
-```{r truth-plot, fig.height = 4.6}
+```{r truth-plot, echo = FALSE, fig.height = 4.6}
 ggplot() +
   geom_line(data = sub(df_truth), aes(t, lambda),
             colour = weave_cols[["truth"]], linewidth = 0.5) +
@@ -206,14 +206,16 @@ them. It is noisy — but it is instant.
 ### The worked example
 
 ```{r plugin}
-g <- build_plugin_field(obs_data, n = n, nt = nt)   # length n * nt, time fastest
+# the plug-in field: per-site centred & scaled log(1 + y), as one long vector
+# (length n * nt, with time varying fastest)
+g <- build_plugin_field(obs_data, n = n, nt = nt)
 str(g)
 ```
 
 For one site, the plug-in field tracks the true latent field, just with
 observation noise layered on top:
 
-```{r plugin-plot, fig.height = 3.6}
+```{r plugin-plot, echo = FALSE, fig.height = 3.6}
 G        <- t(matrix(g, nrow = nt, ncol = n))        # n x nt
 f_true_m <- t(matrix(log(true_data$lambda) - rep(coordinates$mu, each = nt),
                      nrow = nt, ncol = n))           # true f, centred per site
@@ -298,8 +300,11 @@ maximise the marginal likelihood over the three length-scales plus the nugget
 ratio.
 
 ```{r infer}
+# maximise the GP marginal likelihood to recover the three length-scales
+# (plus a noise/nugget ratio); the global variance sigma^2 is profiled out.
 est <- infer_kernel_params(obs_data, coordinates, nt = nt, period = period)
 
+# did we recover the knobs we simulated from?
 data.frame(
   parameter = c("length_scale", "periodic_scale", "long_term_scale"),
   truth     = c(true_length_scale, true_periodic_scale, true_long_term_scale),
@@ -308,6 +313,7 @@ data.frame(
 ```
 
 ```{r infer-extras}
+# the other two pieces estimation returns: the nugget and the profiled variance
 cat(sprintf("nugget ratio (noise/signal) = %.2f;  profiled sigma^2 = %.2f\n",
             est$nugget_ratio, est$sigma2))
 ```
@@ -315,7 +321,7 @@ cat(sprintf("nugget ratio (noise/signal) = %.2f;  profiled sigma^2 = %.2f\n",
 The clearest check is to draw the **fitted** kernels (blue) on top of the
 **true** ones (navy, dashed). If the method worked, they overlap.
 
-```{r kernel-check}
+```{r kernel-check, echo = FALSE}
 kernel_curves <- function(ls, ps, lts, label) {
   sp <- data.frame(distance = seq(0, 5, length.out = 200), type = label)
   sp$correlation <- rbf_kernel(sp$distance, theta = ls)
@@ -396,20 +402,24 @@ The call returns one row per site-week with the posterior `rate` and, because
 attached as an attribute.
 
 ```{r predict}
+# condition the GP on the observed cells and predict every site-week.
+# n_draws controls how many posterior draws estimate the interval width.
 pred <- gp_predict(obs_data, coordinates, hyperparameters = est,
                    nt = nt, period = period, n_draws = 100)
 
-pred_df <- transform(pred, id = as.integer(id))
-head(pred_df)
-cat(sprintf("dispersion r used for the interval = %.1f  (true = %.0f)\n",
-            attr(pred, "r"), true_r))
+head(pred)            # one row per cell: id, t, rate, and the 95% interval
+attr(pred, "r")       # the NB dispersion used for the interval (estimated)
+```
+
+```{r pred-frames, echo = FALSE}
+pred_df <- transform(pred, id = as.integer(id))   # integer ids for plotting/joins
 ```
 
 The blue line is the predicted mean rate and the blue band the 95% prediction
 interval. It should track the navy true-mean line and cover the points —
 including the magenta held-out weeks it never saw.
 
-```{r predict-plot, fig.height = 4.6}
+```{r predict-plot, echo = FALSE, fig.height = 4.6}
 ggplot() +
   geom_ribbon(data = sub(pred_df), aes(t, ymin = lower, ymax = upper),
               fill = weave_cols[["prediction"]], alpha = 0.18) +
@@ -434,13 +444,15 @@ The honest test is the **held-out** weeks: does the 95% interval contain the
 counts the model never saw? It should, about 95% of the time.
 
 ```{r diagnostics}
-chk <- merge(df_miss[, c("id", "t", "lambda", "y")], pred_df, by = c("id", "t"))
+# keep only the held-out weeks (those the model never saw), with the true rate
+held_out <- merge(df_miss[, c("id", "t", "lambda", "y")], pred_df,
+                  by = c("id", "t"))
 
-cat(sprintf("Held-out weeks: %d\n", nrow(chk)))
-cat(sprintf("95%% interval covers the held-out count: %.0f%% of the time\n",
-            100 * mean(chk$y >= chk$lower & chk$y <= chk$upper)))
-cat(sprintf("correlation of predicted rate with true rate: %.2f\n",
-            cor(chk$rate, chk$lambda)))
+# coverage: fraction of held-out counts inside the 95% interval (target ~0.95)
+mean(held_out$y >= held_out$lower & held_out$y <= held_out$upper)
+
+# how well the predicted rate tracks the true rate at those weeks
+cor(held_out$rate, held_out$lambda)
 ```
 
 ::: {.intuition}
