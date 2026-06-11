@@ -79,35 +79,16 @@ Amv <- function(v, obs_idx, N, space_mat, time_mat, noise_var) {
   kron_mv(fill_vector(v, obs_idx, N), space_mat, time_mat)[obs_idx] + noise_var * v
 }
 
-#' Diagonal (Jacobi) preconditioner application
-#'
-#' Divides by an approximation to the diagonal of the system,
-#' which makes the iterative solver converge faster.
-#'
-#' Technically: applies \eqn{M^{-1} v \approx v / \mathrm{diag}(A)}, where
-#' \eqn{A = S K S^\top + \mathrm{diag}(\text{noise})} and
-#' \eqn{\mathrm{diag}(K) = \mathrm{diag}(space) \otimes \mathrm{diag}(time)}.
-#'
-#' @param v Numeric vector to precondition (length \eqn{m}).
-#' @param kdiag_full Vector \eqn{\mathrm{diag}(K)} of length \eqn{N}
-#'   (typically from `as.vector(kronecker(diag(space), diag(time)))`).
-#' @param obs_idx Integer indices of observed entries in the full vector.
-#' @param noise_var Scalar or length-\eqn{m} numeric nugget to add to the diagonal.
-#'
-#' @return A numeric vector of length \eqn{m}: elementwise `v / (diagA + 1e-12)`.
-M_inv <- function(v, kdiag_full, obs_idx, noise_var) {
-  v / (kdiag_full[obs_idx] + noise_var + 1e-12)
-}
-
 #' Preconditioned Conjugate Gradient (PCG) solver for the observed system
 #'
 #' In plain terms: solves the big linear system that gives the GP weights using
 #' only matrix–vector products—no huge matrices, no explicit inverse.
 #'
 #' Technically: solves \eqn{(S K S^\top + \mathrm{diag}(\text{noise}))\,x = b}
-#' by PCG, using `Amv` for matrix–vector products and `M_inv` as a Jacobi
-#' preconditioner. Stops when the relative residual falls below `tol` or after
-#' `maxit` iterations (issues a warning on `maxit`).
+#' by PCG, using `Amv` for matrix–vector products and a Jacobi (diagonal)
+#' preconditioner \eqn{M^{-1} v \approx v / \mathrm{diag}(A)}, gathered once up
+#' front. Stops when the relative residual falls below `tol` or after `maxit`
+#' iterations (issues a warning on `maxit`).
 #'
 #' @param b Right-hand side vector (observed length \eqn{m}).
 #' @param obs_idx Integer indices of observed entries in the full vector.

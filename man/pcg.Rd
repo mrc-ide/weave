@@ -44,7 +44,8 @@ only matrix–vector products—no huge matrices, no explicit inverse.
 }
 \details{
 Technically: solves \eqn{(S K S^\top + \mathrm{diag}(\text{noise}))\,x = b}
-by PCG, using `Amv` for matrix–vector products and `M_inv` as a Jacobi
-preconditioner. Stops when the relative residual falls below `tol` or after
-`maxit` iterations (issues a warning on `maxit`).
+by PCG, using `Amv` for matrix–vector products and a Jacobi (diagonal)
+preconditioner \eqn{M^{-1} v \approx v / \mathrm{diag}(A)}, gathered once up
+front. Stops when the relative residual falls below `tol` or after `maxit`
+iterations (issues a warning on `maxit`).
 }
