@@ -258,14 +258,15 @@ remain consistent with both our kernel and the observations.
 
 Suppose we observe values $`\mathbf{y}`$ at inputs $`\mathbf{x}`$, each
 with independent noise of variance $`\sigma_n^2`$, and we want the
-function at new inputs \$\mathbf{x}\_\\\$. Writing $`K`$ for the kernel
-evaluated between observed inputs, \$K\_\\\$ between new and observed
-inputs, and \$K\_{\\\\}\$ among the new inputs, the posterior is
-Gaussian with
+function at new inputs $`\mathbf{x}_*`$. Writing $`K`$ for the kernel
+evaluated between observed inputs, $`K_*`$ between new and observed
+inputs, and $`K_{**}`$ among the new inputs, the posterior is Gaussian
+with
 
-\$\$ \text{mean} = K\_\\\bigl(K + \sigma_n^2 I\bigr)^{-1}\mathbf{y},
-\qquad \text{cov} = K\_{\\\\} - K\_\\\bigl(K + \sigma_n^2
-I\bigr)^{-1}K\_\\^{\top}. \$\$
+``` math
+\text{mean} = K_*\bigl(K + \sigma_n^2 I\bigr)^{-1}\mathbf{y}, \qquad
+\text{cov}  = K_{**} - K_*\bigl(K + \sigma_n^2 I\bigr)^{-1}K_*^{\top}.
+```
 
 The posterior mean is the GP’s best guess; the posterior variance is its
 honesty. Near observations the function is pinned down and the
