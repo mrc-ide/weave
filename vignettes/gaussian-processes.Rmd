@@ -127,7 +127,7 @@ The correlation as a function of separation in time is simply the kernel
 evaluated against distance. A longer length-scale keeps points correlated
 over a wider gap:
 
-```{r kernel-curve}
+```{r kernel-curve, echo = FALSE}
 lag <- 0:120
 curves <- rbind(
   data.frame(lag = lag, correlation = rbf_kernel(lag, theta = 10),
@@ -147,10 +147,10 @@ ggplot(curves, aes(lag, correlation, colour = length_scale)) +
 
 We can now *draw* functions from the GP defined by each kernel. Each draw is
 one plausible history of feeder visits consistent with our beliefs. The
-package's `quick_mvnorm()` samples such a function efficiently; here a small
-helper wraps it to produce several draws.
+package's `quick_mvnorm()` samples such a function efficiently, which we use to
+produce the draws below.
 
-```{r draw-helper}
+```{r draw-helper, echo = FALSE}
 # Draw `n_draws` functions from a GP with temporal covariance `K`.
 draw_gp <- function(K, n_draws = 6) {
   trivial_space <- matrix(1, 1, 1)              # a single "site": time only
@@ -171,7 +171,7 @@ K_long   <- rbf_kernel(time_dist, theta = 40) + diag(1e-9, length(times))
 With a short length-scale the draws are rough and turn over quickly; with a
 long one they are smooth and slow:
 
-```{r prior-draws-rbf, fig.height = 5.2}
+```{r prior-draws-rbf, echo = FALSE, fig.height = 5.2}
 prior_draws <- rbind(
   cbind(draw_gp(K_short), world = "Short length-scale (rapid change)"),
   cbind(draw_gp(K_long),  world = "Long length-scale (gradual change)")
@@ -202,7 +202,7 @@ where \( p \) is the period (say 52 weeks) and \( \alpha \) controls how
 sharply the function rises and falls within each cycle. Draws from a periodic
 GP repeat their shape from one cycle to the next:
 
-```{r prior-draws-periodic, fig.height = 3.8}
+```{r prior-draws-periodic, echo = FALSE, fig.height = 3.8}
 weeks     <- 1:156                                  # three years
 week_dist <- get_temporal_distance(weeks)
 K_season  <- periodic_kernel(week_dist, alpha = 1.2, period = 52) +
@@ -227,7 +227,7 @@ seasonal cycle is present every year but is free to drift slowly in amplitude
 and level over the long run. The package's `time_kernel()` builds exactly this
 combination:
 
-```{r time-kernel, fig.height = 3.8}
+```{r time-kernel, echo = FALSE, fig.height = 3.8}
 K_time <- time_kernel(weeks, periodic_scale = 1.2, long_term_scale = 120,
                       period = 52)
 
@@ -302,8 +302,8 @@ Ksx  <- rbf(x_star, x_obs,  ell)
 Kss  <- rbf(x_star, x_star, ell)
 
 Kxx_inv  <- solve(Kxx)
-post_mean <- ybar + Ksx %*% Kxx_inv %*% (y_obs - ybar)
-post_var  <- pmax(diag(Kss - Ksx %*% Kxx_inv %*% t(Ksx)), 0)
+post_mean <- ybar + Ksx %*% Kxx_inv %*% (y_obs - ybar)          # posterior mean
+post_var  <- pmax(diag(Kss - Ksx %*% Kxx_inv %*% t(Ksx)), 0)    # posterior variance
 post_sd   <- sqrt(post_var)
 
 post <- data.frame(
@@ -318,7 +318,7 @@ The posterior mean threads through the observations, and the 95% band
 tightens where data is plentiful and balloons across the gap — an honest
 admission that the feeder count there is genuinely uncertain.
 
-```{r posterior-plot}
+```{r posterior-plot, echo = FALSE}
 ggplot() +
   geom_ribbon(data = post, aes(x, ymin = lower, ymax = upper),
               fill = weave_cols[["prediction"]], alpha = 0.18) +
