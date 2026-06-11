@@ -259,13 +259,13 @@ both our kernel and the observations.
 ::: {.maths}
 Suppose we observe values \( \mathbf{y} \) at inputs \( \mathbf{x} \), each
 with independent noise of variance \( \sigma_n^2 \), and we want the function
-at new inputs \( \mathbf{x}_\* \). Writing \( K \) for the kernel evaluated
-between observed inputs, \( K_\* \) between new and observed inputs, and
-\( K_{\*\*} \) among the new inputs, the posterior is Gaussian with
+at new inputs \( \mathbf{x}_* \). Writing \( K \) for the kernel evaluated
+between observed inputs, \( K_* \) between new and observed inputs, and
+\( K_{**} \) among the new inputs, the posterior is Gaussian with
 
 \[
-\text{mean} = K_\*\bigl(K + \sigma_n^2 I\bigr)^{-1}\mathbf{y}, \qquad
-\text{cov}  = K_{\*\*} - K_\*\bigl(K + \sigma_n^2 I\bigr)^{-1}K_\*^{\top}.
+\text{mean} = K_*\bigl(K + \sigma_n^2 I\bigr)^{-1}\mathbf{y}, \qquad
+\text{cov}  = K_{**} - K_*\bigl(K + \sigma_n^2 I\bigr)^{-1}K_*^{\top}.
 \]
 :::
 
