@@ -1,6 +1,7 @@
-# Kronecker diadiagonalg
+# Kronecker diagonal of a separable kernel
 
-A helper: Kronecker diagonal without allocating a big dense kronecker()
+A helper: the diagonal of \`space ⊗ time\` without allocating the big
+dense \`kronecker()\` product.
 
 ## Usage
 
