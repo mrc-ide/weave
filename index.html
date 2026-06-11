@@ -12,7 +12,8 @@
 <link href="deps/Fira_Code-0.4.10/font.css" rel="stylesheet">
 <link href="deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet">
 <link href="deps/font-awesome-6.5.2/css/v4-shims.min.css" rel="stylesheet">
-<script src="deps/headroom-0.11.0/headroom.min.js"></script><script src="deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="deps/search-1.0.0/fuse.min.js"></script><script src="deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="pkgdown.js"></script><meta property="og:title" content="Health facility malaria data interpolation">
+<script src="deps/headroom-0.11.0/headroom.min.js"></script><script src="deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="deps/search-1.0.0/fuse.min.js"></script><script src="deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="pkgdown.js"></script><link href="extra.css" rel="stylesheet">
+<meta property="og:title" content="Health facility malaria data interpolation">
 <meta name="description" content="More about what it does (maybe more than one line) Use four spaces when indenting paragraphs within the Description.">
 <meta property="og:description" content="More about what it does (maybe more than one line) Use four spaces when indenting paragraphs within the Description.">
 </head>
@@ -37,8 +38,8 @@
 <li class="nav-item dropdown">
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
   <ul class="dropdown-menu" aria-labelledby="dropdown-articles">
-<li><a class="dropdown-item" href="articles/fitting-the-model.html">Estimating the kernel hyperparameters</a></li>
-    <li><a class="dropdown-item" href="articles/Primer.html">Gaussian Processes: a Gentle Introduction</a></li>
+<li><a class="dropdown-item" href="articles/gaussian-processes.html">Gaussian processes: a gentle introduction</a></li>
+    <li><a class="dropdown-item" href="articles/walkthrough.html">The weave walkthrough: estimating kernels and predicting rates</a></li>
   </ul>
 </li>
       </ul>
@@ -54,10 +55,11 @@
 </nav><div class="container template-home">
 <div class="row">
   <main id="main" class="col-md-9"><div class="section level1">
-<div class="page-header"><h1 id="weave-">weave <img src="reference/figures/Weave.png" align="right" width="30%" height="30%"><a class="anchor" aria-label="anchor" href="#weave-"></a>
+<div class="page-header"><h1 id="weave-">weave <img src="reference/figures/Weave.png" align="right" width="30%" height="30%" alt="weave package logo"><a class="anchor" aria-label="anchor" href="#weave-"></a>
 </h1></div>
 <!-- badges: start -->
 
+<p><code>weave</code> interpolates noisy, gappy spatio-temporal count data — such as malaria cases reported by health facilities — with a separable Gaussian process. It estimates how quickly counts become uncorrelated across space and time, then predicts the underlying rate at every site and week, fills in missing observations, and attaches an honest prediction interval.</p>
 <div class="section level2">
 <h2 id="installation">Installation<a class="anchor" aria-label="anchor" href="#installation"></a>
 </h2>
@@ -65,6 +67,31 @@
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># install.packages("pak")</span></span>
 <span><span class="fu">pak</span><span class="fu">::</span><span class="fu"><a href="https://pak.r-lib.org/reference/pak.html" class="external-link">pak</a></span><span class="op">(</span><span class="st">"mrc-ide/weave"</span><span class="op">)</span></span></code></pre></div>
+</div>
+<div class="section level2">
+<h2 id="quick-start">Quick start<a class="anchor" aria-label="anchor" href="#quick-start"></a>
+</h2>
+<p>Estimate the kernel hyperparameters from observed counts, then predict the latent rate (with a 95% prediction interval) at every site-week:</p>
+<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://mrc-ide.github.io/weave/">weave</a></span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># estimate the spatial + temporal kernel length-scales</span></span>
+<span><span class="va">est</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/infer_kernel_params.html">infer_kernel_params</a></span><span class="op">(</span><span class="va">obs_data</span>, <span class="va">coordinates</span>, nt <span class="op">=</span> <span class="va">nt</span>, period <span class="op">=</span> <span class="fl">52</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># predict the rate, fill the gaps, and attach a prediction interval</span></span>
+<span><span class="va">pred</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/gp_predict.html">gp_predict</a></span><span class="op">(</span><span class="va">obs_data</span>, <span class="va">coordinates</span>, hyperparameters <span class="op">=</span> <span class="va">est</span>,</span>
+<span>                   nt <span class="op">=</span> <span class="va">nt</span>, period <span class="op">=</span> <span class="fl">52</span>, n_draws <span class="op">=</span> <span class="fl">100</span><span class="op">)</span></span></code></pre></div>
+<p>Here <code>obs_data</code> has columns <code>id</code> (site), <code>t</code> (week) and <code>y_obs</code> (count, <code>NA</code> where missing), and <code>coordinates</code> gives each site’s <code>lon</code>/<code>lat</code>.</p>
+</div>
+<div class="section level2">
+<h2 id="learn-more">Learn more<a class="anchor" aria-label="anchor" href="#learn-more"></a>
+</h2>
+<ul>
+<li>
+<a href="https://mrc-ide.github.io/weave/articles/gaussian-processes.html">Gaussian processes: a gentle introduction</a> — what a GP is, the role of the kernel, and conditioning on data.</li>
+<li>
+<a href="https://mrc-ide.github.io/weave/articles/walkthrough.html">The weave walkthrough</a> — the full method, from estimating the kernels to predicting rates with honest uncertainty.</li>
+</ul>
 </div>
 </div>
   </main><aside class="col-md-3"><div class="license">

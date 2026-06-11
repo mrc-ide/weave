@@ -1,8 +1,8 @@
 # Articles
 
-### All vignettes
+### Articles
 
-- [Estimating the kernel
-  hyperparameters](https://mrc-ide.github.io/weave/articles/fitting-the-model.md):
-- [Gaussian Processes: a Gentle
-  Introduction](https://mrc-ide.github.io/weave/articles/Primer.md):
+- [Gaussian processes: a gentle
+  introduction](https://mrc-ide.github.io/weave/articles/gaussian-processes.md):
+- [The weave walkthrough: estimating kernels and predicting
+  rates](https://mrc-ide.github.io/weave/articles/walkthrough.md):
