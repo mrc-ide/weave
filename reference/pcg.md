@@ -64,6 +64,7 @@ Numeric solution vector \`x\` of length \\m\\.
 ## Details
 
 Technically: solves \\(S K S^\top + \mathrm{diag}(\text{noise}))\\x =
-b\\ by PCG, using \`Amv\` for matrix–vector products and \`M_inv\` as a
-Jacobi preconditioner. Stops when the relative residual falls below
+b\\ by PCG, using \`Amv\` for matrix–vector products and a Jacobi
+(diagonal) preconditioner \\M^{-1} v \approx v / \mathrm{diag}(A)\\,
+gathered once up front. Stops when the relative residual falls below
 \`tol\` or after \`maxit\` iterations (issues a warning on \`maxit\`).

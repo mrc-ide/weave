@@ -4,8 +4,6 @@
 
 - [`Amv()`](https://mrc-ide.github.io/weave/reference/Amv.md) :
   Observed-system matvec: (S K S^T + diag(noise)) v
-- [`M_inv()`](https://mrc-ide.github.io/weave/reference/M_inv.md) :
-  Diagonal (Jacobi) preconditioner application
 - [`bounds()`](https://mrc-ide.github.io/weave/reference/bounds.md) :
   Compute quantile bounds for GP-based count draws
 - [`build_plugin_field()`](https://mrc-ide.github.io/weave/reference/build_plugin_field.md)
