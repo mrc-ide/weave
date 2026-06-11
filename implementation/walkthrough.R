@@ -107,7 +107,7 @@ nt <- 52 * 5 # number of time points (3 yrs weekly)
 period <- 52 # seasonal period (weeks/cycle)
 
 true_length_scale <- 0.5 # spatial smoothness (distance units)
-true_periodic_scale <- 7 # how "peaky" the season is
+true_periodic_scale <- 2 # how "peaky" the season is
 true_long_term_scale <- 150 # long-run trend smoothness
 true_r <- 15 # NB dispersion (smaller = heavier tail)
 
