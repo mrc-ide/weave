@@ -109,73 +109,17 @@ The correlation as a function of separation in time is simply the kernel
 evaluated against distance. A longer length-scale keeps points
 correlated over a wider gap:
 
-``` r
-
-lag <- 0:120
-curves <- rbind(
-  data.frame(lag = lag, correlation = rbf_kernel(lag, theta = 10),
-             length_scale = "short (ℓ = 10)"),
-  data.frame(lag = lag, correlation = rbf_kernel(lag, theta = 40),
-             length_scale = "long (ℓ = 40)")
-)
-
-ggplot(curves, aes(lag, correlation, colour = length_scale)) +
-  geom_line(linewidth = 1.1) +
-  scale_colour_manual(values = unname(weave_pal[c("magenta", "blue")]), name = NULL) +
-  labs(x = "Separation in time (days)", y = "Correlation",
-       title = "The RBF kernel: correlation fades with distance",
-       subtitle = "A longer length-scale keeps distant days correlated") +
-  theme_weave()
-```
-
 ![](gaussian-processes_files/figure-html/kernel-curve-1.png)
 
 We can now *draw* functions from the GP defined by each kernel. Each
 draw is one plausible history of feeder visits consistent with our
 beliefs. The package’s
 [`quick_mvnorm()`](https://mrc-ide.github.io/weave/reference/quick_mvnorm.md)
-samples such a function efficiently; here a small helper wraps it to
-produce several draws.
-
-``` r
-
-# Draw `n_draws` functions from a GP with temporal covariance `K`.
-draw_gp <- function(K, n_draws = 6) {
-  trivial_space <- matrix(1, 1, 1)              # a single "site": time only
-  values <- replicate(n_draws, quick_mvnorm(trivial_space, K))
-  data.frame(
-    day   = rep(seq_len(nrow(K)), times = n_draws),
-    draw  = factor(rep(seq_len(n_draws), each = nrow(K))),
-    value = as.vector(values)
-  )
-}
-
-times    <- 1:180
-time_dist <- get_temporal_distance(times)
-K_short  <- rbf_kernel(time_dist, theta = 8)  + diag(1e-9, length(times))
-K_long   <- rbf_kernel(time_dist, theta = 40) + diag(1e-9, length(times))
-```
+samples such a function efficiently, which we use to produce the draws
+below.
 
 With a short length-scale the draws are rough and turn over quickly;
 with a long one they are smooth and slow:
-
-``` r
-
-prior_draws <- rbind(
-  cbind(draw_gp(K_short), world = "Short length-scale (rapid change)"),
-  cbind(draw_gp(K_long),  world = "Long length-scale (gradual change)")
-)
-
-ggplot(prior_draws, aes(day, value, colour = draw)) +
-  geom_line(linewidth = 0.7, alpha = 0.9) +
-  facet_wrap(~ world, ncol = 1) +
-  scale_colour_weave() +
-  guides(colour = "none") +
-  labs(x = "Day", y = "Visits (centred)",
-       title = "Functions drawn from a GP prior",
-       subtitle = "Same kernel family, two length-scales") +
-  theme_weave()
-```
 
 ![](gaussian-processes_files/figure-html/prior-draws-rbf-1.png)
 
@@ -193,23 +137,6 @@ where $`p`$ is the period (say 52 weeks) and $`\alpha`$ controls how
 sharply the function rises and falls within each cycle. Draws from a
 periodic GP repeat their shape from one cycle to the next:
 
-``` r
-
-weeks     <- 1:156                                  # three years
-week_dist <- get_temporal_distance(weeks)
-K_season  <- periodic_kernel(week_dist, alpha = 1.2, period = 52) +
-  diag(1e-9, length(weeks))
-
-ggplot(draw_gp(K_season, 5), aes(day, value, colour = draw)) +
-  geom_line(linewidth = 0.8) +
-  scale_colour_weave() +
-  guides(colour = "none") +
-  labs(x = "Week", y = "Value (centred)",
-       title = "A periodic GP repeats every cycle",
-       subtitle = "Period = 52 weeks") +
-  theme_weave()
-```
-
 ![](gaussian-processes_files/figure-html/prior-draws-periodic-1.png)
 
 ### 3.3 Combining kernels
@@ -221,21 +148,6 @@ RBF — so the seasonal cycle is present every year but is free to drift
 slowly in amplitude and level over the long run. The package’s
 [`time_kernel()`](https://mrc-ide.github.io/weave/reference/time_kernel.md)
 builds exactly this combination:
-
-``` r
-
-K_time <- time_kernel(weeks, periodic_scale = 1.2, long_term_scale = 120,
-                      period = 52)
-
-ggplot(draw_gp(K_time, 5), aes(day, value, colour = draw)) +
-  geom_line(linewidth = 0.8) +
-  scale_colour_weave() +
-  guides(colour = "none") +
-  labs(x = "Week", y = "Value (centred)",
-       title = "Seasonal cycle that drifts over the years",
-       subtitle = "periodic kernel × long-term RBF") +
-  theme_weave()
-```
 
 ![](gaussian-processes_files/figure-html/time-kernel-1.png)
 
@@ -300,8 +212,8 @@ Ksx  <- rbf(x_star, x_obs,  ell)
 Kss  <- rbf(x_star, x_star, ell)
 
 Kxx_inv  <- solve(Kxx)
-post_mean <- ybar + Ksx %*% Kxx_inv %*% (y_obs - ybar)
-post_var  <- pmax(diag(Kss - Ksx %*% Kxx_inv %*% t(Ksx)), 0)
+post_mean <- ybar + Ksx %*% Kxx_inv %*% (y_obs - ybar)          # posterior mean
+post_var  <- pmax(diag(Kss - Ksx %*% Kxx_inv %*% t(Ksx)), 0)    # posterior variance
 post_sd   <- sqrt(post_var)
 
 post <- data.frame(
@@ -315,23 +227,6 @@ post <- data.frame(
 The posterior mean threads through the observations, and the 95% band
 tightens where data is plentiful and balloons across the gap — an honest
 admission that the feeder count there is genuinely uncertain.
-
-``` r
-
-ggplot() +
-  geom_ribbon(data = post, aes(x, ymin = lower, ymax = upper),
-              fill = weave_cols[["prediction"]], alpha = 0.18) +
-  geom_line(data = data.frame(x = x_star, y = true_fn(x_star)),
-            aes(x, y), colour = "grey55", linetype = "dashed", linewidth = 0.6) +
-  geom_line(data = post, aes(x, mean),
-            colour = weave_cols[["prediction"]], linewidth = 1) +
-  geom_point(data = data.frame(x = x_obs, y = y_obs), aes(x, y),
-             colour = weave_cols[["truth"]], size = 2.2) +
-  labs(x = "Day", y = "Hummingbird visits",
-       title = "Posterior: best guess with honest uncertainty",
-       subtitle = "points = observations, blue = posterior mean + 95% band, dashed = hidden truth") +
-  theme_weave()
-```
 
 ![](gaussian-processes_files/figure-html/posterior-plot-1.png)
 
