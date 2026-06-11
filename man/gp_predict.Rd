@@ -14,7 +14,8 @@ gp_predict(
   r = NULL,
   value = "y_obs",
   standardise = TRUE,
-  pcg_tol = 1e-06
+  pcg_tol = 1e-06,
+  progress = TRUE
 )
 }
 \arguments{
@@ -44,6 +45,11 @@ named by `value` (`NA` where missing).}
 `TRUE`), matching [infer_kernel_params()].}
 
 \item{pcg_tol}{Convergence tolerance for the PCG solves.}
+
+\item{progress}{Logical; show a `cli` progress bar over the posterior-draw
+loop (the expensive part). Defaults to `TRUE`; set `FALSE` to silence it
+(e.g. in scripts or logs). In non-interactive sessions `cli` degrades to
+periodic text updates.}
 }
 \value{
 A data frame with one row per cell and columns `id`, `t`, `rate`

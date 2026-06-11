@@ -68,6 +68,10 @@ gp_field_draw <- function(g_obs, obs_idx, N, space_mat, time_mat, noise_var,
 #' @param standardise Logical; standardise the plug-in field per site (default
 #'   `TRUE`), matching [infer_kernel_params()].
 #' @param pcg_tol Convergence tolerance for the PCG solves.
+#' @param progress Logical; show a `cli` progress bar over the posterior-draw
+#'   loop (the expensive part). Defaults to `TRUE`; set `FALSE` to silence it
+#'   (e.g. in scripts or logs). In non-interactive sessions `cli` degrades to
+#'   periodic text updates.
 #'
 #' @return A data frame with one row per cell and columns `id`, `t`, `rate`
 #'   (posterior point estimate of \eqn{\lambda}), and -- when `n_draws >= 1` --
@@ -78,7 +82,8 @@ gp_field_draw <- function(g_obs, obs_idx, N, space_mat, time_mat, noise_var,
 #' @export
 gp_predict <- function(obs_data, coordinates, hyperparameters, nt, period,
                        n_draws = 100, r = NULL, value = "y_obs",
-                       standardise = TRUE, pcg_tol = 1e-6) {
+                       standardise = TRUE, pcg_tol = 1e-6,
+                       progress = TRUE) {
   hp <- hyperparameters
   need <- c("length_scale", "periodic_scale", "long_term_scale",
             "nugget_ratio", "sigma2")
@@ -141,10 +146,26 @@ gp_predict <- function(obs_data, coordinates, hyperparameters, nt, period,
 
   if (n_draws >= 1) {
     # --- posterior VARIANCE of the log-rate from draws -----------------------
-    Fd <- vapply(seq_len(n_draws), function(i) {
-      gp_field_draw(g_obs, obs_idx, N, space_mat, time_mat, noise_var,
-                    kdiag, Rs_chol, Rt_chol, tol = pcg_tol)
-    }, numeric(N))
+    Fd <- matrix(NA_real_, nrow = N, ncol = n_draws)
+    if (progress) {
+      cli_violet <- cli::make_ansi_style("#824194")   # Weave logo "W"
+      cli_blue   <- cli::make_ansi_style("#1881C4")   # "e"
+      cli_pink   <- cli::make_ansi_style("#E02752")   # "a"
+      cli_amber  <- cli::make_ansi_style("#FCAB1F")   # "v"
+      fmt <- paste0(
+        "{cli_blue(cli::pb_spin)} ",
+        cli_violet(cli::style_bold("Sampling posterior draws")), " ",
+        "{cli_pink(cli::pb_bar)} {cli_amber(cli::style_bold(cli::pb_percent))}",
+        "  ETA {cli_blue(cli::pb_eta)}"
+      )
+      cli::cli_progress_bar(format = fmt, total = n_draws, .envir = environment())
+    }
+    for (i in seq_len(n_draws)) {
+      Fd[, i] <- gp_field_draw(g_obs, obs_idx, N, space_mat, time_mat, noise_var,
+                               kdiag, Rs_chol, Rt_chol, tol = pcg_tol)
+      if (progress) cli::cli_progress_update(.envir = environment())
+    }
+    if (progress) cli::cli_progress_done(.envir = environment())
     vstd  <- apply(Fd, 1, stats::var)
     Vzmat <- (row_sd^2) * t(matrix(vstd, nrow = nt, ncol = n))
 

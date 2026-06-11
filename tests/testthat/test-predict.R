@@ -23,13 +23,36 @@ test_that("gp_predict returns the expected shape and respects n_draws", {
   expect_true(all(out0$rate > 0))
   expect_equal(attr(out0, "n_draws"), 0)
 
-  out1 <- gp_predict(obs, coords, hp_fixed, nt = nt, period = period, n_draws = 20)
+  out1 <- gp_predict(obs, coords, hp_fixed, nt = nt, period = period, n_draws = 20,
+                     progress = FALSE)
   expect_true(all(c("lower", "upper") %in% names(out1)))
   expect_true(all(out1$lower <= out1$upper))
   expect_true(attr(out1, "r") > 0) # Poisson data -> r = Inf (valid: no overdispersion)
 
   # the mean is a deterministic single solve -> unaffected by the draw count
   expect_equal(out0$rate, out1$rate, tolerance = 1e-8)
+})
+
+
+test_that("gp_predict progress bar is cosmetic (same numbers, no error)", {
+  n <- 4; nt <- 6; period <- 52
+  coords <- data.frame(id = factor(1:n), lon = runif(n), lat = runif(n))
+  obs <- make_obs(n, nt, missing = c(3, 10, 15))
+
+  set.seed(7)
+  quiet <- gp_predict(obs, coords, hp_fixed, nt = nt, period = period,
+                      n_draws = 20, progress = FALSE)
+
+  set.seed(7)
+  expect_no_error(
+    loud <- gp_predict(obs, coords, hp_fixed, nt = nt, period = period,
+                       n_draws = 20, progress = TRUE)
+  )
+
+  # The bar is purely cosmetic: identical numeric output under the same seed.
+  expect_equal(loud$lower, quiet$lower)
+  expect_equal(loud$upper, quiet$upper)
+  expect_equal(loud$rate, quiet$rate)
 })
 
 
