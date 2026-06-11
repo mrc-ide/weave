@@ -50,7 +50,7 @@ plug-in latent field, using the Kronecker eigendecomposition so the full
 MCMC, no iterative solver.
 }
 \details{
-This is the recommended replacement for the cross-validated [fit()] estimator
-when a quick hyperparameter estimate is wanted (e.g. as a starting point for
-a downstream sampler, or as a standalone summary).
+This is the recommended quick estimator when a fast hyperparameter estimate is
+wanted (e.g. as a starting point for a downstream sampler, or as a standalone
+summary).
 }

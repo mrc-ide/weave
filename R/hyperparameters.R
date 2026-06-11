@@ -187,9 +187,9 @@ kernel_log_posterior <- function(log_pars, g, n, nt, coordinates, times, period,
 #' `(n * nt)`-square covariance is never formed. Fast and deterministic -- no
 #' MCMC, no iterative solver.
 #'
-#' This is the recommended replacement for the cross-validated [fit()] estimator
-#' when a quick hyperparameter estimate is wanted (e.g. as a starting point for
-#' a downstream sampler, or as a standalone summary).
+#' This is the recommended quick estimator when a fast hyperparameter estimate is
+#' wanted (e.g. as a starting point for a downstream sampler, or as a standalone
+#' summary).
 #'
 #' @param obs_data Data frame with `id` (site), `t` (time) and the count column
 #'   named by `value`.

@@ -15,9 +15,8 @@ LazyData: true
 RoxygenNote: 7.3.3
 Depends:
     R (>= 4.1.0)
-Imports: 
+Imports:
     dplyr,
-    pbapply,
     rlang,
     tidyr
 Suggests: 

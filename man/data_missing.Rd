@@ -4,7 +4,7 @@
 \alias{data_missing}
 \title{Drop sites with missing data}
 \usage{
-data_missing(data, ...)
+data_missing(data, ..., drop_zero = FALSE)
 }
 \arguments{
 \item{data}{A data frame containing site identifiers, time `t`,
@@ -12,10 +12,21 @@ counts `n`, and coordinates `lat` and `lon`.}
 
 \item{...}{Columns identifying sites passed to [dplyr::group_by()]
 (unquoted).}
+
+\item{drop_zero}{Logical; also drop sites whose observed counts sum to zero
+(default `FALSE`).}
 }
 \value{
 A data frame with problem sites removed.
 }
 \description{
-Removes sites lacking counts or coordinates and reports them.
+Removes sites that cannot be modelled and reports them. Sites with no
+observed counts (all `n` missing) or without coordinates (all `lat`/`lon`
+missing) are always dropped. Sites whose observed counts are all zero are
+dropped only when `drop_zero = TRUE`.
+
+Under the `log1p` per-site-centred rate model an all-zero site is valid
+low-rate data, not a defect, so it is retained by default; set
+`drop_zero = TRUE` if all-zero facilities should be treated as reporting
+artefacts and removed.
 }

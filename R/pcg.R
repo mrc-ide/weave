@@ -1,17 +1,17 @@
-#' Add a small ridge to a square matrix
+#' Kronecker diagonal of a separable kernel
 #'
-#' In plain terms: this adds a tiny value to the diagonal so the matrix is
-#' better-behaved numerically (e.g., invertible and Cholesky-able).
+#' A helper: the diagonal of `space ⊗ time` without allocating the big dense
+#' `kronecker()` product.
 #'
-#' Technically: returns \eqn{X + \lambda I}, which improves condition number and
-#' ensures positive definiteness when \eqn{\lambda > 0}.
+#' @param space_diag Space matrix diagonal
+#' @param time_diag Time matrix diagonal
+#' @param n Number of sites
+#' @param nt Number of times
 #'
-#' @param x A square numeric matrix.
-#' @param lambda Non-negative ridge (diagonal) value to add. Default `1e-5`.
-#'
-#' @return A matrix the same size as `x` with `lambda` added to the diagonal.
-regularise <- function(x, lambda = 1e-5) {
-  x + lambda * diag(nrow(x))
+#' @returns Kronecker diagonal
+kdiag_from_factors <- function(space_diag, time_diag, n, nt) {
+  # time varies fastest (sites × times)
+  rep(space_diag, each = nt) * rep(time_diag, times = n)
 }
 
 #' Fast Kronecker–product matrix–vector multiply (times vary fastest)

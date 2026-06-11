@@ -49,3 +49,51 @@ test_that("missing data dropped correctly", {
     )
   )
 })
+
+test_that("all-zero sites are retained by default and dropped with drop_zero", {
+  input_zero <-
+    data.frame(
+      admin1 = rep("A", 4),
+      admin2 = c(rep("A", 2), rep("B", 2)),
+      t = c(1:2, 1:2),
+      n = c(5, 7, 0, 0),
+      lat = c(1, 1, 2, 2),
+      lon = c(1, 1, 2, 2)
+    )
+
+  kept <- data_missing(input_zero, admin1, admin2)
+  expect_true("B" %in% kept$admin2)
+
+  dropped <- data_missing(input_zero, admin1, admin2, drop_zero = TRUE)
+  expect_false("B" %in% dropped$admin2)
+})
+
+test_that("data processing pipeline returns a model-ready bundle", {
+  input_data <-
+    data.frame(
+      admin1 = rep("A", 6),
+      admin2 = c(rep("A", 4), rep("B", 2)),
+      t = c(1:4, 1:2),
+      n = c(1, 2, 3, NA, 4, NA),
+      lat = c(1, NA, NA, NA, 2, NA),
+      lon = c(1, NA, NA, NA, 2, NA)
+    )
+
+  result <- data_process(input_data, admin1, admin2)
+
+  expect_named(result, c("obs_data", "coordinates", "nt"))
+
+  # obs_data: site keys + id + t + the renamed count column
+  expect_identical(
+    colnames(result$obs_data),
+    c("admin1", "admin2", "id", "t", "y_obs")
+  )
+  expect_s3_class(result$obs_data$id, "factor")
+  expect_identical(result$obs_data$t, rep(1:4, times = 2))
+
+  # coordinates: one row per site, id/lon/lat only
+  expect_identical(colnames(result$coordinates), c("id", "lon", "lat"))
+  expect_identical(nrow(result$coordinates), length(unique(result$obs_data$id)))
+
+  expect_identical(result$nt, 4L)
+})

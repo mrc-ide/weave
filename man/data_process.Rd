@@ -2,9 +2,9 @@
 % Please edit documentation in R/data.R
 \name{data_process}
 \alias{data_process}
-\title{Process raw epidemiological data}
+\title{Process raw epidemiological data for the GP model}
 \usage{
-data_process(data, ...)
+data_process(data, ..., drop_zero = FALSE)
 }
 \arguments{
 \item{data}{A data frame containing site identifiers, time `t`,
@@ -12,10 +12,23 @@ counts `n`, and coordinates `lat` and `lon`.}
 
 \item{...}{Columns identifying sites passed to [dplyr::group_by()]
 (unquoted).}
+
+\item{drop_zero}{Logical; passed to [data_missing()] -- also drop sites whose
+observed counts sum to zero (default `FALSE`).}
 }
 \value{
-A processed data frame ready for model fitting.
+A list with three elements ready to pass to the model functions:
+  \describe{
+    \item{`obs_data`}{Observations with the site-identifier columns, the
+      factor `id`, time `t`, and the count column `y_obs` (`NA` where
+      missing).}
+    \item{`coordinates`}{One row per site with `id`, `lon` and `lat`.}
+    \item{`nt`}{The number of time points.}
+  }
 }
 \description{
-Validates and prepares input data for modelling.
+Validates and prepares input data into the shape consumed by
+[infer_kernel_params()] and [gp_predict()]: it completes the site-by-time
+grid, drops sites that cannot be modelled, assigns a factor site `id`, and
+returns the observations and coordinates as separate, ready-to-use frames.
 }
