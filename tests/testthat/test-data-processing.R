@@ -68,6 +68,19 @@ test_that("all-zero sites are retained by default and dropped with drop_zero", {
   expect_false("B" %in% dropped$admin2)
 })
 
+test_that("data_process validates required and protected columns", {
+  ok <- data.frame(admin1 = "A", t = 1, n = 1, lat = 1, lon = 1)
+
+  expect_error(
+    data_process(ok[, c("admin1", "t", "n")], admin1),
+    "must include"
+  )
+  expect_error(
+    data_process(cbind(ok, id = 1), admin1),
+    "protected"
+  )
+})
+
 test_that("data processing pipeline returns a model-ready bundle", {
   input_data <-
     data.frame(

@@ -56,6 +56,29 @@ test_that("gp_predict progress bar is cosmetic (same numbers, no error)", {
 })
 
 
+test_that("ansi_tty returns a single logical flag", {
+  expect_type(ansi_tty(), "logical")
+  expect_length(ansi_tty(), 1)
+})
+
+
+test_that("gp_predict draws the progress bar when the terminal supports it", {
+  n <- 4; nt <- 6; period <- 52
+  coords <- data.frame(id = factor(1:n), lon = runif(n), lat = runif(n))
+  obs <- make_obs(n, nt, missing = c(3, 10, 15))
+
+  # Force the terminal-capability gate on so the draw loop renders the bar.
+  testthat::local_mocked_bindings(ansi_tty = function() TRUE)
+  bar <- utils::capture.output(
+    res <- gp_predict(obs, coords, hp_fixed, nt = nt, period = period,
+                      n_draws = 3, progress = TRUE)
+  )
+
+  expect_true(all(c("lower", "upper") %in% names(res)))
+  expect_match(paste(bar, collapse = ""), "100%")
+})
+
+
 test_that("make_curve_bar draws a braille wave and tracks progress", {
   out <- utils::capture.output({
     pb <- make_curve_bar(total = 10, width = 12)
@@ -75,6 +98,84 @@ test_that("make_curve_bar draws a braille wave and tracks progress", {
       pb2$set(50)
       pb2$done()
     })
+  )
+})
+
+
+test_that("gp_predict models real t spacing, not the row index", {
+  n <- 3; nt <- 5; period <- 4
+  set.seed(1)
+  coords <- data.frame(id = factor(1:n), lon = runif(n), lat = runif(n))
+  y <- rpois(n * nt, 20)
+
+  # Identical counts under two time encodings: evenly spaced, vs a big gap
+  # before the final point. The temporal kernel must see the gap.
+  even <- data.frame(id = factor(rep(1:n, each = nt), levels = 1:n),
+                     t = rep(1:nt, n), y_obs = y)
+  gap  <- data.frame(id = factor(rep(1:n, each = nt), levels = 1:n),
+                     t = rep(c(1, 2, 3, 4, 30), n), y_obs = y)
+
+  r_even <- gp_predict(even, coords, hp_fixed, nt = nt, period = period, n_draws = 0)
+  r_gap  <- gp_predict(gap,  coords, hp_fixed, nt = nt, period = period, n_draws = 0)
+
+  # Gap-aware: the far point is weakly correlated, so the smoothed field differs.
+  expect_false(isTRUE(all.equal(r_even$rate, r_gap$rate)))
+  # Output carries the real t labels.
+  expect_equal(sort(unique(r_gap$t)), c(1, 2, 3, 4, 30))
+})
+
+
+test_that("gp_predict errors on n_draws = 1 and on missing coordinates", {
+  n <- 4; nt <- 6; period <- 52
+  coords <- data.frame(id = factor(1:n), lon = runif(n), lat = runif(n))
+  obs <- make_obs(n, nt)
+
+  expect_error(
+    gp_predict(obs, coords, hp_fixed, nt = nt, period = period, n_draws = 1),
+    "n_draws"
+  )
+  expect_error(
+    gp_predict(obs, coords[1:3, ], hp_fixed, nt = nt, period = period, n_draws = 0),
+    "coordinates"
+  )
+})
+
+
+test_that("gp_predict validates hyperparameters and nt, and runs unstandardised", {
+  n <- 4; nt <- 6; period <- 52
+  coords <- data.frame(id = factor(1:n), lon = runif(n), lat = runif(n))
+  obs <- make_obs(n, nt, missing = c(3, 10, 15))
+
+  expect_error(
+    gp_predict(obs, coords, hp_fixed[c("length_scale", "sigma2")],
+               nt = nt, period = period),
+    "must contain"
+  )
+  expect_error(
+    gp_predict(obs, coords, hp_fixed, nt = nt + 1, period = period),
+    "nt"
+  )
+
+  out <- gp_predict(obs, coords, hp_fixed, nt = nt, period = period,
+                    n_draws = 0, standardise = FALSE)
+  expect_equal(nrow(out), n * nt)
+  expect_true(all(out$rate > 0))
+})
+
+
+test_that("pcg warns when it fails to converge within maxit", {
+  set.seed(1)
+  n <- 3; nt <- 3; N <- n * nt
+  coords <- data.frame(id = 1:n, lon = runif(n), lat = runif(n))
+  space <- space_kernel(coords, length_scale = 1.5)
+  time  <- time_kernel(seq_len(nt), periodic_scale = 1, long_term_scale = 80,
+                       period = 52)
+  kdiag <- kdiag_from_factors(diag(space), diag(time), n, nt)
+
+  expect_warning(
+    pcg(stats::rnorm(N), seq_len(N), N, space, time, noise_var = 1e-6,
+        kdiag_full = kdiag, tol = 1e-12, maxit = 1),
+    "did not converge"
   )
 })
 

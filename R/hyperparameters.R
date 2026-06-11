@@ -192,11 +192,14 @@ kernel_log_posterior <- function(log_pars, g, n, nt, coordinates, times, period,
 #' summary).
 #'
 #' @param obs_data Data frame with `id` (site), `t` (time) and the count column
-#'   named by `value`.
+#'   named by `value`. `t` is a numeric time index whose *differences* encode
+#'   real elapsed time, so gaps and uneven spacing between time points are
+#'   modelled as genuine time distances (use e.g. weeks or days since a
+#'   reference). [gp_predict()] must be given the same `t` encoding.
 #' @param coordinates Site coordinates (data frame with `lon`, `lat`), ordered
 #'   to match `sort(unique(obs_data$id))`.
 #' @param nt Number of time points.
-#' @param period Period of the seasonal cycle.
+#' @param period Period of the seasonal cycle, in the same units as `t`.
 #' @param value Name of the count column (default `"y_obs"`).
 #' @param standardise Logical; standardise the plug-in field per site (default
 #'   `TRUE`).
@@ -233,10 +236,22 @@ infer_kernel_params <- function(obs_data, coordinates, nt, period,
   }
 
   n <- length(unique(obs_data$id))
-  coordinates <- coordinates[match(sort(unique(obs_data$id)), coordinates$id), , drop = FALSE]
+  coord_idx <- match(sort(unique(obs_data$id)), coordinates$id)
+  if (anyNA(coord_idx)) {
+    stop(
+      "`coordinates` has no row for every site `id` in `obs_data`.",
+      call. = FALSE
+    )
+  }
+  coordinates <- coordinates[coord_idx, , drop = FALSE]
 
   g <- build_plugin_field(obs_data, n, nt, value = value, standardise = standardise)
-  times <- seq_len(nt)
+  # Temporal kernel axis: the actual `t` values (sorted), so gaps and uneven
+  # spacing between time points become genuine time distances rather than being
+  # collapsed to a unit-spaced index. This matches the column order of the
+  # plug-in field `g` (build_plugin_field() also sorts on unique `t`) and the
+  # axis gp_predict() uses, so the estimated hyperparameters transfer correctly.
+  times <- sort(unique(obs_data$t))
   log_start <- log(as.numeric(start))
 
   neglp <- function(log_pars) {

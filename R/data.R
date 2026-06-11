@@ -89,8 +89,12 @@ data_missing <- function(data, ..., drop_zero = FALSE){
       "Sites dropped (all data missing or missing coordinates): "
     }
     cat(msg)
-    knitr::kable(sites_to_drop, format = "pipe", align = "c") |>
-      print()
+    if (requireNamespace("knitr", quietly = TRUE)) {
+      knitr::kable(sites_to_drop, format = "pipe", align = "c") |>
+        print()
+    } else {
+      print(as.data.frame(sites_to_drop))
+    }
 
     data <- data |>
       dplyr::anti_join(

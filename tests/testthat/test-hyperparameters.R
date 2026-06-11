@@ -51,6 +51,45 @@ test_that("build_plugin_field has the right shape, ordering and NA handling", {
 })
 
 
+test_that("build_plugin_field errors when n/nt disagree with the data", {
+  obs <- expand.grid(t = 1:4, id = 1:3)
+  obs$y_obs <- 1
+  expect_error(build_plugin_field(obs, n = 2, nt = 4), "do not match")
+  expect_error(build_plugin_field(obs, n = 3, nt = 5), "do not match")
+})
+
+
+test_that("infer_kernel_params errors when coordinates miss a site", {
+  set.seed(1)
+  n <- 4; nt <- 6
+  coords <- data.frame(id = 1:n, lon = runif(n), lat = runif(n))
+  obs <- data.frame(id = rep(1:n, each = nt), t = rep(1:nt, n),
+                    y_obs = stats::rpois(n * nt, 5))
+  expect_error(
+    infer_kernel_params(obs, coords[1:3, ], nt = nt, period = 52),
+    "coordinates"
+  )
+})
+
+
+test_that("infer_kernel_params uses real t spacing (gaps change the fit)", {
+  set.seed(1)
+  n <- 4; nt <- 8; period <- 52
+  coords <- data.frame(id = 1:n, lon = runif(n), lat = runif(n))
+  y <- stats::rpois(n * nt, 20)
+
+  # Same counts, two time encodings. Under the old seq_len(nt) axis these were
+  # identical fits; with the real-t axis the gap must shift the likelihood.
+  even <- data.frame(id = rep(1:n, each = nt), t = rep(1:nt, n), y_obs = y)
+  gap  <- data.frame(id = rep(1:n, each = nt), t = rep(c(1:7, 30), n), y_obs = y)
+
+  e_even <- infer_kernel_params(even, coords, nt = nt, period = period)
+  e_gap  <- infer_kernel_params(gap,  coords, nt = nt, period = period)
+
+  expect_false(isTRUE(all.equal(e_even$log_posterior, e_gap$log_posterior)))
+})
+
+
 test_that("infer_kernel_params n_sites subsamples sites and is seed-reproducible", {
   n <- 8; nt <- 12; period <- 6
   coords <- data.frame(id = factor(1:n), lon = runif(n, 0, 5), lat = runif(n, 0, 5))

@@ -19,7 +19,9 @@ quick_mvnorm <- function(space, time) {
   # i.i.d. standard normals arranged as [sites x times]
   W <- matrix(stats::rnorm(n_sites * n_times), nrow = n_sites, ncol = n_times)
 
-  # Apply separable transforms: Z has cov(time ⊗ space)
+  # Apply separable transforms. vec(Z) has covariance (time ⊗ space); the
+  # transpose-flatten below reorders to times-fastest, giving covariance
+  # (space ⊗ time) to match kronecker(space, time).
   Z <- L_s %*% W %*% L_t
 
   # Flatten with times varying fastest
@@ -44,7 +46,9 @@ quick_mvnorm_chol <- function(space_chol, time_chol) {
   # i.i.d. standard normals arranged as [sites x times]
   W <- matrix(stats::rnorm(n_sites * n_times), nrow = n_sites, ncol = n_times)
 
-  # Apply separable transforms: Z has cov(time ⊗ space)
+  # Apply separable transforms. vec(Z) has covariance (time ⊗ space); the
+  # transpose-flatten below reorders to times-fastest, giving covariance
+  # (space ⊗ time) to match kronecker(space, time).
   Z <- t(space_chol) %*% W %*% time_chol
 
   # Flatten with times varying fastest

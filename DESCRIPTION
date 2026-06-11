@@ -6,9 +6,12 @@ Authors@R: c(
     person("Pete", "Winskill", email = "p.winskill@imperial.ac.uk", role = c("aut", "cre")),
     person("Robert", "Verity", email = "r.verity@imperial.ac.uk", role = c("aut"))
     )
-Maintainer: The package maintainer <yourself@somewhere.net>
-Description: More about what it does (maybe more than one line)
-    Use four spaces when indenting paragraphs within the Description.
+Description: Interpolates routine health-facility malaria counts over space and
+    time with a separable Gaussian process. Provides fast, deterministic
+    kernel-hyperparameter estimation by exact marginal likelihood and
+    matrix-free prediction (with count prediction intervals) by preconditioned
+    conjugate gradient, conditioning on observed cells so gaps are filled by
+    genuine interpolation.
 License: MIT + file LICENSE
 Encoding: UTF-8
 LazyData: true
@@ -16,7 +19,7 @@ RoxygenNote: 7.3.3
 Depends:
     R (>= 4.1.0)
 Imports:
-    dplyr,
+    dplyr (>= 1.1.0),
     rlang,
     tidyr
 Suggests: 

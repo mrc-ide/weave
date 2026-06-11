@@ -110,20 +110,27 @@ pcg <- function(b, obs_idx, N, space_mat, time_mat, noise_var, kdiag_full, tol =
   z <- r / precond
   p <- z
   rz_old <- sum(r * z)
+  converged <- FALSE
   for (it in seq_len(maxit)) {
-    if(it == maxit){
-      warning("maxit reached")
-    }
     Ap <- Amv(p, obs_idx, N, space_mat, time_mat, noise_var)
     alpha <- rz_old / sum(p * Ap)
     x <- x + alpha * p
     r <- r - alpha * Ap
-    if (sqrt(sum(r * r)) <= tol * b_norm) break
+    if (sqrt(sum(r * r)) <= tol * b_norm) {
+      converged <- TRUE
+      break
+    }
     z <- r / precond
     rz_new <- sum(r * z)
     beta <- rz_new / rz_old
     p <- z + beta * p
     rz_old <- rz_new
+  }
+  if (!converged) {
+    warning(sprintf(
+      "pcg() did not converge in %d iterations (residual %.2e, target %.2e).",
+      maxit, sqrt(sum(r * r)), tol * b_norm
+    ))
   }
   x
 }

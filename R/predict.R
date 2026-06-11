@@ -69,16 +69,20 @@ gp_field_draw <- function(
 #' unlike a completed-grid smoother that mean-imputes the gaps.
 #'
 #' @param obs_data Data frame with `id` (site), `t` (time) and a count column
-#'   named by `value` (`NA` where missing).
+#'   named by `value` (`NA` where missing). `t` is a numeric time index whose
+#'   *differences* encode real elapsed time, so gaps and uneven spacing between
+#'   time points are modelled as genuine time distances (use e.g. weeks or days
+#'   since a reference). Must use the same `t` encoding as [infer_kernel_params()].
 #' @param coordinates Site coordinates (data frame with `id`, `lon`, `lat`).
 #' @param hyperparameters A list with elements `length_scale`, `periodic_scale`,
 #'   `long_term_scale`, `nugget_ratio` and `sigma2` -- the value returned by
 #'   [infer_kernel_params()].
 #' @param nt Number of time points.
-#' @param period Period of the seasonal cycle.
+#' @param period Period of the seasonal cycle, in the same units as `t`.
 #' @param n_draws Number of posterior draws used to estimate the variance
 #'   (the prediction interval). Controls only the interval, not the mean. Use
 #'   `0` to return the smooth posterior-mean rate only (one solve, no interval).
+#'   Must be `0` or `>= 2` -- a variance needs at least two draws.
 #' @param r Negative-Binomial dispersion for the count interval. If `NULL`
 #'   (default) it is estimated by method of moments from the observed counts.
 #' @param value Name of the count column (default `"y_obs"`).
@@ -91,7 +95,7 @@ gp_field_draw <- function(
 #'   knitr, logs and CI. Set `FALSE` to disable it entirely.
 #'
 #' @return A data frame with one row per cell and columns `id`, `t`, `rate`
-#'   (posterior point estimate of \eqn{\lambda}), and -- when `n_draws >= 1` --
+#'   (posterior point estimate of \eqn{\lambda}), and -- when `n_draws >= 2` --
 #'   `lower` and `upper` (the 95% count prediction interval). The dispersion `r`
 #'   used and `n_draws` are attached as attributes.
 #'
@@ -125,6 +129,13 @@ gp_predict <- function(
       call. = FALSE
     )
   }
+  if (n_draws == 1) {
+    stop(
+      "`n_draws` must be 0 (mean only) or >= 2 ",
+      "(a variance needs at least two draws).",
+      call. = FALSE
+    )
+  }
 
   ids <- sort(unique(obs_data$id))
   times <- sort(unique(obs_data$t))
@@ -135,7 +146,14 @@ gp_predict <- function(
       call. = FALSE
     )
   }
-  coordinates <- coordinates[match(ids, coordinates$id), , drop = FALSE]
+  coord_idx <- match(ids, coordinates$id)
+  if (anyNA(coord_idx)) {
+    stop(
+      "`coordinates` has no row for every site `id` in `obs_data`.",
+      call. = FALSE
+    )
+  }
+  coordinates <- coordinates[coord_idx, , drop = FALSE]
   N <- n * nt
 
   # --- plug-in field with per-site centring (and optional scaling) -----------
@@ -159,6 +177,12 @@ gp_predict <- function(
   # --- separable kernel (sigma^2 folded into space) + scalar nugget ----------
   space_mat <- hp$sigma2 *
     space_kernel(coordinates, length_scale = hp$length_scale)
+  # Build the temporal kernel on the actual `t` values (sorted), matching
+  # infer_kernel_params(): the hyperparameters were estimated on that axis, so
+  # the kernel here must use it too. Using the real `t` values means gaps and
+  # uneven spacing between time points are modelled as genuine time distances.
+  # `t` should therefore be a numeric encoding actual time position (e.g. weeks
+  # or days since a reference), and `period` must be in those same units.
   time_mat <- time_kernel(
     times,
     periodic_scale = hp$periodic_scale,
@@ -200,10 +224,10 @@ gp_predict <- function(
     rate = as.vector(t(exp(Zmat)))
   )
 
-  if (n_draws >= 1) {
+  if (n_draws >= 2) {
     # --- posterior VARIANCE of the log-rate from draws -----------------------
     Fd <- matrix(NA_real_, nrow = N, ncol = n_draws)
-    show_bar <- isTRUE(progress) && interactive()
+    show_bar <- isTRUE(progress) && ansi_tty()
     if (show_bar) pb <- make_curve_bar(total = n_draws)
     for (i in seq_len(n_draws)) {
       Fd[, i] <- gp_field_draw(

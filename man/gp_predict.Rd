@@ -20,7 +20,10 @@ gp_predict(
 }
 \arguments{
 \item{obs_data}{Data frame with `id` (site), `t` (time) and a count column
-named by `value` (`NA` where missing).}
+named by `value` (`NA` where missing). `t` is a numeric time index whose
+*differences* encode real elapsed time, so gaps and uneven spacing between
+time points are modelled as genuine time distances (use e.g. weeks or days
+since a reference). Must use the same `t` encoding as [infer_kernel_params()].}
 
 \item{coordinates}{Site coordinates (data frame with `id`, `lon`, `lat`).}
 
@@ -30,11 +33,12 @@ named by `value` (`NA` where missing).}
 
 \item{nt}{Number of time points.}
 
-\item{period}{Period of the seasonal cycle.}
+\item{period}{Period of the seasonal cycle, in the same units as `t`.}
 
 \item{n_draws}{Number of posterior draws used to estimate the variance
 (the prediction interval). Controls only the interval, not the mean. Use
-`0` to return the smooth posterior-mean rate only (one solve, no interval).}
+`0` to return the smooth posterior-mean rate only (one solve, no interval).
+Must be `0` or `>= 2` -- a variance needs at least two draws.}
 
 \item{r}{Negative-Binomial dispersion for the count interval. If `NULL`
 (default) it is estimated by method of moments from the observed counts.}
@@ -53,7 +57,7 @@ knitr, logs and CI. Set `FALSE` to disable it entirely.}
 }
 \value{
 A data frame with one row per cell and columns `id`, `t`, `rate`
-  (posterior point estimate of \eqn{\lambda}), and -- when `n_draws >= 1` --
+  (posterior point estimate of \eqn{\lambda}), and -- when `n_draws >= 2` --
   `lower` and `upper` (the 95% count prediction interval). The dispersion `r`
   used and `n_draws` are attached as attributes.
 }
