@@ -53,6 +53,8 @@ pak::pak("mrc-ide/weave")
   : Exact separable-GP marginal log-likelihood of a field, with a nugget
 - [`gp_posterior_mean()`](https://mrc-ide.github.io/weave/reference/gp_posterior_mean.md)
   : Posterior mean of the intensity surface
+- [`gp_predict()`](https://mrc-ide.github.io/weave/reference/gp_predict.md)
+  : Predict the latent rate and a count prediction interval (PCG)
 - [`infer_kernel_params()`](https://mrc-ide.github.io/weave/reference/infer_kernel_params.md)
   : Quick exact-marginal-likelihood estimate of the kernel
   hyperparameters
