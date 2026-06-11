@@ -23,7 +23,8 @@ gp_predict(
   r = NULL,
   value = "y_obs",
   standardise = TRUE,
-  pcg_tol = 1e-06
+  pcg_tol = 1e-06,
+  progress = TRUE
 )
 ```
 
@@ -77,6 +78,13 @@ gp_predict(
 - pcg_tol:
 
   Convergence tolerance for the PCG solves.
+
+- progress:
+
+  Logical; show a \`cli\` progress bar over the posterior-draw loop (the
+  expensive part). Defaults to \`TRUE\`; set \`FALSE\` to silence it
+  (e.g. in scripts or logs). In non-interactive sessions \`cli\`
+  degrades to periodic text updates.
 
 ## Value
 
