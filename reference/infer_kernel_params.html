@@ -63,7 +63,8 @@ MCMC, no iterative solver.</p>
 <span>  standardise <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  priors <span class="op">=</span> <span class="fu"><a href="default_kernel_priors.html">default_kernel_priors</a></span><span class="op">(</span><span class="op">)</span>,</span>
 <span>  start <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>length_scale <span class="op">=</span> <span class="fl">1</span>, periodic_scale <span class="op">=</span> <span class="fl">1</span>, long_term_scale <span class="op">=</span> <span class="fl">100</span>, nugget_ratio <span class="op">=</span></span>
-<span>    <span class="fl">0.1</span><span class="op">)</span></span>
+<span>    <span class="fl">0.1</span><span class="op">)</span>,</span>
+<span>  n_sites <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -105,6 +106,19 @@ to match `sort(unique(obs_data$id))`.</p></dd>
 <dt id="arg-start">start<a class="anchor" aria-label="anchor" href="#arg-start"></a></dt>
 <dd><p>Named/length-4 starting values on the natural scale
 (`length_scale`, `periodic_scale`, `long_term_scale`, `nugget_ratio`).</p></dd>
+
+
+<dt id="arg-n-sites">n_sites<a class="anchor" aria-label="anchor" href="#arg-n-sites"></a></dt>
+<dd><p>Optional integer. If supplied and smaller than the number of
+sites, the hyperparameters are estimated from a random subsample of this
+many sites. The kernel hyperparameters are shared, population-level
+quantities, so a representative site subsample estimates the same length
+scales at a fraction of the \(O(n^3)\) cost – useful for very large site
+counts. Default `NULL` uses all sites. The subsample is drawn from the
+current RNG state, so set a seed beforehand (e.g. [set.seed()]) for a
+reproducible estimate. Note: this subsamples *sites* only, not time points
+(the temporal kernel needs the full series to resolve the periodic and
+long-term scales).</p></dd>
 
 </dl></div>
     <div class="section level2">
