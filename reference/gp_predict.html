@@ -84,7 +84,10 @@ moment-match) to give a 95<!-- % count prediction interval. --></p>
 
 <dl><dt id="arg-obs-data">obs_data<a class="anchor" aria-label="anchor" href="#arg-obs-data"></a></dt>
 <dd><p>Data frame with `id` (site), `t` (time) and a count column
-named by `value` (`NA` where missing).</p></dd>
+named by `value` (`NA` where missing). `t` is a numeric time index whose
+*differences* encode real elapsed time, so gaps and uneven spacing between
+time points are modelled as genuine time distances (use e.g. weeks or days
+since a reference). Must use the same `t` encoding as [infer_kernel_params()].</p></dd>
 
 
 <dt id="arg-coordinates">coordinates<a class="anchor" aria-label="anchor" href="#arg-coordinates"></a></dt>
@@ -102,13 +105,14 @@ named by `value` (`NA` where missing).</p></dd>
 
 
 <dt id="arg-period">period<a class="anchor" aria-label="anchor" href="#arg-period"></a></dt>
-<dd><p>Period of the seasonal cycle.</p></dd>
+<dd><p>Period of the seasonal cycle, in the same units as `t`.</p></dd>
 
 
 <dt id="arg-n-draws">n_draws<a class="anchor" aria-label="anchor" href="#arg-n-draws"></a></dt>
 <dd><p>Number of posterior draws used to estimate the variance
 (the prediction interval). Controls only the interval, not the mean. Use
-`0` to return the smooth posterior-mean rate only (one solve, no interval).</p></dd>
+`0` to return the smooth posterior-mean rate only (one solve, no interval).
+Must be `0` or `&gt;= 2` – a variance needs at least two draws.</p></dd>
 
 
 <dt id="arg-r">r<a class="anchor" aria-label="anchor" href="#arg-r"></a></dt>
@@ -139,7 +143,7 @@ knitr, logs and CI. Set `FALSE` to disable it entirely.</p></dd>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>A data frame with one row per cell and columns `id`, `t`, `rate`
-  (posterior point estimate of \(\lambda\)), and – when `n_draws &gt;= 1` –
+  (posterior point estimate of \(\lambda\)), and – when `n_draws &gt;= 2` –
   `lower` and `upper` (the 95<!-- % count prediction interval). The dispersion `r` -->
   used and `n_draws` are attached as attributes.</p>
     </div>

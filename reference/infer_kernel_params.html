@@ -74,7 +74,10 @@ MCMC, no iterative solver.</p>
 
 <dl><dt id="arg-obs-data">obs_data<a class="anchor" aria-label="anchor" href="#arg-obs-data"></a></dt>
 <dd><p>Data frame with `id` (site), `t` (time) and the count column
-named by `value`.</p></dd>
+named by `value`. `t` is a numeric time index whose *differences* encode
+real elapsed time, so gaps and uneven spacing between time points are
+modelled as genuine time distances (use e.g. weeks or days since a
+reference). [gp_predict()] must be given the same `t` encoding.</p></dd>
 
 
 <dt id="arg-coordinates">coordinates<a class="anchor" aria-label="anchor" href="#arg-coordinates"></a></dt>
@@ -87,7 +90,7 @@ to match `sort(unique(obs_data$id))`.</p></dd>
 
 
 <dt id="arg-period">period<a class="anchor" aria-label="anchor" href="#arg-period"></a></dt>
-<dd><p>Period of the seasonal cycle.</p></dd>
+<dd><p>Period of the seasonal cycle, in the same units as `t`.</p></dd>
 
 
 <dt id="arg-value">value<a class="anchor" aria-label="anchor" href="#arg-value"></a></dt>

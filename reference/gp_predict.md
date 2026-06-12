@@ -33,7 +33,11 @@ gp_predict(
 - obs_data:
 
   Data frame with \`id\` (site), \`t\` (time) and a count column named
-  by \`value\` (\`NA\` where missing).
+  by \`value\` (\`NA\` where missing). \`t\` is a numeric time index
+  whose \*differences\* encode real elapsed time, so gaps and uneven
+  spacing between time points are modelled as genuine time distances
+  (use e.g. weeks or days since a reference). Must use the same \`t\`
+  encoding as \[infer_kernel_params()\].
 
 - coordinates:
 
@@ -51,14 +55,15 @@ gp_predict(
 
 - period:
 
-  Period of the seasonal cycle.
+  Period of the seasonal cycle, in the same units as \`t\`.
 
 - n_draws:
 
   Number of posterior draws used to estimate the variance (the
   prediction interval). Controls only the interval, not the mean. Use
   \`0\` to return the smooth posterior-mean rate only (one solve, no
-  interval).
+  interval). Must be \`0\` or \`\>= 2\` – a variance needs at least two
+  draws.
 
 - r:
 
@@ -89,7 +94,7 @@ gp_predict(
 ## Value
 
 A data frame with one row per cell and columns \`id\`, \`t\`, \`rate\`
-(posterior point estimate of \\\lambda\\), and – when \`n_draws \>= 1\`
+(posterior point estimate of \\\lambda\\), and – when \`n_draws \>= 2\`
 – \`lower\` and \`upper\` (the 95 used and \`n_draws\` are attached as
 attributes.
 

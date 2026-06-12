@@ -28,7 +28,11 @@ infer_kernel_params(
 - obs_data:
 
   Data frame with \`id\` (site), \`t\` (time) and the count column named
-  by \`value\`.
+  by \`value\`. \`t\` is a numeric time index whose \*differences\*
+  encode real elapsed time, so gaps and uneven spacing between time
+  points are modelled as genuine time distances (use e.g. weeks or days
+  since a reference). \[gp_predict()\] must be given the same \`t\`
+  encoding.
 
 - coordinates:
 
@@ -41,7 +45,7 @@ infer_kernel_params(
 
 - period:
 
-  Period of the seasonal cycle.
+  Period of the seasonal cycle, in the same units as \`t\`.
 
 - value:
 
