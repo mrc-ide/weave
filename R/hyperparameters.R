@@ -179,6 +179,71 @@ kernel_log_posterior <- function(log_pars, g, n, nt, coordinates, times, period,
 }
 
 
+# -----------------------------------------------------------------------------
+# One M-step: maximise the exact marginal posterior of a COMPLETE plug-in field
+# `g` over (theta, eta) by Nelder-Mead, returning the estimate list. Factored out
+# so the initial fit and each refinement re-fit share one code path.
+# -----------------------------------------------------------------------------
+fit_kernel_field <- function(g, n, nt, coordinates, times, period, priors, log_start) {
+  neglp <- function(log_pars) {
+    -as.numeric(kernel_log_posterior(log_pars, g, n, nt, coordinates, times,
+                                     period, priors))
+  }
+  opt <- stats::optim(log_start, neglp, method = "Nelder-Mead",
+                      control = list(reltol = 1e-9, maxit = 2000))
+  lp <- kernel_log_posterior(opt$par, g, n, nt, coordinates, times, period, priors)
+  list(
+    length_scale    = exp(opt$par[1]),
+    periodic_scale  = exp(opt$par[2]),
+    long_term_scale = exp(opt$par[3]),
+    nugget_ratio    = exp(opt$par[4]),
+    sigma2          = attr(lp, "sigma2"),
+    log_posterior   = as.numeric(lp),
+    convergence     = opt$convergence
+  )
+}
+
+
+# -----------------------------------------------------------------------------
+# Refinement E-step: complete the plug-in field by replacing the MISSING cells
+# with the GP posterior (conditional) mean given the observed cells under the
+# current hyperparameters `hp`. Observed cells keep their plug-in values. This is
+# exactly the posterior-mean solve gp_predict() does, reusing the same matrix-free
+# PCG machinery (pcg()/kron_mv()), so it costs one PCG solve -- not a dense
+# (n*nt)-square factorisation. sigma2 cancels in the conditional mean, so the
+# fill is robust to the profiled-variance estimate.
+# -----------------------------------------------------------------------------
+complete_field_cond_mean <- function(obs_data, coordinates, n, nt, period,
+                                     value, standardise, hp) {
+  N     <- n * nt
+  ids   <- sort(unique(obs_data$id))
+  times <- sort(unique(obs_data$t))
+
+  # plug-in field: observed cells carry their standardised values, gaps are 0
+  g_vec <- build_plugin_field(obs_data, n, nt, value = value,
+                              standardise = standardise)
+
+  ok <- !is.na(obs_data[[value]])
+  obs_grid <- matrix(FALSE, n, nt)
+  obs_grid[cbind(match(obs_data$id[ok], ids), match(obs_data$t[ok], times))] <- TRUE
+  obs_idx  <- which(as.vector(t(obs_grid)))
+  miss_idx <- setdiff(seq_len(N), obs_idx)
+  if (length(miss_idx) == 0L) return(g_vec)
+
+  space_mat <- hp$sigma2 * space_kernel(coordinates, length_scale = hp$length_scale)
+  time_mat  <- time_kernel(times, periodic_scale = hp$periodic_scale,
+                           long_term_scale = hp$long_term_scale, period = period)
+  noise_var <- hp$sigma2 * hp$nugget_ratio
+  kdiag     <- kdiag_from_factors(diag(space_mat), diag(time_mat), n, nt)
+
+  alpha  <- pcg(g_vec[obs_idx], obs_idx, N, space_mat, time_mat, noise_var, kdiag)
+  f_mean <- kron_mv(fill_vector(alpha, obs_idx, N), space_mat, time_mat)
+
+  g_vec[miss_idx] <- f_mean[miss_idx]
+  g_vec
+}
+
+
 #' Quick exact-marginal-likelihood estimate of the kernel hyperparameters
 #'
 #' Estimates `(length_scale, periodic_scale, long_term_scale)` plus a
@@ -190,6 +255,16 @@ kernel_log_posterior <- function(log_pars, g, n, nt, coordinates, times, period,
 #' This is the recommended quick estimator when a fast hyperparameter estimate is
 #' wanted (e.g. as a starting point for a downstream sampler, or as a standalone
 #' summary).
+#'
+#' Set `refine` to enable an EM-style refinement that removes the bias missing
+#' cells introduce. Each pass refits after replacing the gaps with the GP
+#' posterior (conditional) mean under the current estimate -- a correlation-aware
+#' fill, not the flat mean-imputation -- using the same matrix-free PCG solve as
+#' [gp_predict()]. The expensive observed-cell solve runs only once per pass (not
+#' inside the optimiser), so it stays cheap, and it typically converges in 2-3
+#' passes to the estimate you would get with no missing data at all. It does not
+#' remove the intrinsic plug-in attenuation (conditioning on a noisy field rather
+#' than integrating the latent field out), only the part caused by the gaps.
 #'
 #' @param obs_data Data frame with `id` (site), `t` (time) and the count column
 #'   named by `value`. `t` is a numeric time index whose *differences* encode
@@ -216,6 +291,12 @@ kernel_log_posterior <- function(log_pars, g, n, nt, coordinates, times, period,
 #'   reproducible estimate. Note: this subsamples *sites* only, not time points
 #'   (the temporal kernel needs the full series to resolve the periodic and
 #'   long-term scales).
+#' @param refine Logical; if `TRUE`, run `refine_iter` EM-style refinement passes
+#'   that re-fit after filling the gaps with the GP conditional mean (see
+#'   Details). Default `FALSE` (the fast single-pass estimate). Recommended when
+#'   missingness is non-trivial.
+#' @param refine_iter Number of refinement passes when `refine = TRUE` (default
+#'   `3`). Ignored when `refine = FALSE`.
 #'
 #' @return A list with `length_scale`, `periodic_scale`, `long_term_scale`,
 #'   `nugget_ratio`, the profiled `sigma2`, the maximised `log_posterior`, and
@@ -226,7 +307,13 @@ infer_kernel_params <- function(obs_data, coordinates, nt, period,
                                 priors = default_kernel_priors(),
                                 start = c(length_scale = 1, periodic_scale = 1,
                                           long_term_scale = 100, nugget_ratio = 0.1),
-                                n_sites = NULL) {
+                                n_sites = NULL,
+                                refine = FALSE,
+                                refine_iter = 3L) {
+  if (!is.numeric(refine_iter) || length(refine_iter) != 1 || refine_iter < 0) {
+    stop("`refine_iter` must be a single non-negative integer.", call. = FALSE)
+  }
+  refine_iter <- as.integer(refine_iter)
   if (!is.null(n_sites)) {
     site_ids <- sort(unique(obs_data$id))
     if (n_sites < length(site_ids)) {
@@ -252,23 +339,21 @@ infer_kernel_params <- function(obs_data, coordinates, nt, period,
   # plug-in field `g` (build_plugin_field() also sorts on unique `t`) and the
   # axis gp_predict() uses, so the estimated hyperparameters transfer correctly.
   times <- sort(unique(obs_data$t))
-  log_start <- log(as.numeric(start))
 
-  neglp <- function(log_pars) {
-    -as.numeric(kernel_log_posterior(log_pars, g, n, nt, coordinates, times,
-                                     period, priors))
+  est <- fit_kernel_field(g, n, nt, coordinates, times, period, priors,
+                          log(as.numeric(start)))
+
+  # EM-style refinement: refit on a grid whose gaps are filled with the GP
+  # conditional mean under the current estimate, warm-starting each pass.
+  if (isTRUE(refine)) {
+    for (i in seq_len(refine_iter)) {
+      g <- complete_field_cond_mean(obs_data, coordinates, n, nt, period,
+                                    value, standardise, hp = est)
+      warm <- log(c(est$length_scale, est$periodic_scale,
+                    est$long_term_scale, est$nugget_ratio))
+      est <- fit_kernel_field(g, n, nt, coordinates, times, period, priors, warm)
+    }
   }
-  opt <- stats::optim(log_start, neglp, method = "Nelder-Mead",
-                      control = list(reltol = 1e-9, maxit = 2000))
-  lp <- kernel_log_posterior(opt$par, g, n, nt, coordinates, times, period, priors)
 
-  list(
-    length_scale    = exp(opt$par[1]),
-    periodic_scale  = exp(opt$par[2]),
-    long_term_scale = exp(opt$par[3]),
-    nugget_ratio    = exp(opt$par[4]),
-    sigma2          = attr(lp, "sigma2"),
-    log_posterior   = as.numeric(lp),
-    convergence     = opt$convergence
-  )
+  est
 }

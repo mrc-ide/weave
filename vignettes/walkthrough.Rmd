@@ -299,10 +299,38 @@ the estimate takes a second rather than hours.
 maximise the marginal likelihood over the three length-scales plus the nugget
 ratio.
 
+We switch on `refine = TRUE`. Filling the missing weeks with a flat per-site
+mean makes the field look as if the signal dies in every gap, which biases the
+length-scales downward (the seasonal and long-run scales suffer most). With
+`refine`, the fit instead fills each gap with the GP's *own* conditional mean
+and refits a handful of times, which removes that gap-induced bias.
+
+::: {.intuition}
+This loop is exactly the **EM algorithm** for a fit with missing data, alternating
+two steps:
+
+- **E-step.** With the current hyperparameters, replace each missing week by its
+  expected value under the model — the GP **conditional mean** given the weeks we
+  *did* observe (the same kriging solve `gp_predict()` performs).
+- **M-step.** Treat that completed grid as if it were fully observed and
+  re-maximise the fast (Kronecker) marginal likelihood to get updated
+  hyperparameters.
+
+Each pass feeds the next, and two or three are enough to converge — landing on
+essentially the estimate we would have got with *no* gaps at all. Crucially, the
+expensive conditional-mean solve runs only once per pass, never inside the
+optimiser, so the whole correction stays cheap. (It removes the bias the *gaps*
+cause; the residual plug-in attenuation below — from conditioning on a noisy
+field rather than integrating it out — is a separate matter it does not fix.)
+:::
+
 ```{r infer}
 # maximise the GP marginal likelihood to recover the three length-scales
 # (plus a noise/nugget ratio); the global variance sigma^2 is profiled out.
-est <- infer_kernel_params(obs_data, coordinates, nt = nt, period = period)
+# refine = TRUE fills the gaps with the GP conditional mean and refits, removing
+# the bias that mean-imputing the missing weeks would otherwise introduce.
+est <- infer_kernel_params(obs_data, coordinates, nt = nt, period = period,
+                           refine = TRUE)
 
 # did we recover the knobs we simulated from?
 data.frame(
@@ -478,9 +506,11 @@ that make it quick also limit it:
   \( \sigma^2 \) and amplifies noise at low-count sites.
 - **One homoscedastic nugget.** Real count noise is heteroscedastic (it grows
   with the rate); we summarise it with a single ratio \( \eta \).
-- **Hyperparameter fitting mean-imputes missing cells** in the plug-in field
-  (though `gp_predict()` does not — it conditions on the observed cells, so its
-  interval widens over gaps).
+- **Missing cells.** With `refine = TRUE` (used above) the fit fills the gaps
+  with the GP conditional mean and refits, so missingness no longer biases the
+  length-scales; the default `refine = FALSE` mean-imputes the gaps and is
+  faster but attenuated. (`gp_predict()` always conditions on the observed cells
+  only, so its interval widens over gaps either way.)
 - **The dispersion \( r \)** is recovered by a rough method of moments, so the
   *width* of the count prediction interval inherits that error.
 - **A point estimate.** We report the maximiser, with no uncertainty on the

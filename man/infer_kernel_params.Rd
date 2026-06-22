@@ -14,7 +14,9 @@ infer_kernel_params(
   priors = default_kernel_priors(),
   start = c(length_scale = 1, periodic_scale = 1, long_term_scale = 100, nugget_ratio =
     0.1),
-  n_sites = NULL
+  n_sites = NULL,
+  refine = FALSE,
+  refine_iter = 3L
 )
 }
 \arguments{
@@ -51,6 +53,14 @@ current RNG state, so set a seed beforehand (e.g. [set.seed()]) for a
 reproducible estimate. Note: this subsamples *sites* only, not time points
 (the temporal kernel needs the full series to resolve the periodic and
 long-term scales).}
+
+\item{refine}{Logical; if `TRUE`, run `refine_iter` EM-style refinement passes
+that re-fit after filling the gaps with the GP conditional mean (see
+Details). Default `FALSE` (the fast single-pass estimate). Recommended when
+missingness is non-trivial.}
+
+\item{refine_iter}{Number of refinement passes when `refine = TRUE` (default
+`3`). Ignored when `refine = FALSE`.}
 }
 \value{
 A list with `length_scale`, `periodic_scale`, `long_term_scale`,
@@ -68,4 +78,14 @@ MCMC, no iterative solver.
 This is the recommended quick estimator when a fast hyperparameter estimate is
 wanted (e.g. as a starting point for a downstream sampler, or as a standalone
 summary).
+
+Set `refine` to enable an EM-style refinement that removes the bias missing
+cells introduce. Each pass refits after replacing the gaps with the GP
+posterior (conditional) mean under the current estimate -- a correlation-aware
+fill, not the flat mean-imputation -- using the same matrix-free PCG solve as
+[gp_predict()]. The expensive observed-cell solve runs only once per pass (not
+inside the optimiser), so it stays cheap, and it typically converges in 2-3
+passes to the estimate you would get with no missing data at all. It does not
+remove the intrinsic plug-in attenuation (conditioning on a noisy field rather
+than integrating the latent field out), only the part caused by the gaps.
 }

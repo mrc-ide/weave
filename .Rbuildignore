@@ -9,3 +9,4 @@
 implementation/
 ^doc$
 ^Meta$
+^codecov\.yml$

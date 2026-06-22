@@ -33,9 +33,11 @@
 #     amplifies noise at low-count sites.
 #   - The nugget is a single homoscedastic noise term; real count noise is
 #     heteroscedastic.
-#   - Hyperparameter estimation mean-imputes missing cells (in the plug-in
-#     field); prediction (gp_predict) does not -- it conditions on the observed
-#     cells, so its interval can widen over gaps.
+#   - Missing cells: with refine = TRUE (used below) hyperparameter estimation
+#     fills the gaps with the GP conditional mean and refits, so missingness no
+#     longer biases the length scales; the default refine = FALSE mean-imputes
+#     the gaps (faster, but attenuated). Prediction (gp_predict) always
+#     conditions on the observed cells, so its interval can widen over gaps.
 #   - It returns a point (MAP) estimate of the hyperparameters -- their own
 #     uncertainty is not propagated into the prediction.
 #
@@ -102,7 +104,7 @@ observed_data <- function(data, p_one, p_switch) {
 # -----------------------------------------------------------------------------
 # 1. Controls
 # -----------------------------------------------------------------------------
-n <- 20 # number of sites (health facilities)
+n <- 30 # number of sites (health facilities)
 nt <- 52 * 5 # number of time points (3 yrs weekly)
 period <- 52 # seasonal period (weeks/cycle)
 
@@ -113,7 +115,7 @@ true_r <- 15 # NB dispersion (smaller = heavier tail)
 
 show_missingness <- TRUE # draw held-out (missing) truth in red
 p_one <- 0.1 # missingness controls (see observed_data)
-p_switch <- 0.2
+p_switch <- 0.05
 plot_sites <- 1:min(n, 100) # sites shown in the per-site panels (default: all; set e.g. 1:12 to subset)
 
 
@@ -221,9 +223,21 @@ print(base_plot)
 # -----------------------------------------------------------------------------
 # Maximise the GP marginal likelihood of the plug-in field to estimate the three
 # length scales and the noise/nugget ratio (profiled global variance).
+#
+# refine = TRUE runs an EM-style refinement: it refits after filling the missing
+# weeks with the GP conditional mean (instead of the flat per-site mean), which
+# removes the downward bias the gaps would otherwise put on the length scales. It
+# reuses the same fast solve as gp_predict(), so it stays cheap.
 # -----------------------------------------------------------------------------
 fit_time <- system.time(
-  est <- infer_kernel_params(obs_data, coordinates, nt = nt, period = period)
+  est <- infer_kernel_params(
+    obs_data,
+    coordinates,
+    nt = nt,
+    period = period,
+    n_sites = 50,
+    refine = TRUE
+  )
 )
 
 cat(sprintf("\nFit runtime: %.2f s\n", fit_time[3]))

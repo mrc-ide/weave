@@ -51,6 +51,57 @@ test_that("build_plugin_field has the right shape, ordering and NA handling", {
 })
 
 
+test_that("refine validation and no-op behaviour", {
+  set.seed(1)
+  n <- 4; nt <- 10; period <- 52
+  coords <- data.frame(id = 1:n, lon = runif(n), lat = runif(n))
+  obs <- data.frame(id = rep(1:n, each = nt), t = rep(1:nt, n),
+                    y_obs = stats::rpois(n * nt, 20))
+
+  expect_error(
+    infer_kernel_params(obs, coords, nt = nt, period = period, refine_iter = -1),
+    "non-negative"
+  )
+  # refine = FALSE and refine_iter = 0 (refine = TRUE) both skip the loop.
+  a <- infer_kernel_params(obs, coords, nt = nt, period = period, refine = FALSE)
+  b <- infer_kernel_params(obs, coords, nt = nt, period = period,
+                           refine = TRUE, refine_iter = 0)
+  expect_equal(a$long_term_scale, b$long_term_scale)
+})
+
+
+test_that("refine reduces the gap-induced temporal attenuation", {
+  # GP truth with a long temporal scale; clustered missingness attenuates it,
+  # and refinement should pull the estimate back toward the no-gap fit.
+  skip_on_cran()
+  set.seed(42)
+  n <- 10; nt <- 104; period <- 52
+  coords <- data.frame(id = factor(1:n), lon = runif(n, 0, 5), lat = runif(n, 0, 5))
+  sk <- space_kernel(coords, length_scale = 0.5)
+  tk <- time_kernel(1:nt, periodic_scale = 2, long_term_scale = 80, period = period)
+  f  <- quick_mvnorm(sk, tk)
+  y  <- stats::rpois(n * nt, exp(3 + f))
+  full <- data.frame(id = factor(rep(1:n, each = nt)), t = rep(1:nt, n), y_obs = y)
+
+  # clustered missingness
+  miss <- numeric(n * nt); miss[1] <- 0
+  for (i in 2:(n * nt)) miss[i] <- if (runif(1) < 0.06) rbinom(1, 1, 0.15) else miss[i - 1]
+  gap <- full; gap$y_obs[miss == 1] <- NA
+
+  oracle <- infer_kernel_params(full, coords, nt = nt, period = period)
+  naive  <- infer_kernel_params(gap,  coords, nt = nt, period = period)
+  refined <- infer_kernel_params(gap, coords, nt = nt, period = period,
+                                 refine = TRUE, refine_iter = 3)
+
+  expect_equal(refined$convergence, 0)
+  # gaps attenuate the long-term scale downward; refinement corrects it upward
+  expect_gt(refined$long_term_scale, naive$long_term_scale)
+  # and lands closer to the no-gap oracle than the naive (mean-imputed) fit
+  expect_lt(abs(refined$long_term_scale - oracle$long_term_scale),
+            abs(naive$long_term_scale - oracle$long_term_scale))
+})
+
+
 test_that("build_plugin_field errors when n/nt disagree with the data", {
   obs <- expand.grid(t = 1:4, id = 1:3)
   obs$y_obs <- 1

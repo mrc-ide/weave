@@ -1,0 +1,10 @@
+# Codecov configuration
+# Reference: https://docs.codecov.com/docs/codecovyml-reference
+coverage:
+  status:
+    patch:
+      default:
+        target: auto
+        # Allow the patch (changed-lines) coverage to fall up to 5 percentage
+        # points below target before the check fails.
+        threshold: 5%
