@@ -24,11 +24,13 @@
 # TRUE only in a terminal that can render the bar's ANSI truecolor + carriage-
 # return redraw: an interactive session that is NOT a GUI console (Windows Rgui
 # or macOS R.app emit raw escape codes and do not honour "\r" overwrites), and
-# is either RStudio or a genuine tty.
+# is RStudio, Positron, or a genuine tty.
 ansi_tty <- function() {
   if (!interactive()) return(FALSE)
   if (.Platform$GUI %in% c("Rgui", "AQUA")) return(FALSE)
-  Sys.getenv("RSTUDIO") == "1" || isatty(stdout())
+  Sys.getenv("RSTUDIO") == "1" ||
+    Sys.getenv("POSITRON") == "1" ||
+    isatty(stdout())
 }
 
 make_curve_bar <- function(total,
