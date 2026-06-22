@@ -9,13 +9,13 @@
 ## Citation
 
 Winskill P, Verity R (2026). *weave: Health facility malaria data
-interpolation*. R package version 0.1.4,
+interpolation*. R package version 0.1.5,
 <https://mrc-ide.github.io/weave/>.
 
     @Manual{,
       title = {weave: Health facility malaria data interpolation},
       author = {Pete Winskill and Robert Verity},
       year = {2026},
-      note = {R package version 0.1.4},
+      note = {R package version 0.1.5},
       url = {https://mrc-ide.github.io/weave/},
     }
