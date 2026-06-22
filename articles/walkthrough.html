@@ -329,10 +329,42 @@ rather than hours.</p>
 <p><code><a href="../reference/infer_kernel_params.html">infer_kernel_params()</a></code> does all of the above: build the
 plug-in field, then maximise the marginal likelihood over the three
 length-scales plus the nugget ratio.</p>
+<p>We switch on <code>refine = TRUE</code>. Filling the missing weeks
+with a flat per-site mean makes the field look as if the signal dies in
+every gap, which biases the length-scales downward (the seasonal and
+long-run scales suffer most). With <code>refine</code>, the fit instead
+fills each gap with the GP’s <em>own</em> conditional mean and refits a
+handful of times, which removes that gap-induced bias.</p>
+<div class="intuition">
+<p>This loop is exactly the <strong>EM algorithm</strong> for a fit with
+missing data, alternating two steps:</p>
+<ul>
+<li>
+<strong>E-step.</strong> With the current hyperparameters, replace
+each missing week by its expected value under the model — the GP
+<strong>conditional mean</strong> given the weeks we <em>did</em>
+observe (the same kriging solve <code><a href="../reference/gp_predict.html">gp_predict()</a></code>
+performs).</li>
+<li>
+<strong>M-step.</strong> Treat that completed grid as if it were
+fully observed and re-maximise the fast (Kronecker) marginal likelihood
+to get updated hyperparameters.</li>
+</ul>
+<p>Each pass feeds the next, and two or three are enough to converge —
+landing on essentially the estimate we would have got with <em>no</em>
+gaps at all. Crucially, the expensive conditional-mean solve runs only
+once per pass, never inside the optimiser, so the whole correction stays
+cheap. (It removes the bias the <em>gaps</em> cause; the residual
+plug-in attenuation below — from conditioning on a noisy field rather
+than integrating it out — is a separate matter it does not fix.)</p>
+</div>
 <div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># maximise the GP marginal likelihood to recover the three length-scales</span></span>
 <span><span class="co"># (plus a noise/nugget ratio); the global variance sigma^2 is profiled out.</span></span>
-<span><span class="va">est</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/infer_kernel_params.html">infer_kernel_params</a></span><span class="op">(</span><span class="va">obs_data</span>, <span class="va">coordinates</span>, nt <span class="op">=</span> <span class="va">nt</span>, period <span class="op">=</span> <span class="va">period</span><span class="op">)</span></span>
+<span><span class="co"># refine = TRUE fills the gaps with the GP conditional mean and refits, removing</span></span>
+<span><span class="co"># the bias that mean-imputing the missing weeks would otherwise introduce.</span></span>
+<span><span class="va">est</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/infer_kernel_params.html">infer_kernel_params</a></span><span class="op">(</span><span class="va">obs_data</span>, <span class="va">coordinates</span>, nt <span class="op">=</span> <span class="va">nt</span>, period <span class="op">=</span> <span class="va">period</span>,</span>
+<span>                           refine <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># did we recover the knobs we simulated from?</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
@@ -341,14 +373,14 @@ length-scales plus the nugget ratio.</p>
 <span>  estimate  <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">est</span><span class="op">$</span><span class="va">length_scale</span>, <span class="va">est</span><span class="op">$</span><span class="va">periodic_scale</span>, <span class="va">est</span><span class="op">$</span><span class="va">long_term_scale</span><span class="op">)</span>, <span class="fl">2</span><span class="op">)</span></span>
 <span><span class="op">)</span></span>
 <span><span class="co">#&gt;         parameter truth estimate</span></span>
-<span><span class="co">#&gt; 1    length_scale   2.0     0.89</span></span>
-<span><span class="co">#&gt; 2  periodic_scale   1.1     0.75</span></span>
-<span><span class="co">#&gt; 3 long_term_scale 150.0    55.08</span></span></code></pre></div>
+<span><span class="co">#&gt; 1    length_scale   2.0     1.69</span></span>
+<span><span class="co">#&gt; 2  periodic_scale   1.1     1.04</span></span>
+<span><span class="co">#&gt; 3 long_term_scale 150.0   127.40</span></span></code></pre></div>
 <div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># the other two pieces estimation returns: the nugget and the profiled variance</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/cat.html" class="external-link">cat</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/sprintf.html" class="external-link">sprintf</a></span><span class="op">(</span><span class="st">"nugget ratio (noise/signal) = %.2f;  profiled sigma^2 = %.2f\n"</span>,</span>
 <span>            <span class="va">est</span><span class="op">$</span><span class="va">nugget_ratio</span>, <span class="va">est</span><span class="op">$</span><span class="va">sigma2</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="co">#&gt; nugget ratio (noise/signal) = 0.49;  profiled sigma^2 = 0.51</span></span></code></pre></div>
+<span><span class="co">#&gt; nugget ratio (noise/signal) = 0.17;  profiled sigma^2 = 1.11</span></span></code></pre></div>
 <p>The clearest check is to draw the <strong>fitted</strong> kernels
 (blue) on top of the <strong>true</strong> ones (navy, dashed). If the
 method worked, they overlap.</p>
@@ -409,14 +441,14 @@ interval (<code>lower</code>, <code>upper</code>). The dispersion
 <span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">pred</span><span class="op">)</span>            <span class="co"># one row per cell: id, t, rate, and the 95% interval</span></span>
 <span><span class="co">#&gt;   id t     rate    lower    upper</span></span>
-<span><span class="co">#&gt; 1  1 1 20.74727 9.167142 41.93390</span></span>
-<span><span class="co">#&gt; 2  1 2 19.82157 8.916195 39.25267</span></span>
-<span><span class="co">#&gt; 3  1 3 18.13293 8.176709 35.66125</span></span>
-<span><span class="co">#&gt; 4  1 4 15.86018 7.056011 31.39392</span></span>
-<span><span class="co">#&gt; 5  1 5 13.33049 5.769388 26.84454</span></span>
-<span><span class="co">#&gt; 6  1 6 10.89283 4.532828 22.49001</span></span>
+<span><span class="co">#&gt; 1  1 1 21.33600 9.872323 41.07965</span></span>
+<span><span class="co">#&gt; 2  1 2 19.68997 9.108483 37.78028</span></span>
+<span><span class="co">#&gt; 3  1 3 17.55220 8.042258 33.81216</span></span>
+<span><span class="co">#&gt; 4  1 4 15.13836 6.798913 29.51283</span></span>
+<span><span class="co">#&gt; 5  1 5 12.70435 5.532921 25.26137</span></span>
+<span><span class="co">#&gt; 6  1 6 10.47212 4.377641 21.38402</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/attr.html" class="external-link">attr</a></span><span class="op">(</span><span class="va">pred</span>, <span class="st">"r"</span><span class="op">)</span>       <span class="co"># the NB dispersion used for the interval (estimated)</span></span>
-<span><span class="co">#&gt; [1] 13.48056</span></span></code></pre></div>
+<span><span class="co">#&gt; [1] 13.02461</span></span></code></pre></div>
 <p>The blue line is the predicted mean rate and the blue band the 95%
 prediction interval. It should track the navy true-mean line and cover
 the points — including the magenta held-out weeks it never saw.</p>
@@ -435,11 +467,11 @@ the time.</p>
 <span></span>
 <span><span class="co"># coverage: fraction of held-out counts inside the 95% interval (target ~0.95)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="va">held_out</span><span class="op">$</span><span class="va">y</span> <span class="op">&gt;=</span> <span class="va">held_out</span><span class="op">$</span><span class="va">lower</span> <span class="op">&amp;</span> <span class="va">held_out</span><span class="op">$</span><span class="va">y</span> <span class="op">&lt;=</span> <span class="va">held_out</span><span class="op">$</span><span class="va">upper</span><span class="op">)</span></span>
-<span><span class="co">#&gt; [1] 0.9290466</span></span>
+<span><span class="co">#&gt; [1] 0.9223947</span></span>
 <span></span>
 <span><span class="co"># how well the predicted rate tracks the true rate at those weeks</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/stats/cor.html" class="external-link">cor</a></span><span class="op">(</span><span class="va">held_out</span><span class="op">$</span><span class="va">rate</span>, <span class="va">held_out</span><span class="op">$</span><span class="va">lambda</span><span class="op">)</span></span>
-<span><span class="co">#&gt; [1] 0.9853691</span></span></code></pre></div>
+<span><span class="co">#&gt; [1] 0.989185</span></span></code></pre></div>
 <div class="intuition">
 <p>If the coverage lands near 95% the bands are honest; if the predicted
 rate correlates strongly with the true rate, the gap-filling is doing
@@ -476,10 +508,12 @@ heteroscedastic (it grows with the rate); we summarise it with a single
 ratio
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>η</mi><annotation encoding="application/x-tex">\eta</annotation></semantics></math>.</li>
 <li>
-<strong>Hyperparameter fitting mean-imputes missing cells</strong>
-in the plug-in field (though <code><a href="../reference/gp_predict.html">gp_predict()</a></code> does not — it
-conditions on the observed cells, so its interval widens over
-gaps).</li>
+<strong>Missing cells.</strong> With <code>refine = TRUE</code>
+(used above) the fit fills the gaps with the GP conditional mean and
+refits, so missingness no longer biases the length-scales; the default
+<code>refine = FALSE</code> mean-imputes the gaps and is faster but
+attenuated. (<code><a href="../reference/gp_predict.html">gp_predict()</a></code> always conditions on the observed
+cells only, so its interval widens over gaps either way.)</li>
 <li>
 <strong>The dispersion
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>r</mi><annotation encoding="application/x-tex">r</annotation></semantics></math></strong>

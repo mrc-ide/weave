@@ -204,11 +204,41 @@ answer. This is why the estimate takes a second rather than hours.
 does all of the above: build the plug-in field, then maximise the
 marginal likelihood over the three length-scales plus the nugget ratio.
 
+We switch on `refine = TRUE`. Filling the missing weeks with a flat
+per-site mean makes the field look as if the signal dies in every gap,
+which biases the length-scales downward (the seasonal and long-run
+scales suffer most). With `refine`, the fit instead fills each gap with
+the GP’s *own* conditional mean and refits a handful of times, which
+removes that gap-induced bias.
+
+This loop is exactly the **EM algorithm** for a fit with missing data,
+alternating two steps:
+
+- **E-step.** With the current hyperparameters, replace each missing
+  week by its expected value under the model — the GP **conditional
+  mean** given the weeks we *did* observe (the same kriging solve
+  [`gp_predict()`](https://mrc-ide.github.io/weave/reference/gp_predict.md)
+  performs).
+- **M-step.** Treat that completed grid as if it were fully observed and
+  re-maximise the fast (Kronecker) marginal likelihood to get updated
+  hyperparameters.
+
+Each pass feeds the next, and two or three are enough to converge —
+landing on essentially the estimate we would have got with *no* gaps at
+all. Crucially, the expensive conditional-mean solve runs only once per
+pass, never inside the optimiser, so the whole correction stays cheap.
+(It removes the bias the *gaps* cause; the residual plug-in attenuation
+below — from conditioning on a noisy field rather than integrating it
+out — is a separate matter it does not fix.)
+
 ``` r
 
 # maximise the GP marginal likelihood to recover the three length-scales
 # (plus a noise/nugget ratio); the global variance sigma^2 is profiled out.
-est <- infer_kernel_params(obs_data, coordinates, nt = nt, period = period)
+# refine = TRUE fills the gaps with the GP conditional mean and refits, removing
+# the bias that mean-imputing the missing weeks would otherwise introduce.
+est <- infer_kernel_params(obs_data, coordinates, nt = nt, period = period,
+                           refine = TRUE)
 
 # did we recover the knobs we simulated from?
 data.frame(
@@ -217,9 +247,9 @@ data.frame(
   estimate  = round(c(est$length_scale, est$periodic_scale, est$long_term_scale), 2)
 )
 #>         parameter truth estimate
-#> 1    length_scale   2.0     0.89
-#> 2  periodic_scale   1.1     0.75
-#> 3 long_term_scale 150.0    55.08
+#> 1    length_scale   2.0     1.69
+#> 2  periodic_scale   1.1     1.04
+#> 3 long_term_scale 150.0   127.40
 ```
 
 ``` r
@@ -227,7 +257,7 @@ data.frame(
 # the other two pieces estimation returns: the nugget and the profiled variance
 cat(sprintf("nugget ratio (noise/signal) = %.2f;  profiled sigma^2 = %.2f\n",
             est$nugget_ratio, est$sigma2))
-#> nugget ratio (noise/signal) = 0.49;  profiled sigma^2 = 0.51
+#> nugget ratio (noise/signal) = 0.17;  profiled sigma^2 = 1.11
 ```
 
 The clearest check is to draw the **fitted** kernels (blue) on top of
@@ -289,14 +319,14 @@ pred <- gp_predict(obs_data, coordinates, hyperparameters = est,
 
 head(pred)            # one row per cell: id, t, rate, and the 95% interval
 #>   id t     rate    lower    upper
-#> 1  1 1 20.74727 9.167142 41.93390
-#> 2  1 2 19.82157 8.916195 39.25267
-#> 3  1 3 18.13293 8.176709 35.66125
-#> 4  1 4 15.86018 7.056011 31.39392
-#> 5  1 5 13.33049 5.769388 26.84454
-#> 6  1 6 10.89283 4.532828 22.49001
+#> 1  1 1 21.33600 9.872323 41.07965
+#> 2  1 2 19.68997 9.108483 37.78028
+#> 3  1 3 17.55220 8.042258 33.81216
+#> 4  1 4 15.13836 6.798913 29.51283
+#> 5  1 5 12.70435 5.532921 25.26137
+#> 6  1 6 10.47212 4.377641 21.38402
 attr(pred, "r")       # the NB dispersion used for the interval (estimated)
-#> [1] 13.48056
+#> [1] 13.02461
 ```
 
 The blue line is the predicted mean rate and the blue band the 95%
@@ -318,11 +348,11 @@ held_out <- merge(df_miss[, c("id", "t", "lambda", "y")], pred_df,
 
 # coverage: fraction of held-out counts inside the 95% interval (target ~0.95)
 mean(held_out$y >= held_out$lower & held_out$y <= held_out$upper)
-#> [1] 0.9290466
+#> [1] 0.9223947
 
 # how well the predicted rate tracks the true rate at those weeks
 cor(held_out$rate, held_out$lambda)
-#> [1] 0.9853691
+#> [1] 0.989185
 ```
 
 If the coverage lands near 95% the bands are honest; if the predicted
@@ -346,11 +376,13 @@ shortcuts that make it quick also limit it:
   $`\sigma^2`$ and amplifies noise at low-count sites.
 - **One homoscedastic nugget.** Real count noise is heteroscedastic (it
   grows with the rate); we summarise it with a single ratio $`\eta`$.
-- **Hyperparameter fitting mean-imputes missing cells** in the plug-in
-  field (though
-  [`gp_predict()`](https://mrc-ide.github.io/weave/reference/gp_predict.md)
-  does not — it conditions on the observed cells, so its interval widens
-  over gaps).
+- **Missing cells.** With `refine = TRUE` (used above) the fit fills the
+  gaps with the GP conditional mean and refits, so missingness no longer
+  biases the length-scales; the default `refine = FALSE` mean-imputes
+  the gaps and is faster but attenuated.
+  ([`gp_predict()`](https://mrc-ide.github.io/weave/reference/gp_predict.md)
+  always conditions on the observed cells only, so its interval widens
+  over gaps either way.)
 - **The dispersion $`r`$** is recovered by a rough method of moments, so
   the *width* of the count prediction interval inherits that error.
 - **A point estimate.** We report the maximiser, with no uncertainty on

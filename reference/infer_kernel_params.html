@@ -64,7 +64,9 @@ MCMC, no iterative solver.</p>
 <span>  priors <span class="op">=</span> <span class="fu"><a href="default_kernel_priors.html">default_kernel_priors</a></span><span class="op">(</span><span class="op">)</span>,</span>
 <span>  start <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>length_scale <span class="op">=</span> <span class="fl">1</span>, periodic_scale <span class="op">=</span> <span class="fl">1</span>, long_term_scale <span class="op">=</span> <span class="fl">100</span>, nugget_ratio <span class="op">=</span></span>
 <span>    <span class="fl">0.1</span><span class="op">)</span>,</span>
-<span>  n_sites <span class="op">=</span> <span class="cn">NULL</span></span>
+<span>  n_sites <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  refine <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  refine_iter <span class="op">=</span> <span class="fl">3L</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -123,6 +125,18 @@ reproducible estimate. Note: this subsamples *sites* only, not time points
 (the temporal kernel needs the full series to resolve the periodic and
 long-term scales).</p></dd>
 
+
+<dt id="arg-refine">refine<a class="anchor" aria-label="anchor" href="#arg-refine"></a></dt>
+<dd><p>Logical; if `TRUE`, run `refine_iter` EM-style refinement passes
+that re-fit after filling the gaps with the GP conditional mean (see
+Details). Default `FALSE` (the fast single-pass estimate). Recommended when
+missingness is non-trivial.</p></dd>
+
+
+<dt id="arg-refine-iter">refine_iter<a class="anchor" aria-label="anchor" href="#arg-refine-iter"></a></dt>
+<dd><p>Number of refinement passes when `refine = TRUE` (default
+`3`). Ignored when `refine = FALSE`.</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
@@ -135,6 +149,15 @@ long-term scales).</p></dd>
     <p>This is the recommended quick estimator when a fast hyperparameter estimate is
 wanted (e.g. as a starting point for a downstream sampler, or as a standalone
 summary).</p>
+<p>Set `refine` to enable an EM-style refinement that removes the bias missing
+cells introduce. Each pass refits after replacing the gaps with the GP
+posterior (conditional) mean under the current estimate – a correlation-aware
+fill, not the flat mean-imputation – using the same matrix-free PCG solve as
+[gp_predict()]. The expensive observed-cell solve runs only once per pass (not
+inside the optimiser), so it stays cheap, and it typically converges in 2-3
+passes to the estimate you would get with no missing data at all. It does not
+remove the intrinsic plug-in attenuation (conditioning on a noisy field rather
+than integrating the latent field out), only the part caused by the gaps.</p>
     </div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
