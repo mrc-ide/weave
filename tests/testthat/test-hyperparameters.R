@@ -70,6 +70,30 @@ test_that("refine validation and no-op behaviour", {
 })
 
 
+test_that("refine runs the conditional-mean fill loop", {
+  # Lightweight mechanics check (always runs, unlike the statistical test below):
+  # exercises the refinement E-step / loop on both gappy and complete data.
+  set.seed(1)
+  n <- 4; nt <- 12; period <- 52
+  coords <- data.frame(id = 1:n, lon = runif(n), lat = runif(n))
+  y <- stats::rpois(n * nt, 20)
+
+  # with gaps: the conditional-mean fill (pcg/kron_mv) is exercised
+  yg <- y; yg[c(3, 4, 15, 30)] <- NA
+  obs_gap <- data.frame(id = rep(1:n, each = nt), t = rep(1:nt, n), y_obs = yg)
+  est_gap <- infer_kernel_params(obs_gap, coords, nt = nt, period = period,
+                                 refine = TRUE, refine_iter = 2)
+  expect_equal(est_gap$convergence, 0)
+  expect_true(is.finite(est_gap$long_term_scale) && est_gap$long_term_scale > 0)
+
+  # no gaps: the fill short-circuits (early return), refine loop still runs
+  obs_full <- data.frame(id = rep(1:n, each = nt), t = rep(1:nt, n), y_obs = y)
+  est_full <- infer_kernel_params(obs_full, coords, nt = nt, period = period,
+                                  refine = TRUE, refine_iter = 2)
+  expect_equal(est_full$convergence, 0)
+})
+
+
 test_that("refine reduces the gap-induced temporal attenuation", {
   # GP truth with a long temporal scale; clustered missingness attenuates it,
   # and refinement should pull the estimate back toward the no-gap fit.
