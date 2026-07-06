@@ -1,11 +1,14 @@
-# Predict the latent rate and a count prediction interval (PCG)
+# Predict the latent rate and a count prediction interval (CG)
 
 Given kernel hyperparameters (e.g. from \[infer_kernel_params()\]),
 predicts the latent rate \\\lambda = e^{\mu_s + f\_{st}}\\ at every
 site-by-time cell by conditioning a separable Gaussian process on the
 observed counts only. The posterior mean is obtained from a single
-matrix-free PCG solve (so it is smooth and deterministic); the posterior
-variance is estimated from \`n_draws\` perturbation draws. The
+matrix-free CG solve (so it is smooth and deterministic). The posterior
+variance splits into an exact closed-form "no gaps" part (via the
+Kronecker eigendecomposition) plus a missing-data correction estimated
+from \`n_draws\` paired perturbation draws (a control variate; see
+\[gp_posterior_var()\]), so modest draw counts give tight intervals. The
 latent-rate posterior is then combined with Negative-Binomial
 observation noise (law of total variance, lognormal moment-match) to
 give a 95
@@ -23,7 +26,8 @@ gp_predict(
   r = NULL,
   value = "y_obs",
   standardise = TRUE,
-  pcg_tol = 1e-06,
+  cg_tol = 1e-06,
+  cg_draw_tol = 0.001,
   progress = TRUE
 )
 ```
@@ -59,11 +63,12 @@ gp_predict(
 
 - n_draws:
 
-  Number of posterior draws used to estimate the variance (the
-  prediction interval). Controls only the interval, not the mean. Use
-  \`0\` to return the smooth posterior-mean rate only (one solve, no
-  interval). Must be \`0\` or \`\>= 2\` – a variance needs at least two
-  draws.
+  Number of paired posterior draws used to estimate the missing-data
+  correction to the variance (the prediction interval). Controls only
+  the interval, not the mean. Use \`0\` to return the smooth
+  posterior-mean rate only (one solve, no interval). Because most of the
+  variance is computed exactly and the draws only estimate the gap
+  correction, modest values (25–100) already give tight intervals.
 
 - r:
 
@@ -80,9 +85,20 @@ gp_predict(
   Logical; standardise the plug-in field per site (default \`TRUE\`),
   matching \[infer_kernel_params()\].
 
-- pcg_tol:
+- cg_tol:
 
-  Convergence tolerance for the PCG solves.
+  Convergence tolerance for the single posterior-mean CG solve (the
+  deterministic part of the prediction).
+
+- cg_draw_tol:
+
+  Convergence tolerance for the \`n_draws\` perturbation-draw CG solves.
+  Deliberately looser than \`cg_tol\`: the draws only feed a Monte-Carlo
+  variance whose own relative error is \\\approx
+  1/\sqrt{2\\(n\_{draws}-1)}\\ (about 5 solver error below that is
+  wasted work. At the default \`1e-3\` the posterior sd typically
+  changes by well under 1 while the draw loop needs roughly half the CG
+  iterations.
 
 - progress:
 
@@ -94,7 +110,7 @@ gp_predict(
 ## Value
 
 A data frame with one row per cell and columns \`id\`, \`t\`, \`rate\`
-(posterior point estimate of \\\lambda\\), and – when \`n_draws \>= 2\`
+(posterior point estimate of \\\lambda\\), and – when \`n_draws \>= 1\`
 – \`lower\` and \`upper\` (the 95 used and \`n_draws\` are attached as
 attributes.
 

@@ -10,6 +10,7 @@
 <url><loc>https://mrc-ide.github.io/weave/index.html</loc></url>
 <url><loc>https://mrc-ide.github.io/weave/reference/Amv.html</loc></url>
 <url><loc>https://mrc-ide.github.io/weave/reference/build_plugin_field.html</loc></url>
+<url><loc>https://mrc-ide.github.io/weave/reference/cg.html</loc></url>
 <url><loc>https://mrc-ide.github.io/weave/reference/data_complete.html</loc></url>
 <url><loc>https://mrc-ide.github.io/weave/reference/data_missing.html</loc></url>
 <url><loc>https://mrc-ide.github.io/weave/reference/data_order_index.html</loc></url>
@@ -19,12 +20,11 @@
 <url><loc>https://mrc-ide.github.io/weave/reference/get_spatial_distance.html</loc></url>
 <url><loc>https://mrc-ide.github.io/weave/reference/get_temporal_distance.html</loc></url>
 <url><loc>https://mrc-ide.github.io/weave/reference/gp_marginal_loglik.html</loc></url>
+<url><loc>https://mrc-ide.github.io/weave/reference/gp_posterior_var.html</loc></url>
 <url><loc>https://mrc-ide.github.io/weave/reference/gp_predict.html</loc></url>
 <url><loc>https://mrc-ide.github.io/weave/reference/index.html</loc></url>
 <url><loc>https://mrc-ide.github.io/weave/reference/infer_kernel_params.html</loc></url>
-<url><loc>https://mrc-ide.github.io/weave/reference/kdiag_from_factors.html</loc></url>
 <url><loc>https://mrc-ide.github.io/weave/reference/kron_mv.html</loc></url>
-<url><loc>https://mrc-ide.github.io/weave/reference/pcg.html</loc></url>
 <url><loc>https://mrc-ide.github.io/weave/reference/periodic_kernel.html</loc></url>
 <url><loc>https://mrc-ide.github.io/weave/reference/quick_mvnorm.html</loc></url>
 <url><loc>https://mrc-ide.github.io/weave/reference/quick_mvnorm_chol.html</loc></url>

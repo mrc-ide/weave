@@ -108,7 +108,7 @@ Set \`refine\` to enable an EM-style refinement that removes the bias
 missing cells introduce. Each pass refits after replacing the gaps with
 the GP posterior (conditional) mean under the current estimate – a
 correlation-aware fill, not the flat mean-imputation – using the same
-matrix-free PCG solve as \[gp_predict()\]. The expensive observed-cell
+matrix-free CG solve as \[gp_predict()\]. The expensive observed-cell
 solve runs only once per pass (not inside the optimiser), so it stays
 cheap, and it typically converges in 2-3 passes to the estimate you
 would get with no missing data at all. It does not remove the intrinsic

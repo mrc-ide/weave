@@ -402,11 +402,29 @@ solve,</p>
 </annotation></semantics></math></p>
 <p>(<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>S</mi><annotation encoding="application/x-tex">S</annotation></semantics></math>
 selects the observed cells), so it is smooth and deterministic. The
-posterior <strong>variance</strong> is estimated from
-<code>n_draws</code> perturbation draws. The latent-rate posterior is
-then combined with Negative-Binomial observation noise, via the
-<strong>law of total variance</strong> and a lognormal moment-match, to
-give a 95% <strong>count</strong> prediction interval:</p>
+posterior <strong>variance</strong> splits into two parts:</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mrow><mi mathvariant="normal">Var</mi><mo>⁡</mo></mrow><mo stretchy="false" form="prefix">[</mo><mi>f</mi><mo stretchy="false" form="postfix">]</mo><mspace width="0.278em"></mspace><mo>=</mo><mspace width="0.278em"></mspace><munder><munder><msub><mi>V</mi><mtext mathvariant="normal">complete</mtext></msub><mo accent="true">⏟</mo></munder><mtext mathvariant="normal">exact, closed form</mtext></munder><mspace width="0.278em"></mspace><mo>+</mo><mspace width="0.278em"></mspace><munder><munder><msub><mi mathvariant="normal">Δ</mi><mtext mathvariant="normal">gaps</mtext></msub><mo accent="true">⏟</mo></munder><mrow><mrow><mtext mathvariant="normal">estimated from </mtext><mspace width="0.333em"></mspace></mrow><msub><mi>n</mi><mtext mathvariant="normal">draws</mtext></msub><mrow><mspace width="0.333em"></mspace><mtext mathvariant="normal"> paired draws</mtext></mrow></mrow></munder><mi>.</mi></mrow><annotation encoding="application/x-tex">
+\operatorname{Var}[f] \;=\;
+  \underbrace{V_{\text{complete}}}_{\text{exact, closed form}}
+  \;+\;
+  \underbrace{\Delta_{\text{gaps}}}_{\text{estimated from } n_{\text{draws}} \text{ paired draws}} .
+</annotation></semantics></math></p>
+<p>If <em>no</em> weeks were missing, the posterior variance
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>V</mi><mtext mathvariant="normal">complete</mtext></msub><mo>=</mo><mrow><mi mathvariant="normal">diag</mi><mo>⁡</mo></mrow><mspace width="-0.167em"></mspace><mo minsize="120%" maxsize="120%" stretchy="true" form="prefix">(</mo><mi>K</mi><mo>−</mo><mi>K</mi><mo stretchy="false" form="prefix">(</mo><mi>K</mi><mo>+</mo><mi>ν</mi><mi>I</mi><msup><mo stretchy="false" form="postfix">)</mo><mrow><mi>−</mi><mn>1</mn></mrow></msup><mi>K</mi><mo minsize="120%" maxsize="120%" stretchy="true" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">V_{\text{complete}} = \operatorname{diag}\!\big(K - K(K+\nu I)^{-1}K\big)</annotation></semantics></math>
+has an exact closed-form answer through the same Kronecker
+eigendecomposition used for fitting — no simulation needed. Missing
+weeks change that answer only <em>near the gaps</em>, so the draws are
+spent purely on the correction
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi mathvariant="normal">Δ</mi><mtext mathvariant="normal">gaps</mtext></msub><annotation encoding="application/x-tex">\Delta_{\text{gaps}}</annotation></semantics></math>:
+each perturbation draw (conditioned on the observed cells) is paired
+with an exact <em>complete-grid twin</em> built from the
+<strong>same</strong> random numbers, and the average of
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msubsup><mi>d</mi><mtext mathvariant="normal">obs</mtext><mn>2</mn></msubsup><mo>−</mo><msubsup><mi>d</mi><mtext mathvariant="normal">twin</mtext><mn>2</mn></msubsup></mrow><annotation encoding="application/x-tex">d_{\text{obs}}^2 - d_{\text{twin}}^2</annotation></semantics></math>
+estimates the correction. Sharing the randomness makes the difference
+nearly noise-free — a <strong>control variate</strong>. The latent-rate
+posterior is then combined with Negative-Binomial observation noise, via
+the <strong>law of total variance</strong> and a lognormal moment-match,
+to give a 95% <strong>count</strong> prediction interval:</p>
 <p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>𝔼</mi><mo stretchy="false" form="prefix">[</mo><mi>y</mi><mo stretchy="false" form="postfix">]</mo><mo>=</mo><mi>𝔼</mi><mo stretchy="false" form="prefix">[</mo><mi>λ</mi><mo stretchy="false" form="postfix">]</mo><mo>,</mo><mspace width="2.0em"></mspace><mrow><mi mathvariant="normal">Var</mi><mo>⁡</mo></mrow><mo stretchy="false" form="prefix">[</mo><mi>y</mi><mo stretchy="false" form="postfix">]</mo><mo>=</mo><munder><munder><mrow><mi>𝔼</mi><mspace width="-0.167em"></mspace><mo minsize="120%" maxsize="120%" stretchy="true" form="prefix">[</mo><mi>λ</mi><mo>+</mo><mstyle displaystyle="false"><mfrac><msup><mi>λ</mi><mn>2</mn></msup><mi>r</mi></mfrac></mstyle><mo minsize="120%" maxsize="120%" stretchy="true" form="postfix">]</mo></mrow><mo accent="true">⏟</mo></munder><mtext mathvariant="normal">count noise</mtext></munder><mo>+</mo><munder><munder><mrow><mrow><mi mathvariant="normal">Var</mi><mo>⁡</mo></mrow><mo stretchy="false" form="prefix">[</mo><mi>λ</mi><mo stretchy="false" form="postfix">]</mo></mrow><mo accent="true">⏟</mo></munder><mtext mathvariant="normal">rate uncertainty</mtext></munder><mi>.</mi></mrow><annotation encoding="application/x-tex">
 \mathbb{E}[y] = \mathbb{E}[\lambda], \qquad
 \operatorname{Var}[y] =
@@ -417,8 +435,19 @@ give a 95% <strong>count</strong> prediction interval:</p>
 <div class="intuition">
 <p>Because it conditions on the observed set, missing weeks are filled
 by genuine GP interpolation, and their interval can <em>widen over
-gaps</em> — unlike a smoother that quietly mean-imputes the gaps. A
-future count is uncertain for two reasons: we are unsure of the
+gaps</em> — unlike a smoother that quietly mean-imputes the gaps.</p>
+<p>The variance trick is worth restating in plain words. Most of the
+uncertainty is known <strong>exactly</strong> — the only thing
+simulation must measure is <em>how much the gaps inflate it</em>. So
+instead of asking the draws to estimate the whole variance (the old way,
+which needs hundreds of draws to average away the noise), each draw is
+compared against an exact “what if nothing were missing” twin that
+shares its random numbers. Almost all the randomness cancels in the
+comparison — like judging a diet by weighing the same person before and
+after, rather than comparing two different people. The result: weeks far
+from any gap get an essentially exact interval, and a handful of draws
+does the work that hundreds used to.</p>
+<p>A future count is uncertain for two reasons: we are unsure of the
 underlying rate, <strong>and</strong> counts scatter around any given
 rate. An honest interval includes both. The dispersion
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>r</mi><annotation encoding="application/x-tex">r</annotation></semantics></math>
@@ -435,18 +464,20 @@ interval (<code>lower</code>, <code>upper</code>). The dispersion
 <code>r</code> used is attached as an attribute.</p>
 <div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># condition the GP on the observed cells and predict every site-week.</span></span>
-<span><span class="co"># n_draws controls how many posterior draws estimate the interval width.</span></span>
+<span><span class="co"># n_draws controls the paired draws that estimate the gap correction to the</span></span>
+<span><span class="co"># variance -- the rest of the interval width is computed exactly, so modest</span></span>
+<span><span class="co"># values are plenty.</span></span>
 <span><span class="va">pred</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/gp_predict.html">gp_predict</a></span><span class="op">(</span><span class="va">obs_data</span>, <span class="va">coordinates</span>, hyperparameters <span class="op">=</span> <span class="va">est</span>,</span>
 <span>                   nt <span class="op">=</span> <span class="va">nt</span>, period <span class="op">=</span> <span class="va">period</span>, n_draws <span class="op">=</span> <span class="fl">100</span><span class="op">)</span></span>
 <span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">pred</span><span class="op">)</span>            <span class="co"># one row per cell: id, t, rate, and the 95% interval</span></span>
-<span><span class="co">#&gt;   id t     rate    lower    upper</span></span>
-<span><span class="co">#&gt; 1  1 1 21.33600 9.872323 41.07965</span></span>
-<span><span class="co">#&gt; 2  1 2 19.68997 9.108483 37.78028</span></span>
-<span><span class="co">#&gt; 3  1 3 17.55220 8.042258 33.81216</span></span>
-<span><span class="co">#&gt; 4  1 4 15.13836 6.798913 29.51283</span></span>
-<span><span class="co">#&gt; 5  1 5 12.70435 5.532921 25.26137</span></span>
-<span><span class="co">#&gt; 6  1 6 10.47212 4.377641 21.38402</span></span>
+<span><span class="co">#&gt;   id t     rate     lower    upper</span></span>
+<span><span class="co">#&gt; 1  1 1 21.33600 10.001670 40.53555</span></span>
+<span><span class="co">#&gt; 2  1 2 19.68996  9.186160 37.45235</span></span>
+<span><span class="co">#&gt; 3  1 3 17.55220  8.077434 33.66043</span></span>
+<span><span class="co">#&gt; 4  1 4 15.13835  6.806947 29.47672</span></span>
+<span><span class="co">#&gt; 5  1 5 12.70435  5.528393 25.28300</span></span>
+<span><span class="co">#&gt; 6  1 6 10.47211  4.369851 21.42437</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/attr.html" class="external-link">attr</a></span><span class="op">(</span><span class="va">pred</span>, <span class="st">"r"</span><span class="op">)</span>       <span class="co"># the NB dispersion used for the interval (estimated)</span></span>
 <span><span class="co">#&gt; [1] 13.02461</span></span></code></pre></div>
 <p>The blue line is the predicted mean rate and the blue band the 95%
@@ -467,7 +498,7 @@ the time.</p>
 <span></span>
 <span><span class="co"># coverage: fraction of held-out counts inside the 95% interval (target ~0.95)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="va">held_out</span><span class="op">$</span><span class="va">y</span> <span class="op">&gt;=</span> <span class="va">held_out</span><span class="op">$</span><span class="va">lower</span> <span class="op">&amp;</span> <span class="va">held_out</span><span class="op">$</span><span class="va">y</span> <span class="op">&lt;=</span> <span class="va">held_out</span><span class="op">$</span><span class="va">upper</span><span class="op">)</span></span>
-<span><span class="co">#&gt; [1] 0.9223947</span></span>
+<span><span class="co">#&gt; [1] 0.9201774</span></span>
 <span></span>
 <span><span class="co"># how well the predicted rate tracks the true rate at those weeks</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/stats/cor.html" class="external-link">cor</a></span><span class="op">(</span><span class="va">held_out</span><span class="op">$</span><span class="va">rate</span>, <span class="va">held_out</span><span class="op">$</span><span class="va">lambda</span><span class="op">)</span></span>

@@ -283,10 +283,29 @@ solve,
 ```
 
 ($`S`$ selects the observed cells), so it is smooth and deterministic.
-The posterior **variance** is estimated from `n_draws` perturbation
-draws. The latent-rate posterior is then combined with Negative-Binomial
-observation noise, via the **law of total variance** and a lognormal
-moment-match, to give a 95% **count** prediction interval:
+The posterior **variance** splits into two parts:
+
+``` math
+\operatorname{Var}[f] \;=\;
+  \underbrace{V_{\text{complete}}}_{\text{exact, closed form}}
+  \;+\;
+  \underbrace{\Delta_{\text{gaps}}}_{\text{estimated from } n_{\text{draws}} \text{ paired draws}} .
+```
+
+If *no* weeks were missing, the posterior variance
+$`V_{\text{complete}} = \operatorname{diag}\!\big(K - K(K+\nu I)^{-1}K\big)`$
+has an exact closed-form answer through the same Kronecker
+eigendecomposition used for fitting — no simulation needed. Missing
+weeks change that answer only *near the gaps*, so the draws are spent
+purely on the correction $`\Delta_{\text{gaps}}`$: each perturbation
+draw (conditioned on the observed cells) is paired with an exact
+*complete-grid twin* built from the **same** random numbers, and the
+average of $`d_{\text{obs}}^2 - d_{\text{twin}}^2`$ estimates the
+correction. Sharing the randomness makes the difference nearly
+noise-free — a **control variate**. The latent-rate posterior is then
+combined with Negative-Binomial observation noise, via the **law of
+total variance** and a lognormal moment-match, to give a 95% **count**
+prediction interval:
 
 ``` math
 \mathbb{E}[y] = \mathbb{E}[\lambda], \qquad
@@ -297,12 +316,26 @@ moment-match, to give a 95% **count** prediction interval:
 
 Because it conditions on the observed set, missing weeks are filled by
 genuine GP interpolation, and their interval can *widen over gaps* —
-unlike a smoother that quietly mean-imputes the gaps. A future count is
-uncertain for two reasons: we are unsure of the underlying rate, **and**
-counts scatter around any given rate. An honest interval includes both.
-The dispersion $`r`$ — how overdispersed the counts are — is the one
-quantity this quick method does not estimate from the likelihood, so it
-is recovered by method of moments from the observed counts.
+unlike a smoother that quietly mean-imputes the gaps.
+
+The variance trick is worth restating in plain words. Most of the
+uncertainty is known **exactly** — the only thing simulation must
+measure is *how much the gaps inflate it*. So instead of asking the
+draws to estimate the whole variance (the old way, which needs hundreds
+of draws to average away the noise), each draw is compared against an
+exact “what if nothing were missing” twin that shares its random
+numbers. Almost all the randomness cancels in the comparison — like
+judging a diet by weighing the same person before and after, rather than
+comparing two different people. The result: weeks far from any gap get
+an essentially exact interval, and a handful of draws does the work that
+hundreds used to.
+
+A future count is uncertain for two reasons: we are unsure of the
+underlying rate, **and** counts scatter around any given rate. An honest
+interval includes both. The dispersion $`r`$ — how overdispersed the
+counts are — is the one quantity this quick method does not estimate
+from the likelihood, so it is recovered by method of moments from the
+observed counts.
 
 ### The worked example
 
@@ -313,18 +346,20 @@ dispersion `r` used is attached as an attribute.
 ``` r
 
 # condition the GP on the observed cells and predict every site-week.
-# n_draws controls how many posterior draws estimate the interval width.
+# n_draws controls the paired draws that estimate the gap correction to the
+# variance -- the rest of the interval width is computed exactly, so modest
+# values are plenty.
 pred <- gp_predict(obs_data, coordinates, hyperparameters = est,
                    nt = nt, period = period, n_draws = 100)
 
 head(pred)            # one row per cell: id, t, rate, and the 95% interval
-#>   id t     rate    lower    upper
-#> 1  1 1 21.33600 9.872323 41.07965
-#> 2  1 2 19.68997 9.108483 37.78028
-#> 3  1 3 17.55220 8.042258 33.81216
-#> 4  1 4 15.13836 6.798913 29.51283
-#> 5  1 5 12.70435 5.532921 25.26137
-#> 6  1 6 10.47212 4.377641 21.38402
+#>   id t     rate     lower    upper
+#> 1  1 1 21.33600 10.001670 40.53555
+#> 2  1 2 19.68996  9.186160 37.45235
+#> 3  1 3 17.55220  8.077434 33.66043
+#> 4  1 4 15.13835  6.806947 29.47672
+#> 5  1 5 12.70435  5.528393 25.28300
+#> 6  1 6 10.47211  4.369851 21.42437
 attr(pred, "r")       # the NB dispersion used for the interval (estimated)
 #> [1] 13.02461
 ```
@@ -348,7 +383,7 @@ held_out <- merge(df_miss[, c("id", "t", "lambda", "y")], pred_df,
 
 # coverage: fraction of held-out counts inside the 95% interval (target ~0.95)
 mean(held_out$y >= held_out$lower & held_out$y <= held_out$upper)
-#> [1] 0.9223947
+#> [1] 0.9201774
 
 # how well the predicted rate tracks the true rate at those weeks
 cor(held_out$rate, held_out$lambda)
