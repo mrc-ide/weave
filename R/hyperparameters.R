@@ -4,7 +4,7 @@
 # Goal: a fast, deterministic estimate of the separable-GP kernel
 # hyperparameters that is more defensible than the cross-validated /
 # working-Gaussian approach in fit_hyperparameters.R, but does NOT require an
-# MCMC or the matrix-free PCG sampler. Some pragmatic approximation is fine.
+# MCMC or the matrix-free CG sampler. Some pragmatic approximation is fine.
 #
 # Idea: form a cheap *plug-in* latent field g directly from the counts
 # (per-site-centred log1p(y), see build_plugin_field), then fit the GP by
@@ -209,7 +209,7 @@ fit_kernel_field <- function(g, n, nt, coordinates, times, period, priors, log_s
 # with the GP posterior (conditional) mean given the observed cells under the
 # current hyperparameters `hp`. Observed cells keep their plug-in values. This is
 # exactly the posterior-mean solve gp_predict() does, reusing the same matrix-free
-# PCG machinery (pcg()/kron_mv()), so it costs one PCG solve -- not a dense
+# CG machinery (cg()/kron_mv()), so it costs one CG solve -- not a dense
 # (n*nt)-square factorisation. sigma2 cancels in the conditional mean, so the
 # fill is robust to the profiled-variance estimate.
 # -----------------------------------------------------------------------------
@@ -234,9 +234,8 @@ complete_field_cond_mean <- function(obs_data, coordinates, n, nt, period,
   time_mat  <- time_kernel(times, periodic_scale = hp$periodic_scale,
                            long_term_scale = hp$long_term_scale, period = period)
   noise_var <- hp$sigma2 * hp$nugget_ratio
-  kdiag     <- kdiag_from_factors(diag(space_mat), diag(time_mat), n, nt)
 
-  alpha  <- pcg(g_vec[obs_idx], obs_idx, N, space_mat, time_mat, noise_var, kdiag)
+  alpha  <- cg(g_vec[obs_idx], obs_idx, N, space_mat, time_mat, noise_var)
   f_mean <- kron_mv(fill_vector(alpha, obs_idx, N), space_mat, time_mat)
 
   g_vec[miss_idx] <- f_mean[miss_idx]
@@ -259,7 +258,7 @@ complete_field_cond_mean <- function(obs_data, coordinates, n, nt, period,
 #' Set `refine` to enable an EM-style refinement that removes the bias missing
 #' cells introduce. Each pass refits after replacing the gaps with the GP
 #' posterior (conditional) mean under the current estimate -- a correlation-aware
-#' fill, not the flat mean-imputation -- using the same matrix-free PCG solve as
+#' fill, not the flat mean-imputation -- using the same matrix-free CG solve as
 #' [gp_predict()]. The expensive observed-cell solve runs only once per pass (not
 #' inside the optimiser), so it stays cheap, and it typically converges in 2-3
 #' passes to the estimate you would get with no missing data at all. It does not

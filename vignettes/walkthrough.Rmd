@@ -399,8 +399,26 @@ solve,
 \]
 
 (\( S \) selects the observed cells), so it is smooth and deterministic. The
-posterior **variance** is estimated from `n_draws` perturbation draws. The
-latent-rate posterior is then combined with Negative-Binomial observation
+posterior **variance** splits into two parts:
+
+\[
+\operatorname{Var}[f] \;=\;
+  \underbrace{V_{\text{complete}}}_{\text{exact, closed form}}
+  \;+\;
+  \underbrace{\Delta_{\text{gaps}}}_{\text{estimated from } n_{\text{draws}} \text{ paired draws}} .
+\]
+
+If *no* weeks were missing, the posterior variance
+\( V_{\text{complete}} = \operatorname{diag}\!\big(K - K(K+\nu I)^{-1}K\big) \)
+has an exact closed-form answer through the same Kronecker eigendecomposition
+used for fitting — no simulation needed. Missing weeks change that answer only
+*near the gaps*, so the draws are spent purely on the correction
+\( \Delta_{\text{gaps}} \): each perturbation draw (conditioned on the observed
+cells) is paired with an exact *complete-grid twin* built from the **same**
+random numbers, and the average of
+\( d_{\text{obs}}^2 - d_{\text{twin}}^2 \) estimates the correction. Sharing
+the randomness makes the difference nearly noise-free — a **control variate**.
+The latent-rate posterior is then combined with Negative-Binomial observation
 noise, via the **law of total variance** and a lognormal moment-match, to give
 a 95% **count** prediction interval:
 
@@ -415,7 +433,20 @@ a 95% **count** prediction interval:
 ::: {.intuition}
 Because it conditions on the observed set, missing weeks are filled by genuine
 GP interpolation, and their interval can *widen over gaps* — unlike a smoother
-that quietly mean-imputes the gaps. A future count is uncertain for two
+that quietly mean-imputes the gaps.
+
+The variance trick is worth restating in plain words. Most of the uncertainty
+is known **exactly** — the only thing simulation must measure is *how much the
+gaps inflate it*. So instead of asking the draws to estimate the whole
+variance (the old way, which needs hundreds of draws to average away the
+noise), each draw is compared against an exact "what if nothing were missing"
+twin that shares its random numbers. Almost all the randomness cancels in the
+comparison — like judging a diet by weighing the same person before and after,
+rather than comparing two different people. The result: weeks far from any gap
+get an essentially exact interval, and a handful of draws does the work that
+hundreds used to.
+
+A future count is uncertain for two
 reasons: we are unsure of the underlying rate, **and** counts scatter around
 any given rate. An honest interval includes both. The dispersion \( r \) — how
 overdispersed the counts are — is the one quantity this quick method does not
@@ -431,7 +462,9 @@ attached as an attribute.
 
 ```{r predict}
 # condition the GP on the observed cells and predict every site-week.
-# n_draws controls how many posterior draws estimate the interval width.
+# n_draws controls the paired draws that estimate the gap correction to the
+# variance -- the rest of the interval width is computed exactly, so modest
+# values are plenty.
 pred <- gp_predict(obs_data, coordinates, hyperparameters = est,
                    nt = nt, period = period, n_draws = 100)
 
