@@ -36,10 +36,12 @@ since a reference). Must use the same `t` encoding as [infer_kernel_params()].}
 
 \item{period}{Period of the seasonal cycle, in the same units as `t`.}
 
-\item{n_draws}{Number of posterior draws used to estimate the variance
-(the prediction interval). Controls only the interval, not the mean. Use
-`0` to return the smooth posterior-mean rate only (one solve, no interval).
-Must be `0` or `>= 2` -- a variance needs at least two draws.}
+\item{n_draws}{Number of paired posterior draws used to estimate the
+missing-data correction to the variance (the prediction interval).
+Controls only the interval, not the mean. Use `0` to return the smooth
+posterior-mean rate only (one solve, no interval). Because most of the
+variance is computed exactly and the draws only estimate the gap
+correction, modest values (25--100) already give tight intervals.}
 
 \item{r}{Negative-Binomial dispersion for the count interval. If `NULL`
 (default) it is estimated by method of moments from the observed counts.}
@@ -67,7 +69,7 @@ knitr, logs and CI. Set `FALSE` to disable it entirely.}
 }
 \value{
 A data frame with one row per cell and columns `id`, `t`, `rate`
-  (posterior point estimate of \eqn{\lambda}), and -- when `n_draws >= 2` --
+  (posterior point estimate of \eqn{\lambda}), and -- when `n_draws >= 1` --
   `lower` and `upper` (the 95% count prediction interval). The dispersion `r`
   used and `n_draws` are attached as attributes.
 }
@@ -76,8 +78,11 @@ Given kernel hyperparameters (e.g. from [infer_kernel_params()]), predicts the
 latent rate \eqn{\lambda = e^{\mu_s + f_{st}}} at every site-by-time cell by
 conditioning a separable Gaussian process on the observed counts only. The
 posterior mean is obtained from a single matrix-free CG solve (so it is
-smooth and deterministic); the posterior variance is estimated from
-`n_draws` perturbation draws. The latent-rate posterior is then combined with
+smooth and deterministic). The posterior variance splits into an exact
+closed-form "no gaps" part (via the Kronecker eigendecomposition) plus a
+missing-data correction estimated from `n_draws` paired perturbation draws
+(a control variate; see [gp_posterior_var()]), so modest draw counts give
+tight intervals. The latent-rate posterior is then combined with
 Negative-Binomial observation noise (law of total variance, lognormal
 moment-match) to give a 95% count prediction interval.
 }

@@ -125,15 +125,18 @@ test_that("gp_predict models real t spacing, not the row index", {
 })
 
 
-test_that("gp_predict errors on n_draws = 1 and on missing coordinates", {
+test_that("gp_predict accepts n_draws = 1 and errors on missing coordinates", {
   n <- 4; nt <- 6; period <- 52
   coords <- data.frame(id = factor(1:n), lon = runif(n), lat = runif(n))
   obs <- make_obs(n, nt)
 
-  expect_error(
-    gp_predict(obs, coords, hp_fixed, nt = nt, period = period, n_draws = 1),
-    "n_draws"
-  )
+  # a single draw is enough: the variance is exact-plus-correction, not a
+  # sample variance, so it no longer needs two draws
+  out1 <- gp_predict(obs, coords, hp_fixed, nt = nt, period = period,
+                     n_draws = 1, progress = FALSE)
+  expect_true(all(c("lower", "upper") %in% names(out1)))
+  expect_true(all(out1$lower <= out1$upper))
+
   expect_error(
     gp_predict(obs, coords[1:3, ], hp_fixed, nt = nt, period = period, n_draws = 0),
     "coordinates"
@@ -176,6 +179,47 @@ test_that("cg warns when it fails to converge within maxit", {
        tol = 1e-12, maxit = 1),
     "did not converge"
   )
+})
+
+
+test_that("gp_posterior_var is exact when every cell is observed", {
+  set.seed(3)
+  n <- 4; nt <- 6; N <- n * nt
+  coords <- data.frame(id = 1:n, lon = runif(n), lat = runif(n))
+  space <- 1.3 * space_kernel(coords, length_scale = 1.5)
+  time  <- time_kernel(seq_len(nt), periodic_scale = 1, long_term_scale = 80,
+                       period = 52)
+  nu <- 0.2
+
+  # with no gaps each draw equals its complete-grid twin (up to CG tolerance),
+  # so the correction vanishes and the result is the exact closed form
+  v <- gp_posterior_var(seq_len(N), N, space, time, nu,
+                        chol(space), chol(time), n_draws = 2, tol = 1e-10)
+
+  K <- kronecker(space, time)
+  v_dense <- diag(K - K %*% solve(K + nu * diag(N), K))
+  expect_equal(v, v_dense, tolerance = 1e-6)
+})
+
+
+test_that("gp_posterior_var matches the dense answer with missing cells", {
+  set.seed(4)
+  n <- 4; nt <- 6; N <- n * nt
+  coords <- data.frame(id = 1:n, lon = runif(n), lat = runif(n))
+  space <- 1.3 * space_kernel(coords, length_scale = 1.5)
+  time  <- time_kernel(seq_len(nt), periodic_scale = 1, long_term_scale = 80,
+                       period = 52)
+  nu <- 0.2
+  obs_idx <- setdiff(seq_len(N), c(3, 10, 15, 16, 17))
+
+  v <- gp_posterior_var(obs_idx, N, space, time, nu,
+                        chol(space), chol(time), n_draws = 400, tol = 1e-8)
+
+  K <- kronecker(space, time)
+  A <- K[obs_idx, obs_idx] + nu * diag(length(obs_idx))
+  v_dense <- diag(K) - diag(K[, obs_idx] %*% solve(A, K[obs_idx, ]))
+  # Monte-Carlo correction -> statistical tolerance on the posterior sd
+  expect_equal(sqrt(v), sqrt(v_dense), tolerance = 0.05)
 })
 
 

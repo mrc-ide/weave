@@ -341,8 +341,13 @@ print("")
 #
 #   * posterior MEAN of the field -- a single CG solve, so the rate line is
 #     smooth and independent of the number of draws.
-#   * posterior VARIANCE          -- estimated from `n_draws` perturbation draws
-#     (one CG solve each; this is the expensive part).
+#   * posterior VARIANCE          -- an exact closed-form "no gaps" part (via
+#     the Kronecker eigendecomposition) plus a missing-data correction
+#     estimated from `n_draws` paired perturbation draws (one CG solve each;
+#     this is the expensive part). Each draw is paired with an exact
+#     complete-grid twin sharing its random numbers (a control variate), so
+#     most of the Monte-Carlo noise cancels and modest n_draws give tight
+#     intervals -- cells far from any gap are essentially exact.
 #
 # The latent-rate posterior is then combined with Negative-Binomial observation
 # noise (law of total variance + a lognormal moment-match) to give a 95% count
@@ -362,7 +367,7 @@ pred <- gp_predict(
   hyperparameters = est,
   nt = nt,
   period = period,
-  n_draws = 200
+  n_draws = 100
 )
 pred_df <- transform(pred, id = as.integer(id))
 cat(sprintf(
