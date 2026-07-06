@@ -2,7 +2,7 @@
 % Please edit documentation in R/predict.R
 \name{gp_predict}
 \alias{gp_predict}
-\title{Predict the latent rate and a count prediction interval (PCG)}
+\title{Predict the latent rate and a count prediction interval (CG)}
 \usage{
 gp_predict(
   obs_data,
@@ -14,7 +14,8 @@ gp_predict(
   r = NULL,
   value = "y_obs",
   standardise = TRUE,
-  pcg_tol = 1e-06,
+  cg_tol = 1e-06,
+  cg_draw_tol = 0.001,
   progress = TRUE
 )
 }
@@ -48,7 +49,16 @@ Must be `0` or `>= 2` -- a variance needs at least two draws.}
 \item{standardise}{Logical; standardise the plug-in field per site (default
 `TRUE`), matching [infer_kernel_params()].}
 
-\item{pcg_tol}{Convergence tolerance for the PCG solves.}
+\item{cg_tol}{Convergence tolerance for the single posterior-mean CG solve
+(the deterministic part of the prediction).}
+
+\item{cg_draw_tol}{Convergence tolerance for the `n_draws` perturbation-draw
+CG solves. Deliberately looser than `cg_tol`: the draws only feed a
+Monte-Carlo variance whose own relative error is
+\eqn{\approx 1/\sqrt{2\,(n_{draws}-1)}} (about 5% at 200 draws), so
+solver error below that is wasted work. At the default `1e-3` the
+posterior sd typically changes by well under 1% relative to a tight solve,
+while the draw loop needs roughly half the CG iterations.}
 
 \item{progress}{Logical; show a progress bar over the posterior-draw loop
 (the expensive part). Defaults to `TRUE`, but the bar is drawn only in an
@@ -65,7 +75,7 @@ A data frame with one row per cell and columns `id`, `t`, `rate`
 Given kernel hyperparameters (e.g. from [infer_kernel_params()]), predicts the
 latent rate \eqn{\lambda = e^{\mu_s + f_{st}}} at every site-by-time cell by
 conditioning a separable Gaussian process on the observed counts only. The
-posterior mean is obtained from a single matrix-free PCG solve (so it is
+posterior mean is obtained from a single matrix-free CG solve (so it is
 smooth and deterministic); the posterior variance is estimated from
 `n_draws` perturbation draws. The latent-rate posterior is then combined with
 Negative-Binomial observation noise (law of total variance, lognormal

@@ -1,19 +1,3 @@
-#' Kronecker diagonal of a separable kernel
-#'
-#' A helper: the diagonal of `space ⊗ time` without allocating the big dense
-#' `kronecker()` product.
-#'
-#' @param space_diag Space matrix diagonal
-#' @param time_diag Time matrix diagonal
-#' @param n Number of sites
-#' @param nt Number of times
-#'
-#' @returns Kronecker diagonal
-kdiag_from_factors <- function(space_diag, time_diag, n, nt) {
-  # time varies fastest (sites × times)
-  rep(space_diag, each = nt) * rep(time_diag, times = n)
-}
-
 #' Fast Kronecker–product matrix–vector multiply (times vary fastest)
 #'
 #' In plain terms: multiplies a big covariance `K = space ⊗ time` by a vector
@@ -79,16 +63,21 @@ Amv <- function(v, obs_idx, N, space_mat, time_mat, noise_var) {
   kron_mv(fill_vector(v, obs_idx, N), space_mat, time_mat)[obs_idx] + noise_var * v
 }
 
-#' Preconditioned Conjugate Gradient (PCG) solver for the observed system
+#' Conjugate Gradient (CG) solver for the observed system
 #'
 #' In plain terms: solves the big linear system that gives the GP weights using
 #' only matrix–vector products—no huge matrices, no explicit inverse.
 #'
 #' Technically: solves \eqn{(S K S^\top + \mathrm{diag}(\text{noise}))\,x = b}
-#' by PCG, using `Amv` for matrix–vector products and a Jacobi (diagonal)
-#' preconditioner \eqn{M^{-1} v \approx v / \mathrm{diag}(A)}, gathered once up
-#' front. Stops when the relative residual falls below `tol` or after `maxit`
-#' iterations (issues a warning on `maxit`).
+#' by plain CG, using `Amv` for matrix–vector products. Stops when the relative
+#' residual falls below `tol` or after `maxit` iterations (issues a warning on
+#' `maxit`).
+#'
+#' Deliberately unpreconditioned: the separable kernel is built from
+#' *correlation* matrices (unit diagonal plus a constant nugget) and the noise
+#' is a scalar, so \eqn{\mathrm{diag}(A)} is exactly constant. A Jacobi
+#' (diagonal) preconditioner therefore only rescales the residual and leaves
+#' the CG iterates unchanged -- it is an exact no-op here, so don't add one.
 #'
 #' @param b Right-hand side vector (observed length \eqn{m}).
 #' @param obs_idx Integer indices of observed entries in the full vector.
@@ -96,39 +85,34 @@ Amv <- function(v, obs_idx, N, space_mat, time_mat, noise_var) {
 #' @param space_mat Spatial kernel matrix.
 #' @param time_mat Temporal kernel matrix.
 #' @param noise_var Scalar or length-\eqn{m} nugget on the observed scale.
-#' @param kdiag_full Vector \eqn{\mathrm{diag}(K)} of length \eqn{N}.
 #' @param tol Relative residual tolerance for convergence (default `1e-8`).
 #' @param maxit Maximum number of iterations (default `10000`).
 #'
 #' @return Numeric solution vector `x` of length \eqn{m}.
-pcg <- function(b, obs_idx, N, space_mat, time_mat, noise_var, kdiag_full, tol = 1e-8, maxit = 10000) {
-  # Jacobi preconditioner diagonal: constant across iterations, so gather once.
-  precond <- kdiag_full[obs_idx] + noise_var + 1e-12
+cg <- function(b, obs_idx, N, space_mat, time_mat, noise_var, tol = 1e-8, maxit = 10000) {
   b_norm  <- sqrt(sum(b * b))
   x <- numeric(length(b))
   r <- b - Amv(x, obs_idx, N, space_mat, time_mat, noise_var)
-  z <- r / precond
-  p <- z
-  rz_old <- sum(r * z)
+  p <- r
+  rr_old <- sum(r * r)
   converged <- FALSE
   for (it in seq_len(maxit)) {
     Ap <- Amv(p, obs_idx, N, space_mat, time_mat, noise_var)
-    alpha <- rz_old / sum(p * Ap)
+    alpha <- rr_old / sum(p * Ap)
     x <- x + alpha * p
     r <- r - alpha * Ap
-    if (sqrt(sum(r * r)) <= tol * b_norm) {
+    rr_new <- sum(r * r)
+    if (sqrt(rr_new) <= tol * b_norm) {
       converged <- TRUE
       break
     }
-    z <- r / precond
-    rz_new <- sum(r * z)
-    beta <- rz_new / rz_old
-    p <- z + beta * p
-    rz_old <- rz_new
+    beta <- rr_new / rr_old
+    p <- r + beta * p
+    rr_old <- rr_new
   }
   if (!converged) {
     warning(sprintf(
-      "pcg() did not converge in %d iterations (residual %.2e, target %.2e).",
+      "cg() did not converge in %d iterations (residual %.2e, target %.2e).",
       maxit, sqrt(sum(r * r)), tol * b_norm
     ))
   }

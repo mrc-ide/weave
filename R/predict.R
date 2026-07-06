@@ -1,5 +1,5 @@
 # =============================================================================
-# GP prediction by preconditioned conjugate gradient (PCG).
+# GP prediction by conjugate gradient (CG).
 #
 # Companion to infer_kernel_params(): given estimated kernel hyperparameters,
 # predict the latent rate (and a count prediction interval) by conditioning on
@@ -7,12 +7,12 @@
 # interpolation and their predictive uncertainty widens, rather than being
 # mean-imputed as in a completed-grid smoother.
 #
-# Two pieces, both matrix-free (reusing pcg()/kron_mv()):
-#   * posterior MEAN of the field   -- a single PCG solve,
+# Two pieces, both matrix-free (reusing cg()/kron_mv()):
+#   * posterior MEAN of the field   -- a single CG solve,
 #       f_hat = K S^T (S K S^T + nu I)^{-1} g_obs,
 #     so it is exactly smooth and independent of the number of draws.
 #   * posterior VARIANCE of the field -- estimated from `n_draws` perturbation
-#     draws (one PCG solve each; this is the expensive part).
+#     draws (one CG solve each; this is the expensive part).
 #
 # The latent log-rate posterior (mean Z, variance Vz) is then turned into a
 # Negative-Binomial count prediction interval via the law of total variance and
@@ -32,33 +32,31 @@ gp_field_draw <- function(
   space_mat,
   time_mat,
   noise_var,
-  kdiag,
   Rs_chol,
   Rt_chol,
-  tol = 1e-6
+  tol = 1e-3
 ) {
   u <- quick_mvnorm_chol(Rs_chol, Rt_chol)
   eps <- stats::rnorm(length(obs_idx), sd = sqrt(noise_var))
-  alpha <- pcg(
+  alpha <- cg(
     (u[obs_idx] + eps) - g_obs,
     obs_idx,
     N,
     space_mat,
     time_mat,
     noise_var,
-    kdiag,
     tol = tol
   )
   u - kron_mv(fill_vector(alpha, obs_idx, N), space_mat, time_mat)
 }
 
 
-#' Predict the latent rate and a count prediction interval (PCG)
+#' Predict the latent rate and a count prediction interval (CG)
 #'
 #' Given kernel hyperparameters (e.g. from [infer_kernel_params()]), predicts the
 #' latent rate \eqn{\lambda = e^{\mu_s + f_{st}}} at every site-by-time cell by
 #' conditioning a separable Gaussian process on the observed counts only. The
-#' posterior mean is obtained from a single matrix-free PCG solve (so it is
+#' posterior mean is obtained from a single matrix-free CG solve (so it is
 #' smooth and deterministic); the posterior variance is estimated from
 #' `n_draws` perturbation draws. The latent-rate posterior is then combined with
 #' Negative-Binomial observation noise (law of total variance, lognormal
@@ -88,7 +86,15 @@ gp_field_draw <- function(
 #' @param value Name of the count column (default `"y_obs"`).
 #' @param standardise Logical; standardise the plug-in field per site (default
 #'   `TRUE`), matching [infer_kernel_params()].
-#' @param pcg_tol Convergence tolerance for the PCG solves.
+#' @param cg_tol Convergence tolerance for the single posterior-mean CG solve
+#'   (the deterministic part of the prediction).
+#' @param cg_draw_tol Convergence tolerance for the `n_draws` perturbation-draw
+#'   CG solves. Deliberately looser than `cg_tol`: the draws only feed a
+#'   Monte-Carlo variance whose own relative error is
+#'   \eqn{\approx 1/\sqrt{2\,(n_{draws}-1)}} (about 5% at 200 draws), so
+#'   solver error below that is wasted work. At the default `1e-3` the
+#'   posterior sd typically changes by well under 1% relative to a tight solve,
+#'   while the draw loop needs roughly half the CG iterations.
 #' @param progress Logical; show a progress bar over the posterior-draw loop
 #'   (the expensive part). Defaults to `TRUE`, but the bar is drawn only in an
 #'   interactive UTF-8 / truecolor terminal -- it stays silent in scripts,
@@ -111,7 +117,8 @@ gp_predict <- function(
   r = NULL,
   value = "y_obs",
   standardise = TRUE,
-  pcg_tol = 1e-6,
+  cg_tol = 1e-6,
+  cg_draw_tol = 1e-3,
   progress = TRUE
 ) {
   hp <- hyperparameters
@@ -192,7 +199,6 @@ gp_predict <- function(
   noise_var <- hp$sigma2 * hp$nugget_ratio
   Rs_chol <- chol(space_mat)
   Rt_chol <- chol(time_mat)
-  kdiag <- kdiag_from_factors(diag(space_mat), diag(time_mat), n, nt)
 
   # --- observed cells in the full (site-major, time-fastest) vector layout ---
   ok <- !is.na(obs_data[[value]])
@@ -204,16 +210,15 @@ gp_predict <- function(
   obs_idx <- which(as.vector(t(obs_grid)))
   g_obs <- as.vector(t(G))[obs_idx]
 
-  # --- posterior MEAN of the log-rate (single PCG solve, deterministic) ------
-  alpha0 <- pcg(
+  # --- posterior MEAN of the log-rate (single CG solve, deterministic) -------
+  alpha0 <- cg(
     g_obs,
     obs_idx,
     N,
     space_mat,
     time_mat,
     noise_var,
-    kdiag,
-    tol = pcg_tol
+    tol = cg_tol
   )
   f_mean <- kron_mv(fill_vector(alpha0, obs_idx, N), space_mat, time_mat)
   Zmat <- row_mean + row_sd * t(matrix(f_mean, nrow = nt, ncol = n)) # n x nt
@@ -237,15 +242,15 @@ gp_predict <- function(
         space_mat,
         time_mat,
         noise_var,
-        kdiag,
         Rs_chol,
         Rt_chol,
-        tol = pcg_tol
+        tol = cg_draw_tol
       )
       if (show_bar) pb$tick()
     }
     if (show_bar) pb$done()
-    vstd <- apply(Fd, 1, stats::var)
+    draw_mean <- rowMeans(Fd)
+    vstd <- rowSums((Fd - draw_mean)^2) / (n_draws - 1)
     Vzmat <- (row_sd^2) * t(matrix(vstd, nrow = nt, ncol = n))
 
     # --- dispersion r (method of moments) if not supplied --------------------

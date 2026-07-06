@@ -13,7 +13,7 @@
 #        Kronecker eigendecomposition gives the exact log-determinant and
 #        quadratic form in O(n^3 + nt^3), so the full (n*nt)-square covariance is
 #        never formed and the global variance is profiled out analytically.
-#     3. Predict the latent rate with gp_predict(): a matrix-free PCG posterior
+#     3. Predict the latent rate with gp_predict(): a matrix-free CG posterior
 #        that conditions on the observed cells, then turn it into a count
 #        prediction interval.
 #
@@ -104,7 +104,7 @@ observed_data <- function(data, p_one, p_switch) {
 # -----------------------------------------------------------------------------
 # 1. Controls
 # -----------------------------------------------------------------------------
-n <- 30 # number of sites (health facilities)
+n <- 100 # number of sites (health facilities)
 nt <- 52 * 5 # number of time points (3 yrs weekly)
 period <- 52 # seasonal period (weeks/cycle)
 
@@ -331,18 +331,18 @@ time_kernel_plot <- ggplot(
 
 print(space_kernel_plot)
 print(time_kernel_plot)
-
+print("")
 
 # -----------------------------------------------------------------------------
 # 6. Predict the latent rate and a count prediction interval
 # -----------------------------------------------------------------------------
 # gp_predict() conditions a separable GP on the OBSERVED cells only (it does not
-# mean-impute the gaps), reusing the matrix-free PCG machinery:
+# mean-impute the gaps), reusing the matrix-free CG machinery:
 #
-#   * posterior MEAN of the field -- a single PCG solve, so the rate line is
+#   * posterior MEAN of the field -- a single CG solve, so the rate line is
 #     smooth and independent of the number of draws.
 #   * posterior VARIANCE          -- estimated from `n_draws` perturbation draws
-#     (one PCG solve each; this is the expensive part).
+#     (one CG solve each; this is the expensive part).
 #
 # The latent-rate posterior is then combined with Negative-Binomial observation
 # noise (law of total variance + a lognormal moment-match) to give a 95% count
@@ -353,7 +353,7 @@ print(time_kernel_plot)
 # kernel a gap at one site is largely pinned down by other sites still reporting
 # those weeks, so the widening is largest for region-wide blackouts.)
 #
-# Cost scales steeply with the number of sites (each draw is a full PCG solve);
+# Cost scales steeply with the number of sites (each draw is a full CG solve);
 # reduce `n` at the top of the script or `n_draws` here to experiment quickly.
 # -----------------------------------------------------------------------------
 pred <- gp_predict(

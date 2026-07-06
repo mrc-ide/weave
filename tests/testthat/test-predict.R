@@ -163,18 +163,17 @@ test_that("gp_predict validates hyperparameters and nt, and runs unstandardised"
 })
 
 
-test_that("pcg warns when it fails to converge within maxit", {
+test_that("cg warns when it fails to converge within maxit", {
   set.seed(1)
   n <- 3; nt <- 3; N <- n * nt
   coords <- data.frame(id = 1:n, lon = runif(n), lat = runif(n))
   space <- space_kernel(coords, length_scale = 1.5)
   time  <- time_kernel(seq_len(nt), periodic_scale = 1, long_term_scale = 80,
                        period = 52)
-  kdiag <- kdiag_from_factors(diag(space), diag(time), n, nt)
 
   expect_warning(
-    pcg(stats::rnorm(N), seq_len(N), N, space, time, noise_var = 1e-6,
-        kdiag_full = kdiag, tol = 1e-12, maxit = 1),
+    cg(stats::rnorm(N), seq_len(N), N, space, time, noise_var = 1e-6,
+       tol = 1e-12, maxit = 1),
     "did not converge"
   )
 })
@@ -186,7 +185,7 @@ test_that("gp_predict posterior mean matches a dense GP computation", {
   obs <- make_obs(n, nt, missing = c(3, 10, 15))
 
   out <- gp_predict(obs, coords, hp_fixed, nt = nt, period = period,
-                    n_draws = 0, pcg_tol = 1e-11)
+                    n_draws = 0, cg_tol = 1e-11)
 
   # --- dense replication of the posterior-mean rate ------------------------
   ids <- sort(unique(obs$id)); times <- sort(unique(obs$t)); N <- n * nt
