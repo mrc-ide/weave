@@ -149,6 +149,39 @@ obs_data  <- observed_data(true_data)
 cat(sprintf("%.0f%% of weeks are missing\n", 100 * mean(is.na(obs_data$y_obs))))
 ```
 
+::: {.caveat}
+Two things the simulation glosses over for real data. First, `t` must be a
+numeric index whose *differences* encode real elapsed time — e.g. weeks since
+a reference date — and `period` must be in those same units; arbitrary
+indices (week-of-year that resets, row numbers) silently distort every
+temporal length-scale. Second, real data rarely arrives in this shape:
+`data_process()` turns one raw data frame into the `obs_data`, `coordinates`
+and `nt` used below — see
+[*Using weave with your own data*](data-preparation.html).
+:::
+
+The gaps are not scattered at random: they arrive in *clustered runs*, the
+way real reporting drops out — a facility goes quiet for a stretch, then
+comes back. Magenta marks the missing weeks:
+
+```{r missingness-map, echo = FALSE, fig.height = 3.8, fig.alt = "Heatmap of sites by weeks: observed weeks in grey, missing weeks in magenta, with the missing weeks forming horizontal clustered runs within sites"}
+miss_map <- data.frame(
+  id      = as.integer(obs_data$id),
+  t       = obs_data$t,
+  status  = ifelse(is.na(obs_data$y_obs), "missing", "observed")
+)
+ggplot(miss_map, aes(t, id, fill = status)) +
+  geom_tile() +
+  scale_fill_manual(values = c(observed = "grey85",
+                               missing = weave_cols[["held_out"]]),
+                    name = NULL) +
+  scale_y_continuous(breaks = seq(5, n, by = 5)) +
+  labs(x = "Week", y = "Site",
+       title = "Where the gaps are",
+       subtitle = "missing weeks (magenta) come in clustered runs, like real reporting dropouts") +
+  theme_weave()
+```
+
 Here are the first four sites. The **navy line** is the true underlying mean
 (\( \lambda = e^{\mu_s + f_{st}} \)); **grey points** are the counts we
 actually observe; and **magenta points** are the *held-out truth* at the weeks
@@ -181,7 +214,7 @@ ggplot() +
   theme_weave()
 ```
 
-## 2. Step 1 — a quick "plug-in" latent field
+## 2. A quick "plug-in" latent field
 
 ::: {.maths}
 We cannot see the latent field \( f \) directly, so we build a cheap stand-in
@@ -227,13 +260,16 @@ plot_df <- rbind(
 )
 ggplot(plot_df, aes(t, value, colour = type)) +
   geom_line(linewidth = 0.8) +
-  scale_colour_manual(values = unname(weave_pal[c("violet", "blue")]), name = NULL) +
+  scale_colour_manual(values = c("true f (scaled)" = weave_cols[["truth"]],
+                                 "plug-in g" = weave_cols[["estimate"]]),
+                      name = NULL) +
   labs(x = "Week", y = "Standardised latent field",
-       title = "Site 1: plug-in field vs the truth") +
+       title = "Site 1: plug-in field vs the truth",
+       subtitle = "navy = true latent field · blue = plug-in estimate") +
   theme_weave()
 ```
 
-## 3. Step 2 — score a set of knobs with the marginal likelihood
+## 3. Score the knobs with the marginal likelihood
 
 ::: {.maths}
 For a candidate set of hyperparameters \( \theta \) the kernels give a
@@ -244,8 +280,9 @@ and a global variance \( \sigma^2 \):
 g \sim \mathcal{N}\!\Big(0,\ \sigma^2\big[(R_{\text{space}} \otimes R_{\text{time}}) + \eta I\big]\Big),
 \]
 
-where \( R \) are *correlation* kernels (unit diagonal). The score for
-\( \theta \) is the log marginal likelihood
+where \( R \) are *correlation* kernels (unit diagonal). Writing \( K \) for
+this whole covariance and \( N = n \cdot n_t \) for the number of cells, the
+score for \( \theta \) is the log marginal likelihood
 
 \[
 \log p(g \mid \theta) = -\tfrac{1}{2}\Big(\log|K| + g^\top K^{-1} g + N\log 2\pi\Big).
@@ -253,6 +290,11 @@ where \( R \) are *correlation* kernels (unit diagonal). The score for
 
 We pick the \( \theta \) that maximises this. The variance \( \sigma^2 \) has a
 closed-form optimum, so we "profile" it out and never search over it.
+
+Strictly, the score also includes weakly informative log-normal priors on the
+four parameters (`default_kernel_priors()`), so the estimate is a MAP rather
+than a pure maximum likelihood — mild regularisation that keeps weakly
+identified parameters (notably `long_term_scale`) off the boundary.
 :::
 
 ::: {.intuition}
@@ -267,7 +309,7 @@ kernel would have to explain the noisy plug-in field with smoothness alone,
 badly distorting the length-scales.
 :::
 
-## 4. Step 3 — why it is fast: the Kronecker trick
+## 4. Why it is fast: the Kronecker trick
 
 ::: {.maths}
 The full covariance is \( (n \cdot n_t) \times (n \cdot n_t) \) — here
@@ -277,8 +319,10 @@ eigendecomposing the *small* factors
 \( R_{\text{time}} = U_t \Lambda_t U_t^\top \) (size \( n_t \)) is enough:
 
 \[
-\log|K + \eta I| = \sum_{i,j} \log(a_i b_j + \eta), \qquad
-g^\top (K + \eta I)^{-1} g = \sum_{i,j} \frac{G_{ij}^2}{a_i b_j + \eta},
+\log\bigl|R_{\text{space}} \otimes R_{\text{time}} + \eta I\bigr|
+  = \sum_{i,j} \log(a_i b_j + \eta), \qquad
+g^\top \bigl(R_{\text{space}} \otimes R_{\text{time}} + \eta I\bigr)^{-1} g
+  = \sum_{i,j} \frac{G_{ij}^2}{a_i b_j + \eta},
 \]
 
 with \( a_i, b_j \) the eigenvalues, \( G = U_s^\top F U_t \), and \( F \) the
@@ -293,7 +337,39 @@ of one enormous matrix we juggle two small ones — one for space, one for time
 the estimate takes a second rather than hours.
 :::
 
-## 5. Step 4 — fit, and check against the truth
+The structure is easiest to see. Below is the full space-time covariance for
+a toy problem of 3 sites × 8 weeks: a 24 × 24 matrix, but built entirely from
+a 3 × 3 spatial kernel and an 8 × 8 temporal one. Each 8 × 8 block is the
+temporal kernel scaled by one entry of the spatial kernel — the whole matrix
+never needs to exist:
+
+```{r kron-schematic, echo = FALSE, fig.height = 4.4, fig.alt = "Heatmap of a 24-by-24 Kronecker-product covariance matrix showing a 3-by-3 grid of 8-by-8 blocks; each block is the temporal kernel scaled by one spatial kernel entry"}
+n_toy <- 3; nt_toy <- 8
+coords_toy <- data.frame(id = 1:n_toy, lon = c(0, 1, 4), lat = c(0, 1, 0))
+Ks_toy <- space_kernel(coords_toy, length_scale = 2)
+Kt_toy <- time_kernel(1:nt_toy, periodic_scale = 1, long_term_scale = 50,
+                      period = 8)
+K_toy  <- kronecker(Ks_toy, Kt_toy)
+
+kron_df <- expand.grid(row = 1:(n_toy * nt_toy), col = 1:(n_toy * nt_toy))
+kron_df$value <- as.vector(K_toy)
+
+ggplot(kron_df, aes(col, row, fill = value)) +
+  geom_tile() +
+  geom_hline(yintercept = c(8.5, 16.5), colour = "white", linewidth = 0.8) +
+  geom_vline(xintercept = c(8.5, 16.5), colour = "white", linewidth = 0.8) +
+  scale_y_reverse() +
+  scale_fill_gradient(low = "#f7f1e8", high = weave_cols[["prediction"]],
+                      name = "covariance") +
+  coord_fixed() +
+  labs(x = NULL, y = NULL,
+       title = "The full covariance for 3 sites × 8 weeks",
+       subtitle = "each 8×8 block = temporal kernel × one spatial kernel entry") +
+  theme_weave() +
+  theme(axis.text = element_blank(), panel.grid.major = element_blank())
+```
+
+## 5. Fit, and check against the truth
 
 `infer_kernel_params()` does all of the above: build the plug-in field, then
 maximise the marginal likelihood over the three length-scales plus the nugget
@@ -311,7 +387,8 @@ two steps:
 
 - **E-step.** With the current hyperparameters, replace each missing week by its
   expected value under the model — the GP **conditional mean** given the weeks we
-  *did* observe (the same kriging solve `gp_predict()` performs).
+  *did* observe (the same conditional-mean solve `gp_predict()` performs;
+  "kriging", in geostatistics jargon).
 - **M-step.** Treat that completed grid as if it were fully observed and
   re-maximise the fast (Kronecker) marginal likelihood to get updated
   hyperparameters.
@@ -324,7 +401,7 @@ cause; the residual plug-in attenuation below — from conditioning on a noisy
 field rather than integrating it out — is a separate matter it does not fix.)
 :::
 
-```{r infer}
+```{r infer, warning = TRUE}
 # maximise the GP marginal likelihood to recover the three length-scales
 # (plus a noise/nugget ratio); the global variance sigma^2 is profiled out.
 # refine = TRUE fills the gaps with the GP conditional mean and refits, removing
@@ -344,7 +421,21 @@ data.frame(
 # the other two pieces estimation returns: the nugget and the profiled variance
 cat(sprintf("nugget ratio (noise/signal) = %.2f;  profiled sigma^2 = %.2f\n",
             est$nugget_ratio, est$sigma2))
+
+# est also carries the maximised score and the optimiser's convergence code
+cat(sprintf("log posterior = %.1f;  convergence = %d (0 = success)\n",
+            est$log_posterior, est$convergence))
 ```
+
+::: {.caveat}
+**At scale.** Estimation cost grows as \( O(n^3 + n_t^3) \). For very large
+site counts, `n_sites` fits the hyperparameters on a random site subsample —
+they are shared, population-level quantities, so a representative subsample
+estimates the same values at a fraction of the cost (set a seed for
+reproducibility; time points are never subsampled). Prediction cost is
+dominated by the interval draws, which parallelise — see
+[*Running predictions in parallel*](parallel.html).
+:::
 
 The clearest check is to draw the **fitted** kernels (blue) on top of the
 **true** ones (navy, dashed). If the method worked, they overlap.
@@ -398,8 +489,10 @@ solve,
 \hat{f} = K S^\top \bigl(S K S^\top + \nu I\bigr)^{-1} g_{\text{obs}},
 \]
 
-(\( S \) selects the observed cells), so it is smooth and deterministic. The
-posterior **variance** splits into two parts:
+where \( S \) simply picks out the observed cells and
+\( \nu = \sigma^2 \eta \) is the observation-noise variance implied by the
+fitted nugget ratio — so the mean is smooth and deterministic. The posterior
+**variance** splits into two parts:
 
 \[
 \operatorname{Var}[f] \;=\;
@@ -413,21 +506,41 @@ If *no* weeks were missing, the posterior variance
 has an exact closed-form answer through the same Kronecker eigendecomposition
 used for fitting — no simulation needed. Missing weeks change that answer only
 *near the gaps*, so the draws are spent purely on the correction
-\( \Delta_{\text{gaps}} \): each perturbation draw (conditioned on the observed
-cells) is paired with an exact *complete-grid twin* built from the **same**
-random numbers, and the average of
-\( d_{\text{obs}}^2 - d_{\text{twin}}^2 \) estimates the correction. Sharing
-the randomness makes the difference nearly noise-free — a **control variate**.
+\( \Delta_{\text{gaps}} \). Each perturbation draw (Papandreou & Yuille 2010)
+draws \( u \sim \mathcal{N}(0, K) \) and \( e \sim \mathcal{N}(0, \nu I) \)
+and forms
+
+\[
+d_{\text{obs}} = u - K S^\top \bigl(S K S^\top + \nu I\bigr)^{-1}
+  \bigl(S u + S e\bigr),
+\]
+
+which has exactly the posterior covariance of the field. It is paired with an
+exact *complete-grid twin* \( d_{\text{twin}} \) built from the **same**
+\( u, e \), and the average of \( d_{\text{obs}}^2 - d_{\text{twin}}^2 \)
+estimates the correction. Sharing the randomness makes the difference nearly
+noise-free — a **control variate**.
 The latent-rate posterior is then combined with Negative-Binomial observation
-noise, via the **law of total variance** and a lognormal moment-match, to give
-a 95% **count** prediction interval:
+noise, via the **law of total variance**, to give the count mean and variance
 
 \[
 \mathbb{E}[y] = \mathbb{E}[\lambda], \qquad
 \operatorname{Var}[y] =
   \underbrace{\mathbb{E}\!\big[\lambda + \tfrac{\lambda^2}{r}\big]}_{\text{count noise}}
-  + \underbrace{\operatorname{Var}[\lambda]}_{\text{rate uncertainty}} .
+  + \underbrace{\operatorname{Var}[\lambda]}_{\text{rate uncertainty}} ,
 \]
+
+and the 95% interval comes from a **lognormal moment-match** to that mean and
+variance:
+
+\[
+s^2 = \log\!\left(1 + \frac{\operatorname{Var}[y]}{\mathbb{E}[y]^2}\right),
+\qquad
+m = \log \mathbb{E}[y] - \tfrac{s^2}{2},
+\]
+
+with the interval given by the 2.5% and 97.5% quantiles of
+\( \text{Lognormal}(m, s^2) \).
 :::
 
 ::: {.intuition}
@@ -460,7 +573,7 @@ The call returns one row per site-week with the posterior `rate` and, because
 `n_draws >= 1`, a 95% interval (`lower`, `upper`). The dispersion `r` used is
 attached as an attribute.
 
-```{r predict}
+```{r predict, warning = TRUE}
 # condition the GP on the observed cells and predict every site-week.
 # n_draws controls the paired draws that estimate the gap correction to the
 # variance -- the rest of the interval width is computed exactly, so modest
@@ -558,3 +671,8 @@ that make it quick also limit it:
 For a quick, honest summary of the spatial and temporal correlation structure —
 or a sensible starting point for a fuller model — it does the job in about a
 second.
+
+## References
+
+Papandreou, G. and Yuille, A. L. (2010). Gaussian sampling by local
+perturbations. *Advances in Neural Information Processing Systems 23*.

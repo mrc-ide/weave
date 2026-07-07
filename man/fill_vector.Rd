@@ -15,9 +15,10 @@ full vector.}
 \item{N}{Total length of the full vector.}
 }
 \value{
-A numeric vector of length `N` with `x_obs` scattered at `obs_idx`.
+A numeric vector of length \code{N} with \code{x_obs} scattered at \code{obs_idx}.
 }
 \description{
 Put the observed entries back into their full-length vector,
 filling missing positions with zeros.
 }
+\keyword{internal}

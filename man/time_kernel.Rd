@@ -2,7 +2,7 @@
 % Please edit documentation in R/kernel.R
 \name{time_kernel}
 \alias{time_kernel}
-\title{Estimate the temporal kernel}
+\title{Build the temporal correlation matrix}
 \usage{
 time_kernel(
   times,
@@ -15,22 +15,23 @@ time_kernel(
 \arguments{
 \item{times}{A numeric vector of time indices.}
 
-\item{periodic_scale}{A positive numeric scalar controlling the periodic
-variation.}
+\item{periodic_scale}{A positive numeric scalar controlling how sharply
+correlation falls within each seasonal cycle: smaller values allow sharp
+seasonal peaks; larger values give a gentler, smoother cycle.}
 
-\item{long_term_scale}{A positive numeric scalar for the long-term length
-scale.}
+\item{long_term_scale}{A positive numeric scalar for the long-term
+length-scale.}
 
 \item{nugget}{A non-negative numeric scalar added to the diagonal for
 numerical stability.}
 
 \item{period}{A positive numeric scalar giving the period of the seasonal
-component.}
+component, in the same units as \code{times}.}
 }
 \value{
-A positive-definite matrix representing temporal covariance.
+A positive-definite matrix representing temporal correlation.
 }
 \description{
-Builds a temporal covariance matrix by combining periodic and
+Builds a temporal correlation matrix by combining periodic and
 long-term RBF components with a nugget term for numerical stability.
 }

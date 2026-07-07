@@ -32,8 +32,8 @@ across space and time, modelled as a separable Gaussian process — a spatial
 kernel combined with a temporal kernel (periodic season × long-term drift). In
 three steps it:
 
-1. **builds a quick plug-in field** from the counts (per-site standardised
-   `log(1 + y)`);
+1. **builds a quick rough estimate of the smooth signal** behind the counts
+   (per-site standardised `log(1 + y)` — the "plug-in field");
 2. **estimates the kernel hyperparameters** — how fast counts decorrelate
    across space, within the season, and over the long term — by maximising the
    Gaussian-process marginal likelihood, kept fast by the kernel's Kronecker
@@ -45,7 +45,7 @@ three steps it:
 
 ## Installation
 
-You can install the development version of weave from [GitHub](https://github.com/) with:
+You can install the development version of `weave` from [GitHub](https://github.com/) with:
 
 ``` r
 # install.packages("pak")
@@ -55,15 +55,25 @@ pak::pak("mrc-ide/weave")
 ## Getting started
 
 `weave` needs two inputs: `obs_data`, a data frame with columns `id` (site),
-`t` (week) and `y_obs` (the count, `NA` where missing); and `coordinates`,
-giving each site's `lon`/`lat`. The workflow is two calls — estimate the
+`t` (a numeric time index whose differences encode real elapsed time, e.g.
+weeks since a reference) and `y_obs` (the count, `NA` where missing); and
+`coordinates`, giving each site's `id` and `lon`/`lat`. If you are starting
+from one raw data frame, `data_process()` returns `obs_data`, `coordinates`
+and `nt` in exactly this shape. The workflow is then two calls — estimate the
 kernels, then predict:
 
 ``` r
 library(weave)
 
+prepared <- data_process(raw_data, facility_name)   # raw -> model-ready
+obs_data    <- prepared$obs_data
+coordinates <- prepared$coordinates
+nt          <- prepared$nt
+
 # 1. estimate the spatial + temporal kernel length-scales
-est <- infer_kernel_params(obs_data, coordinates, nt = nt, period = 52)
+#    (with missing weeks, refine = TRUE removes the gap-induced bias)
+est <- infer_kernel_params(obs_data, coordinates, nt = nt, period = 52,
+                           refine = TRUE)
 
 # 2. predict the rate, fill the gaps, and attach a 95% prediction interval
 pred <- gp_predict(obs_data, coordinates, hyperparameters = est,
@@ -80,4 +90,10 @@ prediction interval.
 - [The weave walkthrough](https://mrc-ide.github.io/weave/articles/walkthrough.html)
   — the full method worked end to end, from estimating the kernels to predicting
   rates with honest uncertainty.
+- [Using weave with your own data](https://mrc-ide.github.io/weave/articles/data-preparation.html)
+  — preparing raw data with `data_process()`, encoding time correctly, and
+  predicting beyond the observed weeks.
+- [Running predictions in parallel](https://mrc-ide.github.io/weave/articles/parallel.html)
+  — one line of setup to spread the prediction draws across CPU cores;
+  identical results.
 

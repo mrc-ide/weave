@@ -2,18 +2,28 @@
 % Please edit documentation in R/sample.R
 \name{quick_mvnorm}
 \alias{quick_mvnorm}
-\title{Quick multivariate normal samples over two dimensions}
+\title{Quick multivariate normal draw over two dimensions}
 \usage{
 quick_mvnorm(space, time)
 }
 \arguments{
-\item{space}{Space kernel matrix}
+\item{space}{Space kernel matrix.}
 
-\item{time}{Time kernel matrix}
+\item{time}{Time kernel matrix.}
+}
+\value{
+A numeric vector of length \code{nrow(space) * nrow(time)}, ordered
+site by site with time varying fastest (matching
+\code{kronecker(space, time)}).
 }
 \description{
-This is equivalent to estimating the full spatio-temporal covariance matrix
-and sampling from the multivariate normal distribution:
-full_k <- kronecker(dist_k, time_k)
-f  <- mvrnorm(1, rep(0, n * nt), full_k)
+Draws one sample from a zero-mean Gaussian with separable space-time
+covariance, without ever forming the full matrix. This is equivalent to
+forming the full spatio-temporal covariance and drawing from the
+multivariate normal distribution:
+}
+\details{
+\if{html}{\out{<div class="sourceCode r">}}\preformatted{full_k <- kronecker(space, time)
+f <- MASS::mvrnorm(1, rep(0, nrow(space) * nrow(time)), full_k)
+}\if{html}{\out{</div>}}
 }

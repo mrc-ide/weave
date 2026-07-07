@@ -18,4 +18,29 @@ articles:
   contents:
   - gaussian-processes
   - walkthrough
+  - data-preparation
   - parallel
+
+reference:
+- title: Core workflow
+  desc: Prepare the data, estimate the kernel hyperparameters, predict.
+  contents:
+  - data_process
+  - infer_kernel_params
+  - gp_predict
+- title: Kernels and distances
+  contents:
+  - space_kernel
+  - time_kernel
+  - rbf_kernel
+  - periodic_kernel
+  - get_spatial_distance
+  - get_temporal_distance
+- title: Building blocks
+  desc: The pieces the workflow is assembled from, exported for direct use.
+  contents:
+  - build_plugin_field
+  - gp_marginal_loglik
+  - default_kernel_priors
+  - quick_mvnorm
+  - quick_mvnorm_chol

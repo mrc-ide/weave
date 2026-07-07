@@ -1,0 +1,157 @@
+---
+title: "Using weave with your own data"
+output:
+  rmarkdown::html_vignette:
+    css: weave.css
+    toc: true
+    toc_depth: 2
+vignette: >
+  %\VignetteIndexEntry{Using weave with your own data}
+  %\VignetteEncoding{UTF-8}
+  %\VignetteEngine{knitr::rmarkdown}
+editor_options:
+  markdown:
+    wrap: 72
+---
+
+```{r, include = FALSE}
+source("_common.R")
+set.seed(20260707)
+```
+
+```{r setup}
+library(weave)
+```
+
+The [walkthrough](walkthrough.html) works on simulated data that arrives in
+exactly the shape the model functions expect. Real data rarely does. This
+article covers the practical on-ramp: preparing a raw data frame with
+`data_process()`, encoding time correctly, what the coordinates mean, and how
+to predict beyond the weeks you observed.
+
+## 1. From a raw data frame to model-ready inputs
+
+`infer_kernel_params()` and `gp_predict()` need two objects:
+
+* `obs_data` — one row per site-week, with a factor `id`, a numeric time
+  `t`, and the count `y_obs` (`NA` where missing);
+* `coordinates` — one row per site, with `id`, `lon`, `lat`.
+
+`data_process()` builds both from a single raw data frame. It expects columns
+`t` (time), `n` (the count), `lat` and `lon`, plus any columns that together
+identify a site — passed as bare names:
+
+```{r raw-data}
+# a raw extract: two regions, facilities reporting weekly counts, some weeks
+# absent entirely (never recorded) and note facility C only starts at week 4
+raw <- data.frame(
+  region   = rep(c("North", "North", "South"), each = 6),
+  facility = rep(c("A", "B", "C"), each = 6),
+  t        = c(1:6,  1:6,  4:9),
+  n        = rpois(18, 20),
+  lat      = rep(c(0.10, 0.15, 0.90), each = 6),
+  lon      = rep(c(0.20, 0.25, 0.80), each = 6)
+)
+raw <- raw[-c(3, 9), ]   # drop two site-weeks entirely, as real data does
+
+prepared <- data_process(raw, region, facility)
+str(prepared, max.level = 1)
+```
+
+Three things happened:
+
+```{r prepared}
+head(prepared$obs_data)
+prepared$coordinates
+prepared$nt
+```
+
+* the site-by-time grid was **completed** — every site now has a row for
+  every time point that appears *anywhere* in the data, with `y_obs = NA`
+  where nothing was recorded (absent rows and `NA` counts are treated
+  identically: as missing). A week recorded by *no* site at all — week 3
+  above — simply stays out of the grid: the kernels measure real elapsed
+  time from `t`, so it is still modelled as a genuine gap;
+* each site got a factor `id` (the original identifying columns are kept);
+* sites that cannot be modelled — all counts missing, or missing
+  coordinates — are dropped, with a message telling you which
+  (`drop_zero = TRUE` also drops sites whose counts are all zero).
+
+The returned pieces feed straight into the two model calls:
+
+```{r fit, eval = FALSE}
+est <- infer_kernel_params(prepared$obs_data, prepared$coordinates,
+                           nt = prepared$nt, period = 52, refine = TRUE)
+pred <- gp_predict(prepared$obs_data, prepared$coordinates,
+                   hyperparameters = est, nt = prepared$nt, period = 52)
+```
+
+## 2. Encoding time correctly
+
+`t` is not just a label: its *differences* are the distances the temporal
+kernel sees. Three rules keep it honest:
+
+* **Use a numeric index whose steps mirror real elapsed time** — e.g. weeks
+  since the first week of the series (`1, 2, 3, ...` for consecutive weeks),
+  or days since a reference date. A fortnight-long gap between two reports
+  should show up as a difference of 2 weeks, not 1 row.
+* **Never use an index that resets**, like week-of-year: week 52 of one year
+  and week 1 of the next would look 51 weeks apart instead of adjacent.
+* **`period` is in the same units as `t`** — weekly data with a yearly
+  season means `period = 52`; daily data means `period = 365.25`.
+
+Uneven spacing is fine — monthly data, or a mix of reporting frequencies,
+just needs `t` values whose gaps reflect the real calendar. Both
+`infer_kernel_params()` and `gp_predict()` must be given the *same* `t`
+encoding, since the hyperparameters are estimated on that axis.
+
+## 3. What the coordinates mean
+
+Spatial distance is plain **Euclidean distance in the units of `lon`/`lat`**
+— there is no great-circle correction. Two consequences:
+
+* the fitted `length_scale` is in those units (degrees, if you pass raw
+  longitude/latitude);
+* one degree of longitude shrinks with latitude, so for a large study area
+  or one far from the equator, **project the coordinates first** (e.g. to
+  kilometres with a suitable local projection) and interpret `length_scale`
+  in km.
+
+For the small, near-equatorial extents typical of a single country or
+region, raw degrees are usually an acceptable approximation.
+
+## 4. Predicting beyond the observed weeks
+
+`gp_predict()` predicts at every `(id, t)` cell present in `obs_data`. To
+get predictions for weeks with no data anywhere — filling the future, or a
+gap before the series starts — append rows with `NA` counts for those weeks
+(for every site) and increase `nt` to match:
+
+```{r forecast, eval = FALSE}
+obs <- prepared$obs_data
+future_weeks <- (max(obs$t) + 1):(max(obs$t) + 8)      # 8 weeks ahead
+extra <- expand.grid(id = levels(obs$id), t = future_weeks)
+extra$y_obs <- NA
+
+obs_extended <- rbind(obs[, c("id", "t", "y_obs")], extra)
+nt_extended  <- length(unique(obs_extended$t))
+
+pred <- gp_predict(obs_extended, prepared$coordinates, hyperparameters = est,
+                   nt = nt_extended, period = 52)
+```
+
+The prediction interval widens with distance from the data, as it should.
+Treat genuine extrapolation with the usual caution: beyond the observed
+range the GP leans increasingly on the fitted seasonal shape and long-term
+drift rather than on evidence.
+
+## 5. Scaling up
+
+* **Estimation** costs \( O(n^3 + n_t^3) \) in the site and time counts. For
+  very large site counts, pass `n_sites` to `infer_kernel_params()`: the
+  hyperparameters are shared, population-level quantities, so a random site
+  subsample estimates the same values at a fraction of the cost (set a seed
+  first for reproducibility; time points are never subsampled).
+* **Prediction** cost is dominated by the interval draws, which parallelise
+  across CPU cores with one line of setup — see
+  [*Running predictions in parallel*](parallel.html).

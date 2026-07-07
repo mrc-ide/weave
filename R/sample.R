@@ -1,12 +1,21 @@
-#' Quick multivariate normal samples over two dimensions
+#' Quick multivariate normal draw over two dimensions
 #'
-#' This is equivalent to estimating the full spatio-temporal covariance matrix
-#' and sampling from the multivariate normal distribution:
-#' full_k <- kronecker(dist_k, time_k)
-#' f  <- mvrnorm(1, rep(0, n * nt), full_k)
+#' Draws one sample from a zero-mean Gaussian with separable space-time
+#' covariance, without ever forming the full matrix. This is equivalent to
+#' forming the full spatio-temporal covariance and drawing from the
+#' multivariate normal distribution:
 #'
-#' @param space Space kernel matrix
-#' @param time  Time kernel matrix
+#' ```r
+#' full_k <- kronecker(space, time)
+#' f <- MASS::mvrnorm(1, rep(0, nrow(space) * nrow(time)), full_k)
+#' ```
+#'
+#' @param space Space kernel matrix.
+#' @param time Time kernel matrix.
+#'
+#' @return A numeric vector of length `nrow(space) * nrow(time)`, ordered
+#'   site by site with time varying fastest (matching
+#'   `kronecker(space, time)`).
 #' @export
 quick_mvnorm <- function(space, time) {
   n_sites <- nrow(space)
@@ -29,15 +38,21 @@ quick_mvnorm <- function(space, time) {
 }
 
 
-#' Quick multivariate normal samples over two dimensions (cholesky precomputed)
+#' Quick multivariate normal draw over two dimensions (Cholesky precomputed)
 #'
-#' This is equivalent to estimating the full spatio-temporal covariance matrix
-#' and sampling from the multivariate normal distribution:
-#' full_k <- kronecker(dist_k, time_k)
-#' f  <- mvrnorm(1, rep(0, n * nt), full_k)
+#' As [quick_mvnorm()], but taking precomputed Cholesky factors so repeated
+#' draws (e.g. the perturbation draws in [gp_predict()]) skip the
+#' factorisation cost.
 #'
-#' @param space_chol Cholesky decomposition of sapace kernel matrix
-#' @param time_chol  Cholesky decomposition of time kernel matrix
+#' @param space_chol Upper-triangular Cholesky factor of the space kernel
+#'   matrix, as returned by [chol()]. Passing the lower-triangular factor
+#'   gives silently wrong draws.
+#' @param time_chol Upper-triangular Cholesky factor of the time kernel
+#'   matrix, as returned by [chol()].
+#'
+#' @return A numeric vector of length `nrow(space_chol) * nrow(time_chol)`,
+#'   ordered site by site with time varying fastest (matching
+#'   `kronecker(space, time)`).
 #' @export
 quick_mvnorm_chol <- function(space_chol, time_chol) {
   n_sites <- nrow(space_chol)

@@ -2,28 +2,30 @@
 % Please edit documentation in R/cg.R
 \name{kron_mv}
 \alias{kron_mv}
-\title{Fast Kronecker–product matrix–vector multiply (times vary fastest)}
+\title{Fast Kronecker-product matrix-vector multiply (times vary fastest)}
 \usage{
 kron_mv(v, space, time)
 }
 \arguments{
-\item{v}{Numeric vector of length `nrow(space) * nrow(time)`, ordered with
+\item{v}{Numeric vector of length \code{nrow(space) * nrow(time)}, ordered with
 times varying fastest within site.}
 
 \item{space}{Spatial kernel matrix (size \eqn{n \times n}). Must be
 symmetric (kernels are, by construction) -- the implementation relies on
-`t(space) == space`.}
+\code{t(space) == space}.}
 
 \item{time}{Temporal kernel matrix (size \eqn{nt \times nt}).}
 }
 \value{
-A numeric vector the same length as `v`.
+A numeric vector the same length as \code{v}.
 }
 \description{
-In plain terms: multiplies a big covariance `K = space ⊗ time` by a vector
-without ever forming `K`, using a reshape–multiply–reshape trick.
+In plain terms: multiplies a big covariance
+\eqn{K = \mathrm{space} \otimes \mathrm{time}} by a vector without ever
+forming \code{K}, using a reshape-multiply-reshape trick.
 }
 \details{
-Technically: for \eqn{v = \mathrm{vec}(X^\top)} with `times` varying fastest,
+Technically: for \eqn{v = \mathrm{vec}(X^\top)} with \code{times} varying fastest,
 computes \eqn{(space \otimes time)\,v = \mathrm{vec}\!\big((space\,X\,time^\top)^\top\big)}.
 }
+\keyword{internal}

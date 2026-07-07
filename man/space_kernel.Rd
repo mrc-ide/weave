@@ -2,22 +2,24 @@
 % Please edit documentation in R/kernel.R
 \name{space_kernel}
 \alias{space_kernel}
-\title{Estimate the spatial kernel}
+\title{Build the spatial correlation matrix}
 \usage{
 space_kernel(coordinates, length_scale, nugget = 1e-09)
 }
 \arguments{
-\item{coordinates}{A data frame with columns `lon` and `lat` in degrees.}
+\item{coordinates}{A data frame with columns \code{lon} and \code{lat}.}
 
-\item{length_scale}{A positive numeric scalar for the spatial length scale.}
+\item{length_scale}{A positive numeric scalar for the spatial length-scale.}
 
 \item{nugget}{A non-negative numeric scalar added to the diagonal for
 numerical stability.}
 }
 \value{
-A positive-definite matrix representing spatial covariance.
+A positive-definite matrix representing spatial correlation.
 }
 \description{
-Builds a spatial covariance matrix using an RBF kernel with a nugget
-term for numerical stability.
+Builds a spatial correlation matrix using an RBF kernel with a nugget
+term for numerical stability. Distances are Euclidean in the coordinate
+units (see \code{\link[=get_spatial_distance]{get_spatial_distance()}}), so \code{length_scale} is in those same
+units.
 }

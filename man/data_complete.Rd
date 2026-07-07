@@ -7,16 +7,17 @@
 data_complete(data, ...)
 }
 \arguments{
-\item{data}{A data frame containing site identifiers, time `t`,
-counts `n`, and coordinates `lat` and `lon`.}
+\item{data}{A data frame containing site identifiers, time \code{t},
+counts \code{n}, and coordinates \code{lat} and \code{lon}.}
 
-\item{...}{Columns identifying sites passed to [dplyr::group_by()]
-(unquoted).}
+\item{...}{Bare (unquoted) column names that jointly identify a site,
+e.g. \verb{region, facility_name}.}
 }
 \value{
 A data frame with missing site-time combinations filled in and
-  `n` set to `NA`.
+\code{n} set to \code{NA}.
 }
 \description{
-Adds rows for all combinations of site identifiers and time `t`.
+Adds rows for all combinations of site identifiers and time \code{t}.
 }
+\keyword{internal}

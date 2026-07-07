@@ -2,9 +2,9 @@
 # Quick, exact kernel-hyperparameter estimation.
 #
 # Goal: a fast, deterministic estimate of the separable-GP kernel
-# hyperparameters that is more defensible than the cross-validated /
-# working-Gaussian approach in fit_hyperparameters.R, but does NOT require an
-# MCMC or the matrix-free CG sampler. Some pragmatic approximation is fine.
+# hyperparameters that is more defensible than a cross-validated /
+# working-Gaussian approach, but does NOT require an MCMC or the matrix-free
+# CG sampler. Some pragmatic approximation is fine.
 #
 # Idea: form a cheap *plug-in* latent field g directly from the counts
 # (per-site-centred log1p(y), see build_plugin_field), then fit the GP by
@@ -38,10 +38,10 @@
 
 #' Default priors for the kernel hyperparameters
 #'
-#' Weakly-informative log-normal priors (i.e. Normal priors on the log scale) on
+#' Weakly informative log-normal priors (i.e. Normal priors on the log scale) on
 #' `length_scale`, `periodic_scale`, `long_term_scale` and the noise-to-signal
 #' ratio `nugget_ratio`. They act as mild regularisation on an otherwise
-#' maximum-likelihood fit, keeping weakly-identified parameters (notably
+#' maximum-likelihood fit, keeping weakly identified parameters (notably
 #' `long_term_scale`) away from the boundary.
 #'
 #' @return A named list of `list(meanlog, sdlog)` priors.
@@ -79,8 +79,9 @@ eig_sym <- function(K, floor = 1e-12) {
 #'
 #' Forms a cheap estimate of the latent log-intensity field as the per-site
 #' centred (and optionally scaled) `log1p` of the observed counts. Missing cells
-#' are mean-imputed (0 after centring) and therefore contribute nothing to the
-#' marginal likelihood.
+#' are filled with the per-site mean (zero after centring) -- a neutral fill
+#' that carries no signal of its own. See `refine = TRUE` in
+#' [infer_kernel_params()] for a correlation-aware fill.
 #'
 #' Per-site centring removes the site intercept `mu_s`; per-site scaling
 #' homogenises per-site variances so a single global `sigma^2` and the
@@ -129,7 +130,14 @@ build_plugin_field <- function(obs_data, n, nt, value = "y_obs", standardise = T
 #' global variance `sigma^2` is profiled out (concentrated log-likelihood) and
 #' the profiled value is attached as `attr(., "sigma2")`.
 #'
-#' @param g Plug-in field, length `n * nt`, ordered sites x times (time fastest).
+#' [infer_kernel_params()] maximises this quantity for you; call it directly
+#' when you want to score a candidate set of hyperparameters yourself (e.g.
+#' profiling a likelihood surface). The kernels should be correlation matrices
+#' (unit diagonal) as built by [space_kernel()] / [time_kernel()], decomposed
+#' with `eigen(., symmetric = TRUE)`.
+#'
+#' @param g Plug-in field, length `n * nt`, ordered sites x times (time
+#'   fastest), as returned by [build_plugin_field()].
 #' @param n Number of sites.
 #' @param nt Number of time points.
 #' @param eig_s Eigendecomposition (`eigen` object) of the spatial correlation
@@ -140,6 +148,17 @@ build_plugin_field <- function(obs_data, n, nt, value = "y_obs", standardise = T
 #'
 #' @return The concentrated log-likelihood (numeric scalar), with the profiled
 #'   `sigma2` attached as an attribute.
+#'
+#' @examples
+#' n <- 5; nt <- 20
+#' coords <- data.frame(id = 1:n, lon = runif(n), lat = runif(n))
+#' g <- stats::rnorm(n * nt)
+#' eig_s <- eigen(space_kernel(coords, length_scale = 1), symmetric = TRUE)
+#' eig_t <- eigen(time_kernel(1:nt, periodic_scale = 1, long_term_scale = 50,
+#'                            period = 52), symmetric = TRUE)
+#' ll <- gp_marginal_loglik(g, n, nt, eig_s, eig_t, eta = 0.1)
+#' ll
+#' attr(ll, "sigma2")  # the profiled global variance
 #' @export
 gp_marginal_loglik <- function(g, n, nt, eig_s, eig_t, eta) {
   F_mat <- t(matrix(g, nrow = nt, ncol = n))               # n x nt, time fastest
@@ -255,6 +274,12 @@ complete_field_cond_mean <- function(obs_data, coordinates, n, nt, period,
 #' wanted (e.g. as a starting point for a downstream sampler, or as a standalone
 #' summary).
 #'
+#' Strictly, the score maximised is the marginal likelihood *plus* weakly
+#' informative log-normal priors on the four parameters (a MAP estimate; see
+#' [default_kernel_priors()]). The priors act as mild regularisation that
+#' keeps weakly identified parameters -- notably `long_term_scale` -- away
+#' from the boundary; pass `priors` to change them.
+#'
 #' Set `refine` to enable an EM-style refinement that removes the bias missing
 #' cells introduce. Each pass refits after replacing the gaps with the GP
 #' posterior (conditional) mean under the current estimate -- a correlation-aware
@@ -270,8 +295,9 @@ complete_field_cond_mean <- function(obs_data, coordinates, n, nt, period,
 #'   real elapsed time, so gaps and uneven spacing between time points are
 #'   modelled as genuine time distances (use e.g. weeks or days since a
 #'   reference). [gp_predict()] must be given the same `t` encoding.
-#' @param coordinates Site coordinates (data frame with `lon`, `lat`), ordered
-#'   to match `sort(unique(obs_data$id))`.
+#' @param coordinates Site coordinates: a data frame with `id`, `lon`, `lat`,
+#'   one row per site in `obs_data` (rows are matched by `id`, so order does
+#'   not matter).
 #' @param nt Number of time points.
 #' @param period Period of the seasonal cycle, in the same units as `t`.
 #' @param value Name of the count column (default `"y_obs"`).
@@ -283,8 +309,8 @@ complete_field_cond_mean <- function(obs_data, coordinates, n, nt, period,
 #' @param n_sites Optional integer. If supplied and smaller than the number of
 #'   sites, the hyperparameters are estimated from a random subsample of this
 #'   many sites. The kernel hyperparameters are shared, population-level
-#'   quantities, so a representative site subsample estimates the same length
-#'   scales at a fraction of the \eqn{O(n^3)} cost -- useful for very large site
+#'   quantities, so a representative site subsample estimates the same
+#'   length-scales at a fraction of the \eqn{O(n^3)} cost -- useful for very large site
 #'   counts. Default `NULL` uses all sites. The subsample is drawn from the
 #'   current RNG state, so set a seed beforehand (e.g. [set.seed()]) for a
 #'   reproducible estimate. Note: this subsamples *sites* only, not time points
@@ -325,7 +351,7 @@ infer_kernel_params <- function(obs_data, coordinates, nt, period,
   coord_idx <- match(sort(unique(obs_data$id)), coordinates$id)
   if (anyNA(coord_idx)) {
     stop(
-      "`coordinates` has no row for every site `id` in `obs_data`.",
+      "`coordinates` is missing a row for one or more site `id`s in `obs_data`.",
       call. = FALSE
     )
   }

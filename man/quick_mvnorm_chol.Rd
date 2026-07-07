@@ -2,18 +2,25 @@
 % Please edit documentation in R/sample.R
 \name{quick_mvnorm_chol}
 \alias{quick_mvnorm_chol}
-\title{Quick multivariate normal samples over two dimensions (cholesky precomputed)}
+\title{Quick multivariate normal draw over two dimensions (Cholesky precomputed)}
 \usage{
 quick_mvnorm_chol(space_chol, time_chol)
 }
 \arguments{
-\item{space_chol}{Cholesky decomposition of sapace kernel matrix}
+\item{space_chol}{Upper-triangular Cholesky factor of the space kernel
+matrix, as returned by \code{\link[=chol]{chol()}}. Passing the lower-triangular factor
+gives silently wrong draws.}
 
-\item{time_chol}{Cholesky decomposition of time kernel matrix}
+\item{time_chol}{Upper-triangular Cholesky factor of the time kernel
+matrix, as returned by \code{\link[=chol]{chol()}}.}
+}
+\value{
+A numeric vector of length \code{nrow(space_chol) * nrow(time_chol)},
+ordered site by site with time varying fastest (matching
+\code{kronecker(space, time)}).
 }
 \description{
-This is equivalent to estimating the full spatio-temporal covariance matrix
-and sampling from the multivariate normal distribution:
-full_k <- kronecker(dist_k, time_k)
-f  <- mvrnorm(1, rep(0, n * nt), full_k)
+As \code{\link[=quick_mvnorm]{quick_mvnorm()}}, but taking precomputed Cholesky factors so repeated
+draws (e.g. the perturbation draws in \code{\link[=gp_predict]{gp_predict()}}) skip the
+factorisation cost.
 }

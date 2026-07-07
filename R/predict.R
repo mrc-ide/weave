@@ -55,11 +55,12 @@
 #' @param Rs_chol,Rt_chol Upper Cholesky factors of `space_mat` / `time_mat`.
 #' @param n_draws Number of paired draws for the missing-data correction.
 #' @param tol CG tolerance for the draw solves.
-#' @param progress_bar Optional progress bar (from [make_curve_bar()]); ticked
+#' @param progress_bar Optional progress bar (from `make_curve_bar()`); ticked
 #'   once per draw. Only effective under a single-worker plan (parallel
 #'   workers cannot tick a bar in the calling session).
 #'
 #' @return Numeric vector of length `N`: the posterior variance of the field.
+#' @keywords internal
 gp_posterior_var <- function(obs_idx, N, space_mat, time_mat, noise_var,
                              Rs_chol, Rt_chol, n_draws, tol = 1e-3,
                              progress_bar = NULL) {
@@ -127,6 +128,12 @@ gp_posterior_var <- function(obs_idx, N, space_mat, time_mat, noise_var,
 #' genuine GP interpolation and their prediction interval can widen over gaps --
 #' unlike a completed-grid smoother that mean-imputes the gaps.
 #'
+#' Predictions are made at every `(id, t)` cell present in `obs_data`. To
+#' predict at time points with no data anywhere (e.g. a future week), append
+#' rows with `NA` counts for those times (every site) and increase `nt`
+#' accordingly; the interval widens with distance from the data. Treat
+#' extrapolation beyond the observed range with the usual caution.
+#'
 #' @param obs_data Data frame with `id` (site), `t` (time) and a count column
 #'   named by `value` (`NA` where missing). `t` is a numeric time index whose
 #'   *differences* encode real elapsed time, so gaps and uneven spacing between
@@ -161,7 +168,7 @@ gp_posterior_var <- function(obs_idx, N, space_mat, time_mat, noise_var,
 #' @param progress Logical; show a progress bar over the posterior-draw loop
 #'   (the expensive part). Defaults to `TRUE`, but the bar is drawn only in an
 #'   interactive UTF-8 / truecolor terminal -- it stays silent in scripts,
-#'   knitr, logs and CI. Under a multi-worker [future::plan()] the bar is
+#'   knitr, logs, and CI. Under a multi-worker [future::plan()] the bar is
 #'   suppressed (workers cannot tick it). Set `FALSE` to disable it entirely.
 #'
 #' @section Parallel execution:
@@ -188,7 +195,8 @@ gp_posterior_var <- function(obs_idx, N, space_mat, time_mat, noise_var,
 #' by default there is nothing to do. See
 #' `vignette("parallel", package = "weave")` for a walkthrough.
 #'
-#' @return A data frame with one row per cell and columns `id`, `t`, `rate`
+#' @return A data frame with one row per site-by-time cell (site-week) and
+#'   columns `id`, `t`, `rate`
 #'   (posterior point estimate of \eqn{\lambda}), and -- when `n_draws >= 1` --
 #'   `lower` and `upper` (the 95% count prediction interval). The dispersion `r`
 #'   used and `n_draws` are attached as attributes.
@@ -236,7 +244,7 @@ gp_predict <- function(
   coord_idx <- match(ids, coordinates$id)
   if (anyNA(coord_idx)) {
     stop(
-      "`coordinates` has no row for every site `id` in `obs_data`.",
+      "`coordinates` is missing a row for one or more site `id`s in `obs_data`.",
       call. = FALSE
     )
   }

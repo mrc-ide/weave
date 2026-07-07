@@ -105,7 +105,7 @@ observed_data <- function(data, p_one, p_switch) {
 # 1. Controls
 # -----------------------------------------------------------------------------
 n <- 100 # number of sites (health facilities)
-nt <- 52 * 5 # number of time points (3 yrs weekly)
+nt <- 52 * 5 # number of time points (5 yrs weekly)
 period <- 52 # seasonal period (weeks/cycle)
 
 true_length_scale <- 0.5 # spatial smoothness (distance units)

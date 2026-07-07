@@ -19,26 +19,27 @@ cg(b, obs_idx, N, space_mat, time_mat, noise_var, tol = 1e-08, maxit = 10000)
 
 \item{noise_var}{Scalar or length-\eqn{m} nugget on the observed scale.}
 
-\item{tol}{Relative residual tolerance for convergence (default `1e-8`).}
+\item{tol}{Relative residual tolerance for convergence (default \code{1e-8}).}
 
-\item{maxit}{Maximum number of iterations (default `10000`).}
+\item{maxit}{Maximum number of iterations (default \code{10000}).}
 }
 \value{
-Numeric solution vector `x` of length \eqn{m}.
+Numeric solution vector \code{x} of length \eqn{m}.
 }
 \description{
 In plain terms: solves the big linear system that gives the GP weights using
-only matrix–vector products—no huge matrices, no explicit inverse.
+only matrix-vector products -- no huge matrices, no explicit inverse.
 }
 \details{
 Technically: solves \eqn{(S K S^\top + \mathrm{diag}(\text{noise}))\,x = b}
-by plain CG, using `Amv` for matrix–vector products. Stops when the relative
-residual falls below `tol` or after `maxit` iterations (issues a warning on
-`maxit`).
+by plain CG, using \code{Amv} for matrix-vector products. Stops when the relative
+residual falls below \code{tol} or after \code{maxit} iterations (issues a warning on
+\code{maxit}).
 
 Deliberately unpreconditioned: the separable kernel is built from
-*correlation* matrices (unit diagonal plus a constant nugget) and the noise
+\emph{correlation} matrices (unit diagonal plus a constant nugget) and the noise
 is a scalar, so \eqn{\mathrm{diag}(A)} is exactly constant. A Jacobi
 (diagonal) preconditioner therefore only rescales the residual and leaves
 the CG iterates unchanged -- it is an exact no-op here, so don't add one.
 }
+\keyword{internal}

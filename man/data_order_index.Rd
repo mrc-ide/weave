@@ -7,14 +7,15 @@
 data_order_index(data, ...)
 }
 \arguments{
-\item{data}{A data frame containing site identifiers and time `t`.}
+\item{data}{A data frame containing site identifiers and time \code{t}.}
 
-\item{...}{Columns identifying sites passed to [dplyr::group_by()]
-(unquoted).}
+\item{...}{Bare (unquoted) column names that jointly identify a site,
+e.g. \verb{region, facility_name}.}
 }
 \value{
-A data frame ordered by site and time with an `id` column.
+A data frame ordered by site and time with an \code{id} column.
 }
 \description{
-Arranges data by site and time and creates a factor `id` per site.
+Arranges data by site and time and creates a factor \code{id} per site.
 }
+\keyword{internal}

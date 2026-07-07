@@ -1,6 +1,6 @@
 Package: weave
 Type: Package
-Title: Health facility malaria data interpolation
+Title: Health Facility Malaria Data Interpolation
 Version: 0.1.5
 Authors@R: c(
     person("Pete", "Winskill", email = "p.winskill@imperial.ac.uk", role = c("aut", "cre")),
@@ -9,12 +9,13 @@ Authors@R: c(
 Description: Interpolates routine health-facility malaria counts over space and
     time with a separable Gaussian process. Provides fast, deterministic
     kernel-hyperparameter estimation by exact marginal likelihood and
-    matrix-free prediction (with count prediction intervals) by preconditioned
-    conjugate gradient, conditioning on observed cells so gaps are filled by
+    matrix-free prediction (with count prediction intervals) by conjugate
+    gradient, conditioning on observed cells so gaps are filled by
     genuine interpolation.
 License: MIT + file LICENSE
 Encoding: UTF-8
 LazyData: true
+Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.3
 Depends:
     R (>= 4.1.0)

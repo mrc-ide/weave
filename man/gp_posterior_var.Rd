@@ -20,7 +20,7 @@ gp_posterior_var(
 \arguments{
 \item{obs_idx}{Integer indices of observed cells in the full vector.}
 
-\item{N}{Total number of cells (`n * nt`).}
+\item{N}{Total number of cells (\code{n * nt}).}
 
 \item{space_mat}{Spatial kernel matrix (variance-scaled).}
 
@@ -28,18 +28,18 @@ gp_posterior_var(
 
 \item{noise_var}{Scalar observation-noise variance \eqn{\nu}.}
 
-\item{Rs_chol, Rt_chol}{Upper Cholesky factors of `space_mat` / `time_mat`.}
+\item{Rs_chol, Rt_chol}{Upper Cholesky factors of \code{space_mat} / \code{time_mat}.}
 
 \item{n_draws}{Number of paired draws for the missing-data correction.}
 
 \item{tol}{CG tolerance for the draw solves.}
 
-\item{progress_bar}{Optional progress bar (from [make_curve_bar()]); ticked
+\item{progress_bar}{Optional progress bar (from \code{make_curve_bar()}); ticked
 once per draw. Only effective under a single-worker plan (parallel
 workers cannot tick a bar in the calling session).}
 }
 \value{
-Numeric vector of length `N`: the posterior variance of the field.
+Numeric vector of length \code{N}: the posterior variance of the field.
 }
 \description{
 Estimates the per-cell posterior variance of the GP field conditioned on the
@@ -50,21 +50,22 @@ correction:
 }
 \details{
 \eqn{V_{\mathrm{complete}} = \operatorname{diag}(K - K(K+\nu I)^{-1}K)} is the
-posterior variance had *every* cell been observed -- available in closed form
+posterior variance had \emph{every} cell been observed -- available in closed form
 through the Kronecker eigendecomposition, no draws needed. Missing cells
 change the variance only locally, so the draws are spent purely on that
 correction: each zero-mean perturbation draw \eqn{d_{\mathrm{obs}}}
 (Papandreou & Yuille 2010, one CG solve) is paired with an exact
-complete-grid twin \eqn{d_{\mathrm{complete}}} built from the *same* random
+complete-grid twin \eqn{d_{\mathrm{complete}}} built from the \emph{same} random
 numbers \eqn{u, e}, so their difference is nearly noise-free away from gaps
 (a control variate). Modest draw counts therefore give variances that plain
 Monte-Carlo would need hundreds of draws to match, and cells far from any
 gap are essentially exact.
 
 The draws are independent, so they run through
-[future.apply::future_lapply()]: serial under the default
-[future::plan()], parallel when the caller selects a multi-worker plan.
-`future.seed = TRUE` gives every draw its own pre-generated
-L'Ecuyer-CMRG stream, so results are reproducible under [set.seed()] and
+\code{\link[future.apply:future_lapply]{future.apply::future_lapply()}}: serial under the default
+\code{\link[future:plan]{future::plan()}}, parallel when the caller selects a multi-worker plan.
+\code{future.seed = TRUE} gives every draw its own pre-generated
+L'Ecuyer-CMRG stream, so results are reproducible under \code{\link[=set.seed]{set.seed()}} and
 identical for every backend and worker count.
 }
+\keyword{internal}

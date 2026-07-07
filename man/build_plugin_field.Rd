@@ -7,30 +7,31 @@
 build_plugin_field(obs_data, n, nt, value = "y_obs", standardise = TRUE)
 }
 \arguments{
-\item{obs_data}{Data frame with `id` (site), `t` (time) and the count column
-named by `value`.}
+\item{obs_data}{Data frame with \code{id} (site), \code{t} (time) and the count column
+named by \code{value}.}
 
 \item{n}{Number of sites.}
 
 \item{nt}{Number of time points.}
 
-\item{value}{Name of the count column (default `"y_obs"`).}
+\item{value}{Name of the count column (default \code{"y_obs"}).}
 
 \item{standardise}{Logical; scale each site to unit variance after centring
-(default `TRUE`).}
+(default \code{TRUE}).}
 }
 \value{
-A numeric vector of length `n * nt`, ordered sites x times (time
-  fastest).
+A numeric vector of length \code{n * nt}, ordered sites x times (time
+fastest).
 }
 \description{
 Forms a cheap estimate of the latent log-intensity field as the per-site
-centred (and optionally scaled) `log1p` of the observed counts. Missing cells
-are mean-imputed (0 after centring) and therefore contribute nothing to the
-marginal likelihood.
+centred (and optionally scaled) \code{log1p} of the observed counts. Missing cells
+are filled with the per-site mean (zero after centring) -- a neutral fill
+that carries no signal of its own. See \code{refine = TRUE} in
+\code{\link[=infer_kernel_params]{infer_kernel_params()}} for a correlation-aware fill.
 }
 \details{
-Per-site centring removes the site intercept `mu_s`; per-site scaling
-homogenises per-site variances so a single global `sigma^2` and the
-*correlation* kernels apply.
+Per-site centring removes the site intercept \code{mu_s}; per-site scaling
+homogenises per-site variances so a single global \code{sigma^2} and the
+\emph{correlation} kernels apply.
 }

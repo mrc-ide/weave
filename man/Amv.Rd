@@ -28,9 +28,10 @@ plus a per-observation noise (nugget), all without building any big matrices.
 }
 \details{
 Technically: for \eqn{K = \mathrm{space}\,\otimes\,\mathrm{time}}, returns
-\deqn{S\,K\,S^{\mathsf T}\,v \;+\; \operatorname{diag}(\sigma^2)\,v,}
+\deqn{S\,K\,S^{\top}\,v \;+\; \nu\,v,}
 i.e., the observed block of the GP plus a diagonal nugget. Implemented
 matrix-free as \code{kron_mv(with_nas(v, obs_idx, N), space_mat, time_mat)[obs_idx] + noise_var * v},
-where \eqn{S^{\mathsf T}} “scatters’’ into the full vector and \eqn{\sigma^2}
-denotes the per-observation noise.
+where \eqn{S^{\top}} "scatters" into the full vector and \eqn{\nu}
+denotes the per-observation noise (scalar or per-observation vector).
 }
+\keyword{internal}
