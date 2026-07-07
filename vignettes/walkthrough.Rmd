@@ -32,9 +32,9 @@ apply them. The walkthrough has three parts:
 
 1. **The model** — what we assume generates the counts, the kernels that
    encode smoothness, and the simulated data we will use throughout.
-2. **Fitting the kernel hyperparameters** — how the handful of numbers that
-   say how quickly counts become uncorrelated in space and time are
-   estimated, including the EM-style handling of missing weeks.
+2. **Fitting the kernel hyperparameters** — how the parameters that control
+   how quickly counts become uncorrelated in space and time are estimated,
+   including the EM-style handling of missing weeks.
 3. **From fitted kernels to predictions** — the best-guess rate at every
    site and week, and an honest **prediction interval** around it, with
    `gp_predict()`.
@@ -94,7 +94,7 @@ whole task is to read their parameters off the data.
 The spatial kernel is an RBF (squared-exponential) on the distance between
 sites; the temporal kernel is a periodic kernel (the seasonal cycle)
 multiplied by a slowly-decaying RBF (the long-run drift). Between them they
-carry three hyperparameters — the knobs we want to estimate:
+carry three hyperparameters — the quantities we want to estimate:
 
 - `length_scale` — how far apart two sites must be before they stop looking
   alike (spatial RBF kernel);
@@ -109,14 +109,14 @@ generates.)
 
 ### The worked example: simulated data with missing weeks
 
-We simulate data with *chosen* true knobs, so we can check the answer. The
-small helpers that draw the counts and punch clustered gaps into them
-(`simulate_data()`, `observed_data()`) are example scaffolding, not part of the
-package, so they are hidden here.
+We simulate data with *chosen* true hyperparameters, so we can check the
+answer. The small helpers that draw the counts and remove clustered runs of
+weeks (`simulate_data()`, `observed_data()`) are example scaffolding, not part
+of the package, so they are hidden here.
 
 ```{r sim-helpers, echo = FALSE}
 # Example-only helpers (NOT part of weave). They draw a Negative-Binomial GP and
-# then knock out clustered runs of weeks, mimicking real reporting dropouts.
+# then remove clustered runs of weeks, mimicking real reporting dropouts.
 simulate_data <- function(n, nt, coordinates, space_k, time_k, r) {
   f      <- quick_mvnorm(space_k, time_k)        # latent field, time fastest
   lambda <- exp(rep(coordinates$mu, each = nt) + f)
@@ -148,7 +148,7 @@ n      <- 20          # sites (health facilities)
 nt     <- 52 * 3      # weeks (3 years)
 period <- 52          # weeks per seasonal cycle
 
-# the "true" kernel knobs we will try to recover
+# the true kernel hyperparameters we will try to recover
 true_length_scale    <- 2     # spatial smoothness
 true_periodic_scale  <- 1.1   # how sharp the season is
 true_long_term_scale <- 150   # long-run drift
@@ -263,8 +263,8 @@ divide by its standard deviation.
 The logarithm turns the multiplicative "rate" scale into an additive one that
 matches \( f \). Subtracting each site's average removes the baseline
 \( \mu_s \) (which we do not care about here), and dividing by the spread puts
-every site on the same footing, so a single set of knobs applies to all of
-them. It is noisy — but it is instant.
+every site on the same footing, so a single set of hyperparameters applies to
+all of them. It is noisy — but it is instant.
 :::
 
 ```{r plugin}
@@ -327,10 +327,11 @@ identified parameters (notably `long_term_scale`) off the boundary.
 :::
 
 ::: {.intuition}
-For any guess at the knobs we can ask: *how plausible is the plug-in field if
-the world really had this much smoothness?* The first term (\( \log|K| \))
-penalises over-flexible kernels (an "Occam" penalty); the second rewards
-kernels that explain the field well. We turn the dial until the score is best.
+For any candidate hyperparameters we can ask: *how plausible is the plug-in
+field if the world really had this much smoothness?* The first term
+(\( \log|K| \)) penalises over-flexible kernels (an "Occam" penalty); the
+second rewards kernels that explain the field well. We adjust the
+hyperparameters until the score is best.
 
 The **nugget** \( \eta \) is the important addition: a slice of pure noise the
 model may attribute to observation error rather than signal. Without it the
@@ -389,7 +390,7 @@ maximise the score over the three length-scales plus the nugget ratio, with
 est <- infer_kernel_params(obs_data, coordinates, nt = nt, period = period,
                            refine = TRUE)
 
-# did we recover the knobs we simulated from?
+# did we recover the hyperparameters we simulated from?
 data.frame(
   parameter = c("length_scale", "periodic_scale", "long_term_scale"),
   truth     = c(true_length_scale, true_periodic_scale, true_long_term_scale),

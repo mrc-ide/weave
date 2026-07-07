@@ -209,8 +209,9 @@ conjugate-gradient iteration cheap even at large \( N \).
 
 ::: {.intuition}
 A separable kernel means space and time can be handled separately. So
-instead of one enormous matrix we juggle two small ones — one for space, one
-for time — which is dramatically cheaper and gives the *exact* same answer.
+instead of one enormous matrix we work with two small ones — one for space,
+one for time — which is dramatically cheaper and gives the *exact* same
+answer.
 This is why the estimate takes a second rather than hours.
 :::
 
