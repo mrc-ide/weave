@@ -102,6 +102,89 @@ test_that("make_curve_bar draws a braille wave and tracks progress", {
 })
 
 
+test_that("gp_predict draws are reproducible under set.seed", {
+  old <- future::plan(future::sequential)
+  on.exit(future::plan(old), add = TRUE)
+  n <- 4; nt <- 6; period <- 52
+  coords <- data.frame(id = factor(1:n), lon = runif(n), lat = runif(n))
+  obs <- make_obs(n, nt, missing = c(3, 10, 15))
+
+  set.seed(11)
+  a <- gp_predict(obs, coords, hp_fixed, nt = nt, period = period,
+                  n_draws = 10, progress = FALSE)
+  set.seed(11)
+  b <- gp_predict(obs, coords, hp_fixed, nt = nt, period = period,
+                  n_draws = 10, progress = FALSE)
+  set.seed(12)
+  c <- gp_predict(obs, coords, hp_fixed, nt = nt, period = period,
+                  n_draws = 10, progress = FALSE)
+
+  expect_identical(a$lower, b$lower)
+  expect_identical(a$upper, b$upper)
+  expect_false(isTRUE(all.equal(a$lower, c$lower)))
+})
+
+
+test_that("gp_predict results are invariant to the future backend", {
+  skip_on_cran()
+  old <- future::plan(future::sequential)
+  on.exit(future::plan(old), add = TRUE)
+  n <- 4; nt <- 6; period <- 52
+  coords <- data.frame(id = factor(1:n), lon = runif(n), lat = runif(n))
+  obs <- make_obs(n, nt, missing = c(3, 10, 15))
+
+  set.seed(21)
+  res_seq <- gp_predict(obs, coords, hp_fixed, nt = nt, period = period,
+                        n_draws = 8, progress = FALSE)
+
+  # multisession workers load the INSTALLED weave; skip (rather than fail)
+  # when running from load_all() without an installed copy.
+  res_par <- tryCatch({
+    future::plan(future::multisession, workers = 2)
+    set.seed(21)
+    gp_predict(obs, coords, hp_fixed, nt = nt, period = period,
+               n_draws = 8, progress = FALSE)
+  }, error = function(e) {
+    skip(paste("multisession workers unavailable:", conditionMessage(e)))
+  })
+
+  expect_equal(res_seq$lower, res_par$lower)
+  expect_equal(res_seq$upper, res_par$upper)
+  expect_equal(res_seq$rate, res_par$rate)
+})
+
+
+test_that("gp_predict suppresses the progress bar under a parallel plan", {
+  skip_on_cran()
+  old <- future::plan(future::sequential)
+  on.exit(future::plan(old), add = TRUE)
+  n <- 4; nt <- 6; period <- 52
+  coords <- data.frame(id = factor(1:n), lon = runif(n), lat = runif(n))
+  obs <- make_obs(n, nt, missing = c(3, 10, 15))
+
+  set.seed(31)
+  quiet <- gp_predict(obs, coords, hp_fixed, nt = nt, period = period,
+                      n_draws = 3, progress = FALSE)
+
+  testthat::local_mocked_bindings(ansi_tty = function() TRUE)
+  bar <- tryCatch({
+    future::plan(future::multisession, workers = 2)
+    set.seed(31)
+    utils::capture.output(
+      loud <- gp_predict(obs, coords, hp_fixed, nt = nt, period = period,
+                         n_draws = 3, progress = TRUE)
+    )
+  }, error = function(e) {
+    skip(paste("multisession workers unavailable:", conditionMessage(e)))
+  })
+
+  # no braille wave emitted, and the numbers are unchanged
+  expect_false(grepl("[⠀-⣿]", paste(bar, collapse = "")))
+  expect_equal(loud$lower, quiet$lower)
+  expect_equal(loud$upper, quiet$upper)
+})
+
+
 test_that("gp_predict models real t spacing, not the row index", {
   n <- 3; nt <- 5; period <- 4
   set.seed(1)

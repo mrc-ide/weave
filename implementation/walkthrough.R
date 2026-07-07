@@ -118,6 +118,11 @@ p_one <- 0.1 # missingness controls (see observed_data)
 p_switch <- 0.05
 plot_sites <- 1:min(n, 100) # sites shown in the per-site panels (default: all; set e.g. 1:12 to subset)
 
+n_workers <- 1 # >1 parallelises gp_predict's posterior draws across background
+# R sessions (results are identical for any value, and reproducible under the
+# seed above). NOTE: workers load the INSTALLED weave, not this session's
+# load_all() copy -- run devtools::install() first when setting n_workers > 1.
+
 
 # -----------------------------------------------------------------------------
 # 2. Simulate ground truth
@@ -360,7 +365,16 @@ print("")
 #
 # Cost scales steeply with the number of sites (each draw is a full CG solve);
 # reduce `n` at the top of the script or `n_draws` here to experiment quickly.
+#
+# The draws parallelise via future::plan(), controlled by `n_workers` in the
+# Controls block: results are identical for every n_workers, and the braille
+# progress bar shows only when running serially (workers can't tick it).
 # -----------------------------------------------------------------------------
+if (n_workers > 1) {
+  future::plan(future::multisession, workers = n_workers)
+} else {
+  future::plan(future::sequential)
+}
 pred <- gp_predict(
   obs_data,
   coordinates,
@@ -369,6 +383,7 @@ pred <- gp_predict(
   period = period,
   n_draws = 100
 )
+future::plan(future::sequential) # back to serial for the rest of the session
 pred_df <- transform(pred, id = as.integer(id))
 cat(sprintf(
   "Dispersion r used for the interval (estimated) = %.1f  (true = %.1f)\n",

@@ -10,3 +10,5 @@ implementation/
 ^doc$
 ^Meta$
 ^codecov\.yml$
+^\.claude$
+^AGENTS\.md$

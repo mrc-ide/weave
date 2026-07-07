@@ -1,0 +1,70 @@
+---
+title: "Running predictions in parallel"
+output:
+  rmarkdown::html_vignette:
+    css: weave.css
+vignette: >
+  %\VignetteIndexEntry{Running predictions in parallel}
+  %\VignetteEncoding{UTF-8}
+  %\VignetteEngine{knitr::rmarkdown}
+editor_options:
+  markdown:
+    wrap: 72
+---
+
+```{r, include = FALSE}
+source("_common.R")
+```
+
+The expensive part of `gp_predict()` is the set of `n_draws` perturbation
+draws that estimate how the missing weeks widen the prediction interval. Each
+draw is an independent conjugate-gradient solve, so at scale (many sites,
+many draws) they parallelise naturally across CPU cores.
+
+weave uses the [future](https://future.futureverse.org/) framework for this.
+By default everything runs serially — nothing to install, nothing to
+configure — and you opt in with a single line before the call. No arguments
+to `gp_predict()` change.
+
+```{r parallel, eval = FALSE}
+future::plan(future::multisession, workers = 4)   # 4 background R sessions
+
+pred <- gp_predict(obs_data, coordinates, hyperparameters = est,
+                   nt = nt, period = period, n_draws = 100)
+
+future::plan(future::sequential)                  # back to serial
+```
+
+`future::multisession` works on every platform (it uses background R
+sessions, not forks). Any other future backend — `multicore` on Linux/macOS,
+a cluster of machines — works the same way; see the
+[future documentation](https://future.futureverse.org/) for the options.
+
+## The numbers never change
+
+Parallelism is purely a speed decision:
+
+* **Results are identical** for every backend and worker count. Each draw
+  gets its own pre-generated random-number stream, so the split across
+  workers cannot affect the numbers.
+* **Reproducibility** works exactly as in serial code: `set.seed(1)` before
+  `gp_predict()` gives the same answer whether you run on 1 worker or 8.
+
+## When it pays off
+
+Each worker takes about a second to start, and receives the kernel matrices
+once. Parallelism therefore helps when `sites × draws` is large; for small
+problems the serial default is already the fastest option. As an indication:
+a 300-site × 260-week problem with 10% missing data and 100 draws ran about
+4× faster with `workers = 4` on a 4-performance-core laptop.
+
+## Practicalities
+
+* The **progress bar** only shows when running serially — background workers
+  cannot draw it.
+* At very large site counts you may need to raise the future framework's
+  export cap: `options(future.globals.maxSize = 1e9)` (the matrices shipped
+  to each worker are about 40 MB at 1000 sites × 260 weeks).
+* If your R uses a **multithreaded BLAS** (OpenBLAS, MKL), cap its threads
+  inside workers to avoid oversubscription. R's shipped BLAS is
+  single-threaded, so by default there is nothing to do.

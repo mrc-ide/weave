@@ -49,7 +49,7 @@ quick_mvnorm_chol <- function(space_chol, time_chol) {
   # Apply separable transforms. vec(Z) has covariance (time ⊗ space); the
   # transpose-flatten below reorders to times-fastest, giving covariance
   # (space ⊗ time) to match kronecker(space, time).
-  Z <- t(space_chol) %*% W %*% time_chol
+  Z <- crossprod(space_chol, W) %*% time_chol
 
   # Flatten with times varying fastest
   as.vector(t(Z))
