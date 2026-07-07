@@ -1,6 +1,6 @@
 # Complete site-time combinations
 
-Adds rows for all combinations of site identifiers and time \`t\`.
+Adds rows for all combinations of site identifiers and time `t`.
 
 ## Usage
 
@@ -12,14 +12,15 @@ data_complete(data, ...)
 
 - data:
 
-  A data frame containing site identifiers, time \`t\`, counts \`n\`,
-  and coordinates \`lat\` and \`lon\`.
+  A data frame containing site identifiers, time `t`, counts `n`, and
+  coordinates `lat` and `lon`.
 
 - ...:
 
-  Columns identifying sites passed to \[dplyr::group_by()\] (unquoted).
+  Bare (unquoted) column names that jointly identify a site, e.g.
+  `region, facility_name`.
 
 ## Value
 
-A data frame with missing site-time combinations filled in and \`n\` set
-to \`NA\`.
+A data frame with missing site-time combinations filled in and `n` set
+to `NA`.

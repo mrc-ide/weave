@@ -38,6 +38,7 @@
   <ul class="dropdown-menu" aria-labelledby="dropdown-articles">
 <li><a class="dropdown-item" href="../articles/gaussian-processes.html">Gaussian processes: a gentle introduction</a></li>
     <li><a class="dropdown-item" href="../articles/walkthrough.html">The weave walkthrough: estimating kernels and predicting rates</a></li>
+    <li><a class="dropdown-item" href="../articles/data-preparation.html">Using weave with your own data</a></li>
     <li><a class="dropdown-item" href="../articles/parallel.html">Running predictions in parallel</a></li>
   </ul>
 </li>
@@ -174,14 +175,14 @@ rapidly from day to day; a long one makes it change only gradually.</p>
 <p>The correlation as a function of separation in time is simply the
 kernel evaluated against distance. A longer length-scale keeps points
 correlated over a wider gap:</p>
-<p><img src="gaussian-processes_files/figure-html/kernel-curve-1.png" class="r-plt" alt="" width="1050" style="display: block; margin: auto;"></p>
+<p><img src="gaussian-processes_files/figure-html/kernel-curve-1.png" class="r-plt" alt="Two curves of correlation against separation in time: a short length-scale decays quickly, a long one keeps distant days correlated" width="1050" style="display: block; margin: auto;"></p>
 <p>We can now <em>draw</em> functions from the GP defined by each
 kernel. Each draw is one plausible history of feeder visits consistent
 with our beliefs. The package’s <code><a href="../reference/quick_mvnorm.html">quick_mvnorm()</a></code> samples such
 a function efficiently, which we use to produce the draws below.</p>
 <p>With a short length-scale the draws are rough and turn over quickly;
 with a long one they are smooth and slow:</p>
-<p><img src="gaussian-processes_files/figure-html/prior-draws-rbf-1.png" class="r-plt" alt="" width="1050" style="display: block; margin: auto;"></p>
+<p><img src="gaussian-processes_files/figure-html/prior-draws-rbf-1.png" class="r-plt" alt="Two panels of GP prior draws: rough, rapidly varying curves under a short length-scale; smooth, slowly varying curves under a long one" width="1050" style="display: block; margin: auto;"></p>
 </div>
 <div class="section level3">
 <h3 id="periodicity-capturing-the-seasons">3.2 Periodicity: capturing the seasons<a class="anchor" aria-label="anchor" href="#periodicity-capturing-the-seasons"></a>
@@ -200,7 +201,7 @@ is the period (say 52 weeks) and
 controls how sharply the function rises and falls within each cycle.
 Draws from a periodic GP repeat their shape from one cycle to the
 next:</p>
-<p><img src="gaussian-processes_files/figure-html/prior-draws-periodic-1.png" class="r-plt" alt="" width="1050" style="display: block; margin: auto;"></p>
+<p><img src="gaussian-processes_files/figure-html/prior-draws-periodic-1.png" class="r-plt" alt="Draws from a periodic GP: each curve repeats the same shape every 52-week cycle" width="1050" style="display: block; margin: auto;"></p>
 </div>
 <div class="section level3">
 <h3 id="combining-kernels">3.3 Combining kernels<a class="anchor" aria-label="anchor" href="#combining-kernels"></a>
@@ -212,14 +213,16 @@ by a long length-scale RBF — so the seasonal cycle is present every year
 but is free to drift slowly in amplitude and level over the long run.
 The package’s <code><a href="../reference/time_kernel.html">time_kernel()</a></code> builds exactly this
 combination:</p>
-<p><img src="gaussian-processes_files/figure-html/time-kernel-1.png" class="r-plt" alt="" width="1050" style="display: block; margin: auto;"></p>
+<p><img src="gaussian-processes_files/figure-html/time-kernel-1.png" class="r-plt" alt="Draws from the product of a periodic kernel and a long-term RBF: seasonal cycles whose amplitude and level drift slowly across years" width="1050" style="display: block; margin: auto;"></p>
 <p>In space, <code>weave</code> uses an RBF kernel on the distance
 between sites, so nearby facilities are expected to behave alike. Space
 and time are then combined into a single space-time covariance with a
 <em>separable</em> structure,
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>K</mi><mtext mathvariant="normal">space</mtext></msub><mo>⊗</mo><msub><mi>K</mi><mtext mathvariant="normal">time</mtext></msub></mrow><annotation encoding="application/x-tex">K_{\text{space}} \otimes K_{\text{time}}</annotation></semantics></math>,
-which keeps the model fast — a point the <a href="walkthrough.html">walkthrough</a> returns to. Three numbers
-control all of this: the spatial <code>length_scale</code>, the
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>K</mi><mtext mathvariant="normal">space</mtext></msub><mo>⊗</mo><msub><mi>K</mi><mtext mathvariant="normal">time</mtext></msub></mrow><annotation encoding="application/x-tex">K_{\text{space}} \otimes K_{\text{time}}</annotation></semantics></math>
+— the <em>Kronecker product</em>, a recipe that builds the one enormous
+space-time matrix from the two small ones — which keeps the model fast,
+a point the <a href="walkthrough.html">walkthrough</a> returns to. Three
+numbers control all of this: the spatial <code>length_scale</code>, the
 <code>periodic_scale</code>, and the <code>long_term_scale</code>.
 Estimating them from data is the subject of that article.</p>
 </div>
@@ -263,25 +266,33 @@ itself</em> in gaps — we never have to tell it to.</p>
 <p>Let us condition on a handful of noisy feeder counts. For this
 illustration we treat the counts as continuous measurements and leave
 the count-specific machinery to the walkthrough. Note the deliberate gap
-in the observations between days 25 and 55.</p>
+in the observations between days 25 and 55. (In the package,
+<code><a href="../reference/rbf_kernel.html">rbf_kernel()</a></code>’s <code>theta</code> argument is the
+length-scale
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>ℓ</mi><annotation encoding="application/x-tex">\ell</annotation></semantics></math>,
+and the kernel is returned in correlation form —
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi>σ</mi><mn>2</mn></msup><mo>=</mo><mn>1</mn></mrow><annotation encoding="application/x-tex">\sigma^2 = 1</annotation></semantics></math>.)</p>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># a smooth underlying pattern we pretend not to know</span></span>
 <span><span class="va">true_fn</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">x</span><span class="op">)</span> <span class="fl">12</span> <span class="op">+</span> <span class="fl">6</span> <span class="op">*</span> <span class="fu"><a href="https://rdrr.io/r/base/Trig.html" class="external-link">sin</a></span><span class="op">(</span><span class="va">x</span> <span class="op">/</span> <span class="fl">12</span><span class="op">)</span></span>
 <span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/Random.html" class="external-link">set.seed</a></span><span class="op">(</span><span class="fl">1</span><span class="op">)</span>                                        <span class="co"># reproducible noise</span></span>
 <span><span class="va">x_obs</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">3</span>, <span class="fl">8</span>, <span class="fl">14</span>, <span class="fl">20</span>, <span class="fl">25</span>, <span class="fl">55</span>, <span class="fl">62</span>, <span class="fl">70</span>, <span class="fl">78</span>, <span class="fl">85</span><span class="op">)</span>   <span class="co"># note the gap 25 -&gt; 55</span></span>
 <span><span class="va">y_obs</span> <span class="op">&lt;-</span> <span class="fu">true_fn</span><span class="op">(</span><span class="va">x_obs</span><span class="op">)</span> <span class="op">+</span> <span class="fu"><a href="https://rdrr.io/r/stats/Normal.html" class="external-link">rnorm</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">x_obs</span><span class="op">)</span>, sd <span class="op">=</span> <span class="fl">1.2</span><span class="op">)</span></span>
 <span></span>
-<span><span class="va">x_star</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">90</span>, length.out <span class="op">=</span> <span class="fl">200</span><span class="op">)</span></span>
+<span><span class="va">x_star</span>  <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">90</span>, length.out <span class="op">=</span> <span class="fl">200</span><span class="op">)</span></span>
 <span><span class="va">ell</span>     <span class="op">&lt;-</span> <span class="fl">12</span>      <span class="co"># length-scale</span></span>
+<span><span class="va">sigma_f</span> <span class="op">&lt;-</span> <span class="fl">4</span>       <span class="co"># signal sd: how far the function can range from its mean</span></span>
 <span><span class="va">sigma_n</span> <span class="op">&lt;-</span> <span class="fl">1.2</span>     <span class="co"># observation noise</span></span>
 <span></span>
 <span><span class="co"># RBF kernel between two sets of inputs, via outer-difference distances</span></span>
+<span><span class="co"># (rbf_kernel() returns the correlation form, so we scale by sigma_f^2)</span></span>
 <span><span class="va">rbf</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">a</span>, <span class="va">b</span>, <span class="va">theta</span><span class="op">)</span> <span class="fu"><a href="../reference/rbf_kernel.html">rbf_kernel</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/outer.html" class="external-link">outer</a></span><span class="op">(</span><span class="va">a</span>, <span class="va">b</span>, <span class="st">"-"</span><span class="op">)</span>, theta <span class="op">=</span> <span class="va">theta</span><span class="op">)</span></span>
 <span></span>
 <span><span class="va">ybar</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="va">y_obs</span><span class="op">)</span>                                <span class="co"># model the centred data</span></span>
-<span><span class="va">Kxx</span>  <span class="op">&lt;-</span> <span class="fu">rbf</span><span class="op">(</span><span class="va">x_obs</span>,  <span class="va">x_obs</span>,  <span class="va">ell</span><span class="op">)</span> <span class="op">+</span> <span class="va">sigma_n</span><span class="op">^</span><span class="fl">2</span> <span class="op">*</span> <span class="fu"><a href="https://rdrr.io/r/base/diag.html" class="external-link">diag</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">x_obs</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="va">Ksx</span>  <span class="op">&lt;-</span> <span class="fu">rbf</span><span class="op">(</span><span class="va">x_star</span>, <span class="va">x_obs</span>,  <span class="va">ell</span><span class="op">)</span></span>
-<span><span class="va">Kss</span>  <span class="op">&lt;-</span> <span class="fu">rbf</span><span class="op">(</span><span class="va">x_star</span>, <span class="va">x_star</span>, <span class="va">ell</span><span class="op">)</span></span>
+<span><span class="va">Kxx</span>  <span class="op">&lt;-</span> <span class="va">sigma_f</span><span class="op">^</span><span class="fl">2</span> <span class="op">*</span> <span class="fu">rbf</span><span class="op">(</span><span class="va">x_obs</span>,  <span class="va">x_obs</span>,  <span class="va">ell</span><span class="op">)</span> <span class="op">+</span> <span class="va">sigma_n</span><span class="op">^</span><span class="fl">2</span> <span class="op">*</span> <span class="fu"><a href="https://rdrr.io/r/base/diag.html" class="external-link">diag</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">x_obs</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">Ksx</span>  <span class="op">&lt;-</span> <span class="va">sigma_f</span><span class="op">^</span><span class="fl">2</span> <span class="op">*</span> <span class="fu">rbf</span><span class="op">(</span><span class="va">x_star</span>, <span class="va">x_obs</span>,  <span class="va">ell</span><span class="op">)</span></span>
+<span><span class="va">Kss</span>  <span class="op">&lt;-</span> <span class="va">sigma_f</span><span class="op">^</span><span class="fl">2</span> <span class="op">*</span> <span class="fu">rbf</span><span class="op">(</span><span class="va">x_star</span>, <span class="va">x_star</span>, <span class="va">ell</span><span class="op">)</span></span>
 <span></span>
 <span><span class="va">Kxx_inv</span>  <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/solve.html" class="external-link">solve</a></span><span class="op">(</span><span class="va">Kxx</span><span class="op">)</span></span>
 <span><span class="va">post_mean</span> <span class="op">&lt;-</span> <span class="va">ybar</span> <span class="op">+</span> <span class="va">Ksx</span> <span class="op"><a href="https://rdrr.io/r/base/matmult.html" class="external-link">%*%</a></span> <span class="va">Kxx_inv</span> <span class="op"><a href="https://rdrr.io/r/base/matmult.html" class="external-link">%*%</a></span> <span class="op">(</span><span class="va">y_obs</span> <span class="op">-</span> <span class="va">ybar</span><span class="op">)</span>          <span class="co"># posterior mean</span></span>
@@ -297,7 +308,7 @@ in the observations between days 25 and 55.</p>
 <p>The posterior mean threads through the observations, and the 95% band
 tightens where data is plentiful and balloons across the gap — an honest
 admission that the feeder count there is genuinely uncertain.</p>
-<p><img src="gaussian-processes_files/figure-html/posterior-plot-1.png" class="r-plt" alt="" width="1050" style="display: block; margin: auto;"></p>
+<p><img src="gaussian-processes_files/figure-html/posterior-plot-1.png" class="r-plt" alt="GP posterior mean with a 95% band through noisy points; the band is narrow near observations and balloons over the observation gap, still covering the dashed hidden truth" width="1050" style="display: block; margin: auto;"></p>
 <p>This single picture is the essence of the method. Everything in the
 walkthrough is a scaled-up version of it: instead of one feeder over
 time, we condition on <em>many</em> facilities across <em>both</em>
@@ -316,9 +327,9 @@ are noisy integers.</p>
 from observed counts, by maximising the Gaussian-process marginal
 likelihood; and</li>
 <li>
-<strong>predicts</strong> the underlying rate at every facility and
-week — filling in missing weeks and attaching a 95% prediction interval
-— with <code><a href="../reference/gp_predict.html">gp_predict()</a></code>.</li>
+<strong>predicts</strong> the underlying rate at every site and week
+— filling in missing weeks and attaching a 95% prediction interval —
+with <code><a href="../reference/gp_predict.html">gp_predict()</a></code>.</li>
 </ol>
 <p>The same prior-to-posterior logic seen here carries through; the
 walkthrough adds the spatial dimension, learns the kernel from data, and

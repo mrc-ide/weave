@@ -1,13 +1,18 @@
 # Running predictions in parallel
 
+This short article continues the example from [the
+walkthrough](https://mrc-ide.github.io/weave/articles/walkthrough.md) —
+`obs_data` and `est` below are the data and fitted hyperparameters built
+there.
+
 The expensive part of
 [`gp_predict()`](https://mrc-ide.github.io/weave/reference/gp_predict.md)
-is the set of `n_draws` perturbation draws that estimate how the missing
-weeks widen the prediction interval. Each draw is an independent
-conjugate-gradient solve, so at scale (many sites, many draws) they
-parallelise naturally across CPU cores.
+is the set of `n_draws` simulation draws that estimate how the missing
+weeks widen the prediction interval. Each draw is an independent solve,
+so at scale (many sites, many draws) they parallelise naturally across
+CPU cores.
 
-weave uses the [future](https://future.futureverse.org/) framework for
+`weave` uses the [future](https://future.futureverse.org/) framework for
 this. By default everything runs serially — nothing to install, nothing
 to configure — and you opt in with a single line before the call. No
 arguments to
@@ -44,11 +49,11 @@ Parallelism is purely a speed decision:
 
 ## When it pays off
 
-Each worker takes about a second to start, and receives the kernel
-matrices once. Parallelism therefore helps when `sites × draws` is
-large; for small problems the serial default is already the fastest
-option. As an indication: a 300-site × 260-week problem with 10% missing
-data and 100 draws ran about 4× faster with `workers = 4` on a
+Each worker takes about a second to start and receives the kernel
+matrices once. Parallelism therefore helps when the number of sites ×
+draws is large; for small problems the serial default is already the
+fastest option. As an indication: a 300-site × 260-week problem with 10%
+missing data and 100 draws ran about 4× faster with `workers = 4` on a
 4-performance-core laptop.
 
 ## Practicalities

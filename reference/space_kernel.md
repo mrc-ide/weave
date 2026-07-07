@@ -1,7 +1,10 @@
-# Estimate the spatial kernel
+# Build the spatial correlation matrix
 
-Builds a spatial covariance matrix using an RBF kernel with a nugget
-term for numerical stability.
+Builds a spatial correlation matrix using an RBF kernel with a nugget
+term for numerical stability. Distances are Euclidean in the coordinate
+units (see
+[`get_spatial_distance()`](https://mrc-ide.github.io/weave/reference/get_spatial_distance.md)),
+so `length_scale` is in those same units.
 
 ## Usage
 
@@ -13,11 +16,11 @@ space_kernel(coordinates, length_scale, nugget = 1e-09)
 
 - coordinates:
 
-  A data frame with columns \`lon\` and \`lat\` in degrees.
+  A data frame with columns `lon` and `lat`.
 
 - length_scale:
 
-  A positive numeric scalar for the spatial length scale.
+  A positive numeric scalar for the spatial length-scale.
 
 - nugget:
 
@@ -26,4 +29,4 @@ space_kernel(coordinates, length_scale, nugget = 1e-09)
 
 ## Value
 
-A positive-definite matrix representing spatial covariance.
+A positive-definite matrix representing spatial correlation.

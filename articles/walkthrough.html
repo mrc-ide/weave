@@ -38,6 +38,7 @@
   <ul class="dropdown-menu" aria-labelledby="dropdown-articles">
 <li><a class="dropdown-item" href="../articles/gaussian-processes.html">Gaussian processes: a gentle introduction</a></li>
     <li><a class="dropdown-item" href="../articles/walkthrough.html">The weave walkthrough: estimating kernels and predicting rates</a></li>
+    <li><a class="dropdown-item" href="../articles/data-preparation.html">Using weave with your own data</a></li>
     <li><a class="dropdown-item" href="../articles/parallel.html">Running predictions in parallel</a></li>
   </ul>
 </li>
@@ -127,6 +128,18 @@ function of their separation.</li>
 is the Kronecker product — the full space-time covariance is built from
 a small spatial kernel and a small temporal kernel (“separable”).</li>
 </ul>
+<p>The Negative-Binomial assumption is lighter than it looks: it enters
+only the <strong>prediction interval</strong> (through the count-noise
+variance
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>λ</mi><mo>+</mo><msup><mi>λ</mi><mn>2</mn></msup><mi>/</mi><mi>r</mi></mrow><annotation encoding="application/x-tex">\lambda + \lambda^2/r</annotation></semantics></math>).
+The hyperparameter estimates and the predicted rate are built from the
+Gaussian field on the
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mrow><mi mathvariant="normal">log</mi><mo>⁡</mo></mrow><mo stretchy="false" form="prefix">(</mo><mn>1</mn><mo>+</mo><mi>y</mi><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">\log(1+y)</annotation></semantics></math>
+scale and do not depend on it. With no overdispersion the model reduces
+to Poisson — the limit
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>r</mi><mo>=</mo><mi>∞</mi></mrow><annotation encoding="application/x-tex">r = \infty</annotation></semantics></math>,
+which the dispersion estimate returns automatically when the data show
+no excess variance.</p>
 </div>
 <p>The kernels carry three hyperparameters — the knobs we want to
 estimate:</p>
@@ -186,6 +199,22 @@ here.</p>
 <span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/cat.html" class="external-link">cat</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/sprintf.html" class="external-link">sprintf</a></span><span class="op">(</span><span class="st">"%.0f%% of weeks are missing\n"</span>, <span class="fl">100</span> <span class="op">*</span> <span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">obs_data</span><span class="op">$</span><span class="va">y_obs</span><span class="op">)</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="co">#&gt; 14% of weeks are missing</span></span></code></pre></div>
+<div class="caveat">
+<p>Two things the simulation glosses over for real data. First,
+<code>t</code> must be a numeric index whose <em>differences</em> encode
+real elapsed time — e.g. weeks since a reference date — and
+<code>period</code> must be in those same units; arbitrary indices
+(week-of-year that resets, row numbers) silently distort every temporal
+length-scale. Second, real data rarely arrives in this shape:
+<code><a href="../reference/data_process.html">data_process()</a></code> turns one raw data frame into the
+<code>obs_data</code>, <code>coordinates</code> and <code>nt</code> used
+below — see <a href="data-preparation.html"><em>Using weave with your
+own data</em></a>.</p>
+</div>
+<p>The gaps are not scattered at random: they arrive in <em>clustered
+runs</em>, the way real reporting drops out — a facility goes quiet for
+a stretch, then comes back. Magenta marks the missing weeks:</p>
+<p><img src="walkthrough_files/figure-html/missingness-map-1.png" class="r-plt" alt="Heatmap of sites by weeks: observed weeks in grey, missing weeks in magenta, with the missing weeks forming horizontal clustered runs within sites" width="1050" style="display: block; margin: auto;"></p>
 <p>Here are the first four sites. The <strong>navy line</strong> is the
 true underlying mean
 (<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>λ</mi><mo>=</mo><msup><mi>e</mi><mrow><msub><mi>μ</mi><mi>s</mi></msub><mo>+</mo><msub><mi>f</mi><mrow><mi>s</mi><mi>t</mi></mrow></msub></mrow></msup></mrow><annotation encoding="application/x-tex">\lambda = e^{\mu_s + f_{st}}</annotation></semantics></math>);
@@ -197,7 +226,7 @@ to see.</p>
 </div>
 </div>
 <div class="section level2">
-<h2 id="step-1-a-quick-plug-in-latent-field">2. Step 1 — a quick “plug-in” latent field<a class="anchor" aria-label="anchor" href="#step-1-a-quick-plug-in-latent-field"></a>
+<h2 id="a-quick-plug-in-latent-field">2. A quick “plug-in” latent field<a class="anchor" aria-label="anchor" href="#a-quick-plug-in-latent-field"></a>
 </h2>
 <div class="maths">
 <p>We cannot see the latent field
@@ -238,7 +267,7 @@ with observation noise layered on top:</p>
 </div>
 </div>
 <div class="section level2">
-<h2 id="step-2-score-a-set-of-knobs-with-the-marginal-likelihood">3. Step 2 — score a set of knobs with the marginal likelihood<a class="anchor" aria-label="anchor" href="#step-2-score-a-set-of-knobs-with-the-marginal-likelihood"></a>
+<h2 id="score-the-knobs-with-the-marginal-likelihood">3. Score the knobs with the marginal likelihood<a class="anchor" aria-label="anchor" href="#score-the-knobs-with-the-marginal-likelihood"></a>
 </h2>
 <div class="maths">
 <p>For a candidate set of hyperparameters
@@ -254,7 +283,11 @@ g \sim \mathcal{N}\!\Big(0,\ \sigma^2\big[(R_{\text{space}} \otimes R_{\text{tim
 </annotation></semantics></math></p>
 <p>where
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>R</mi><annotation encoding="application/x-tex">R</annotation></semantics></math>
-are <em>correlation</em> kernels (unit diagonal). The score for
+are <em>correlation</em> kernels (unit diagonal). Writing
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>K</mi><annotation encoding="application/x-tex">K</annotation></semantics></math>
+for this whole covariance and
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>N</mi><mo>=</mo><mi>n</mi><mo>⋅</mo><msub><mi>n</mi><mi>t</mi></msub></mrow><annotation encoding="application/x-tex">N = n \cdot n_t</annotation></semantics></math>
+for the number of cells, the score for
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>θ</mi><annotation encoding="application/x-tex">\theta</annotation></semantics></math>
 is the log marginal likelihood</p>
 <p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mrow><mi mathvariant="normal">log</mi><mo>⁡</mo></mrow><mi>p</mi><mo stretchy="false" form="prefix">(</mo><mi>g</mi><mo>∣</mo><mi>θ</mi><mo stretchy="false" form="postfix">)</mo><mo>=</mo><mi>−</mi><mstyle displaystyle="false"><mfrac><mn>1</mn><mn>2</mn></mfrac></mstyle><mo minsize="180%" maxsize="180%" stretchy="true" form="prefix">(</mo><mrow><mi mathvariant="normal">log</mi><mo>⁡</mo></mrow><mo stretchy="false" form="prefix">|</mo><mi>K</mi><mo stretchy="false" form="prefix">|</mo><mi>+</mi><msup><mi>g</mi><mi>⊤</mi></msup><msup><mi>K</mi><mrow><mi>−</mi><mn>1</mn></mrow></msup><mi>g</mi><mo>+</mo><mi>N</mi><mrow><mi mathvariant="normal">log</mi><mo>⁡</mo></mrow><mn>2</mn><mi>π</mi><mo minsize="180%" maxsize="180%" stretchy="true" form="postfix">)</mo><mi>.</mi></mrow><annotation encoding="application/x-tex">
@@ -266,6 +299,11 @@ that maximises this. The variance
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msup><mi>σ</mi><mn>2</mn></msup><annotation encoding="application/x-tex">\sigma^2</annotation></semantics></math>
 has a closed-form optimum, so we “profile” it out and never search over
 it.</p>
+<p>Strictly, the score also includes weakly informative log-normal
+priors on the four parameters (<code><a href="../reference/default_kernel_priors.html">default_kernel_priors()</a></code>), so
+the estimate is a MAP rather than a pure maximum likelihood — mild
+regularisation that keeps weakly identified parameters (notably
+<code>long_term_scale</code>) off the boundary.</p>
 </div>
 <div class="intuition">
 <p>For any guess at the knobs we can ask: <em>how plausible is the
@@ -284,7 +322,7 @@ distorting the length-scales.</p>
 </div>
 </div>
 <div class="section level2">
-<h2 id="step-3-why-it-is-fast-the-kronecker-trick">4. Step 3 — why it is fast: the Kronecker trick<a class="anchor" aria-label="anchor" href="#step-3-why-it-is-fast-the-kronecker-trick"></a>
+<h2 id="why-it-is-fast-the-kronecker-trick">4. Why it is fast: the Kronecker trick<a class="anchor" aria-label="anchor" href="#why-it-is-fast-the-kronecker-trick"></a>
 </h2>
 <div class="maths">
 <p>The full covariance is
@@ -299,9 +337,11 @@ and
 (size
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>n</mi><mi>t</mi></msub><annotation encoding="application/x-tex">n_t</annotation></semantics></math>)
 is enough:</p>
-<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mrow><mi mathvariant="normal">log</mi><mo>⁡</mo></mrow><mo stretchy="false" form="prefix">|</mo><mi>K</mi><mo>+</mo><mi>η</mi><mi>I</mi><mo stretchy="false" form="prefix">|</mo><mo>=</mo><munder><mo>∑</mo><mrow><mi>i</mi><mo>,</mo><mi>j</mi></mrow></munder><mrow><mi mathvariant="normal">log</mi><mo>⁡</mo></mrow><mo stretchy="false" form="prefix">(</mo><msub><mi>a</mi><mi>i</mi></msub><msub><mi>b</mi><mi>j</mi></msub><mo>+</mo><mi>η</mi><mo stretchy="false" form="postfix">)</mo><mo>,</mo><mspace width="2.0em"></mspace><msup><mi>g</mi><mi>⊤</mi></msup><mo stretchy="false" form="prefix">(</mo><mi>K</mi><mo>+</mo><mi>η</mi><mi>I</mi><msup><mo stretchy="false" form="postfix">)</mo><mrow><mi>−</mi><mn>1</mn></mrow></msup><mi>g</mi><mo>=</mo><munder><mo>∑</mo><mrow><mi>i</mi><mo>,</mo><mi>j</mi></mrow></munder><mfrac><msubsup><mi>G</mi><mrow><mi>i</mi><mi>j</mi></mrow><mn>2</mn></msubsup><mrow><msub><mi>a</mi><mi>i</mi></msub><msub><mi>b</mi><mi>j</mi></msub><mo>+</mo><mi>η</mi></mrow></mfrac><mo>,</mo></mrow><annotation encoding="application/x-tex">
-\log|K + \eta I| = \sum_{i,j} \log(a_i b_j + \eta), \qquad
-g^\top (K + \eta I)^{-1} g = \sum_{i,j} \frac{G_{ij}^2}{a_i b_j + \eta},
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mrow><mi mathvariant="normal">log</mi><mo>⁡</mo></mrow><mo minsize="120%" maxsize="120%" stretchy="true" form="prefix">|</mo><msub><mi>R</mi><mtext mathvariant="normal">space</mtext></msub><mo>⊗</mo><msub><mi>R</mi><mtext mathvariant="normal">time</mtext></msub><mo>+</mo><mi>η</mi><mi>I</mi><mo minsize="120%" maxsize="120%" stretchy="true" form="prefix">|</mo><mo>=</mo><munder><mo>∑</mo><mrow><mi>i</mi><mo>,</mo><mi>j</mi></mrow></munder><mrow><mi mathvariant="normal">log</mi><mo>⁡</mo></mrow><mo stretchy="false" form="prefix">(</mo><msub><mi>a</mi><mi>i</mi></msub><msub><mi>b</mi><mi>j</mi></msub><mo>+</mo><mi>η</mi><mo stretchy="false" form="postfix">)</mo><mo>,</mo><mspace width="2.0em"></mspace><msup><mi>g</mi><mi>⊤</mi></msup><mo minsize="120%" maxsize="120%" stretchy="true" form="prefix">(</mo><msub><mi>R</mi><mtext mathvariant="normal">space</mtext></msub><mo>⊗</mo><msub><mi>R</mi><mtext mathvariant="normal">time</mtext></msub><mo>+</mo><mi>η</mi><mi>I</mi><msup><mo minsize="120%" maxsize="120%" stretchy="true" form="postfix">)</mo><mrow><mi>−</mi><mn>1</mn></mrow></msup><mi>g</mi><mo>=</mo><munder><mo>∑</mo><mrow><mi>i</mi><mo>,</mo><mi>j</mi></mrow></munder><mfrac><msubsup><mi>G</mi><mrow><mi>i</mi><mi>j</mi></mrow><mn>2</mn></msubsup><mrow><msub><mi>a</mi><mi>i</mi></msub><msub><mi>b</mi><mi>j</mi></msub><mo>+</mo><mi>η</mi></mrow></mfrac><mo>,</mo></mrow><annotation encoding="application/x-tex">
+\log\bigl|R_{\text{space}} \otimes R_{\text{time}} + \eta I\bigr|
+  = \sum_{i,j} \log(a_i b_j + \eta), \qquad
+g^\top \bigl(R_{\text{space}} \otimes R_{\text{time}} + \eta I\bigr)^{-1} g
+  = \sum_{i,j} \frac{G_{ij}^2}{a_i b_j + \eta},
 </annotation></semantics></math></p>
 <p>with
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>a</mi><mi>i</mi></msub><mo>,</mo><msub><mi>b</mi><mi>j</mi></msub></mrow><annotation encoding="application/x-tex">a_i, b_j</annotation></semantics></math>
@@ -323,9 +363,15 @@ one for time — which is dramatically cheaper and gives the
 <em>exact</em> same answer. This is why the estimate takes a second
 rather than hours.</p>
 </div>
+<p>The structure is easiest to see. Below is the full space-time
+covariance for a toy problem of 3 sites × 8 weeks: a 24 × 24 matrix, but
+built entirely from a 3 × 3 spatial kernel and an 8 × 8 temporal one.
+Each 8 × 8 block is the temporal kernel scaled by one entry of the
+spatial kernel — the whole matrix never needs to exist:</p>
+<p><img src="walkthrough_files/figure-html/kron-schematic-1.png" class="r-plt" alt="Heatmap of a 24-by-24 Kronecker-product covariance matrix showing a 3-by-3 grid of 8-by-8 blocks; each block is the temporal kernel scaled by one spatial kernel entry" width="1050" style="display: block; margin: auto;"></p>
 </div>
 <div class="section level2">
-<h2 id="step-4-fit-and-check-against-the-truth">5. Step 4 — fit, and check against the truth<a class="anchor" aria-label="anchor" href="#step-4-fit-and-check-against-the-truth"></a>
+<h2 id="fit-and-check-against-the-truth">5. Fit, and check against the truth<a class="anchor" aria-label="anchor" href="#fit-and-check-against-the-truth"></a>
 </h2>
 <p><code><a href="../reference/infer_kernel_params.html">infer_kernel_params()</a></code> does all of the above: build the
 plug-in field, then maximise the marginal likelihood over the three
@@ -344,8 +390,8 @@ missing data, alternating two steps:</p>
 <strong>E-step.</strong> With the current hyperparameters, replace
 each missing week by its expected value under the model — the GP
 <strong>conditional mean</strong> given the weeks we <em>did</em>
-observe (the same kriging solve <code><a href="../reference/gp_predict.html">gp_predict()</a></code>
-performs).</li>
+observe (the same conditional-mean solve <code><a href="../reference/gp_predict.html">gp_predict()</a></code>
+performs; “kriging”, in geostatistics jargon).</li>
 <li>
 <strong>M-step.</strong> Treat that completed grid as if it were
 fully observed and re-maximise the fast (Kronecker) marginal likelihood
@@ -381,7 +427,22 @@ than integrating it out — is a separate matter it does not fix.)</p>
 <code class="sourceCode R"><span><span class="co"># the other two pieces estimation returns: the nugget and the profiled variance</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/cat.html" class="external-link">cat</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/sprintf.html" class="external-link">sprintf</a></span><span class="op">(</span><span class="st">"nugget ratio (noise/signal) = %.2f;  profiled sigma^2 = %.2f\n"</span>,</span>
 <span>            <span class="va">est</span><span class="op">$</span><span class="va">nugget_ratio</span>, <span class="va">est</span><span class="op">$</span><span class="va">sigma2</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="co">#&gt; nugget ratio (noise/signal) = 0.17;  profiled sigma^2 = 1.11</span></span></code></pre></div>
+<span><span class="co">#&gt; nugget ratio (noise/signal) = 0.17;  profiled sigma^2 = 1.11</span></span>
+<span></span>
+<span><span class="co"># est also carries the maximised score and the optimiser's convergence code</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/cat.html" class="external-link">cat</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/sprintf.html" class="external-link">sprintf</a></span><span class="op">(</span><span class="st">"log posterior = %.1f;  convergence = %d (0 = success)\n"</span>,</span>
+<span>            <span class="va">est</span><span class="op">$</span><span class="va">log_posterior</span>, <span class="va">est</span><span class="op">$</span><span class="va">convergence</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="co">#&gt; log posterior = -2111.5;  convergence = 0 (0 = success)</span></span></code></pre></div>
+<div class="caveat">
+<p><strong>At scale.</strong> Estimation cost grows as
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>O</mi><mo stretchy="false" form="prefix">(</mo><msup><mi>n</mi><mn>3</mn></msup><mo>+</mo><msubsup><mi>n</mi><mi>t</mi><mn>3</mn></msubsup><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">O(n^3 + n_t^3)</annotation></semantics></math>.
+For very large site counts, <code>n_sites</code> fits the
+hyperparameters on a random site subsample — they are shared,
+population-level quantities, so a representative subsample estimates the
+same values at a fraction of the cost (set a seed for reproducibility;
+time points are never subsampled). Prediction cost is dominated by the
+interval draws, which parallelise — see <a href="parallel.html"><em>Running predictions in parallel</em></a>.</p>
+</div>
 <p>The clearest check is to draw the <strong>fitted</strong> kernels
 (blue) on top of the <strong>true</strong> ones (navy, dashed). If the
 method worked, they overlap.</p>
@@ -401,9 +462,13 @@ solve,</p>
 <p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mover><mi>f</mi><mo accent="true">̂</mo></mover><mo>=</mo><mi>K</mi><msup><mi>S</mi><mi>⊤</mi></msup><mo minsize="120%" maxsize="120%" stretchy="true" form="prefix">(</mo><mi>S</mi><mi>K</mi><msup><mi>S</mi><mi>⊤</mi></msup><mo>+</mo><mi>ν</mi><mi>I</mi><msup><mo minsize="120%" maxsize="120%" stretchy="true" form="postfix">)</mo><mrow><mi>−</mi><mn>1</mn></mrow></msup><msub><mi>g</mi><mtext mathvariant="normal">obs</mtext></msub><mo>,</mo></mrow><annotation encoding="application/x-tex">
 \hat{f} = K S^\top \bigl(S K S^\top + \nu I\bigr)^{-1} g_{\text{obs}},
 </annotation></semantics></math></p>
-<p>(<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>S</mi><annotation encoding="application/x-tex">S</annotation></semantics></math>
-selects the observed cells), so it is smooth and deterministic. The
-posterior <strong>variance</strong> splits into two parts:</p>
+<p>where
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>S</mi><annotation encoding="application/x-tex">S</annotation></semantics></math>
+simply picks out the observed cells and
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>ν</mi><mo>=</mo><msup><mi>σ</mi><mn>2</mn></msup><mi>η</mi></mrow><annotation encoding="application/x-tex">\nu = \sigma^2 \eta</annotation></semantics></math>
+is the observation-noise variance implied by the fitted nugget ratio —
+so the mean is smooth and deterministic. The posterior
+<strong>variance</strong> splits into two parts:</p>
 <p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mrow><mi mathvariant="normal">Var</mi><mo>⁡</mo></mrow><mo stretchy="false" form="prefix">[</mo><mi>f</mi><mo stretchy="false" form="postfix">]</mo><mspace width="0.278em"></mspace><mo>=</mo><mspace width="0.278em"></mspace><munder><munder><msub><mi>V</mi><mtext mathvariant="normal">complete</mtext></msub><mo accent="true">⏟</mo></munder><mtext mathvariant="normal">exact, closed form</mtext></munder><mspace width="0.278em"></mspace><mo>+</mo><mspace width="0.278em"></mspace><munder><munder><msub><mi mathvariant="normal">Δ</mi><mtext mathvariant="normal">gaps</mtext></msub><mo accent="true">⏟</mo></munder><mrow><mrow><mtext mathvariant="normal">estimated from </mtext><mspace width="0.333em"></mspace></mrow><msub><mi>n</mi><mtext mathvariant="normal">draws</mtext></msub><mrow><mspace width="0.333em"></mspace><mtext mathvariant="normal"> paired draws</mtext></mrow></mrow></munder><mi>.</mi></mrow><annotation encoding="application/x-tex">
 \operatorname{Var}[f] \;=\;
   \underbrace{V_{\text{complete}}}_{\text{exact, closed form}}
@@ -416,22 +481,43 @@ has an exact closed-form answer through the same Kronecker
 eigendecomposition used for fitting — no simulation needed. Missing
 weeks change that answer only <em>near the gaps</em>, so the draws are
 spent purely on the correction
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi mathvariant="normal">Δ</mi><mtext mathvariant="normal">gaps</mtext></msub><annotation encoding="application/x-tex">\Delta_{\text{gaps}}</annotation></semantics></math>:
-each perturbation draw (conditioned on the observed cells) is paired
-with an exact <em>complete-grid twin</em> built from the
-<strong>same</strong> random numbers, and the average of
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi mathvariant="normal">Δ</mi><mtext mathvariant="normal">gaps</mtext></msub><annotation encoding="application/x-tex">\Delta_{\text{gaps}}</annotation></semantics></math>.
+Each perturbation draw (Papandreou &amp; Yuille 2010) draws
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>u</mi><mo>∼</mo><mi>𝒩</mi><mo stretchy="false" form="prefix">(</mo><mn>0</mn><mo>,</mo><mi>K</mi><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">u \sim \mathcal{N}(0, K)</annotation></semantics></math>
+and
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>e</mi><mo>∼</mo><mi>𝒩</mi><mo stretchy="false" form="prefix">(</mo><mn>0</mn><mo>,</mo><mi>ν</mi><mi>I</mi><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">e \sim \mathcal{N}(0, \nu I)</annotation></semantics></math>
+and forms</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>d</mi><mtext mathvariant="normal">obs</mtext></msub><mo>=</mo><mi>u</mi><mo>−</mo><mi>K</mi><msup><mi>S</mi><mi>⊤</mi></msup><mo minsize="120%" maxsize="120%" stretchy="true" form="prefix">(</mo><mi>S</mi><mi>K</mi><msup><mi>S</mi><mi>⊤</mi></msup><mo>+</mo><mi>ν</mi><mi>I</mi><msup><mo minsize="120%" maxsize="120%" stretchy="true" form="postfix">)</mo><mrow><mi>−</mi><mn>1</mn></mrow></msup><mo minsize="120%" maxsize="120%" stretchy="true" form="prefix">(</mo><mi>S</mi><mi>u</mi><mo>+</mo><mi>S</mi><mi>e</mi><mo minsize="120%" maxsize="120%" stretchy="true" form="postfix">)</mo><mo>,</mo></mrow><annotation encoding="application/x-tex">
+d_{\text{obs}} = u - K S^\top \bigl(S K S^\top + \nu I\bigr)^{-1}
+  \bigl(S u + S e\bigr),
+</annotation></semantics></math></p>
+<p>which has exactly the posterior covariance of the field. It is paired
+with an exact <em>complete-grid twin</em>
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>d</mi><mtext mathvariant="normal">twin</mtext></msub><annotation encoding="application/x-tex">d_{\text{twin}}</annotation></semantics></math>
+built from the <strong>same</strong>
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>u</mi><mo>,</mo><mi>e</mi></mrow><annotation encoding="application/x-tex">u, e</annotation></semantics></math>,
+and the average of
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msubsup><mi>d</mi><mtext mathvariant="normal">obs</mtext><mn>2</mn></msubsup><mo>−</mo><msubsup><mi>d</mi><mtext mathvariant="normal">twin</mtext><mn>2</mn></msubsup></mrow><annotation encoding="application/x-tex">d_{\text{obs}}^2 - d_{\text{twin}}^2</annotation></semantics></math>
 estimates the correction. Sharing the randomness makes the difference
 nearly noise-free — a <strong>control variate</strong>. The latent-rate
 posterior is then combined with Negative-Binomial observation noise, via
-the <strong>law of total variance</strong> and a lognormal moment-match,
-to give a 95% <strong>count</strong> prediction interval:</p>
-<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>𝔼</mi><mo stretchy="false" form="prefix">[</mo><mi>y</mi><mo stretchy="false" form="postfix">]</mo><mo>=</mo><mi>𝔼</mi><mo stretchy="false" form="prefix">[</mo><mi>λ</mi><mo stretchy="false" form="postfix">]</mo><mo>,</mo><mspace width="2.0em"></mspace><mrow><mi mathvariant="normal">Var</mi><mo>⁡</mo></mrow><mo stretchy="false" form="prefix">[</mo><mi>y</mi><mo stretchy="false" form="postfix">]</mo><mo>=</mo><munder><munder><mrow><mi>𝔼</mi><mspace width="-0.167em"></mspace><mo minsize="120%" maxsize="120%" stretchy="true" form="prefix">[</mo><mi>λ</mi><mo>+</mo><mstyle displaystyle="false"><mfrac><msup><mi>λ</mi><mn>2</mn></msup><mi>r</mi></mfrac></mstyle><mo minsize="120%" maxsize="120%" stretchy="true" form="postfix">]</mo></mrow><mo accent="true">⏟</mo></munder><mtext mathvariant="normal">count noise</mtext></munder><mo>+</mo><munder><munder><mrow><mrow><mi mathvariant="normal">Var</mi><mo>⁡</mo></mrow><mo stretchy="false" form="prefix">[</mo><mi>λ</mi><mo stretchy="false" form="postfix">]</mo></mrow><mo accent="true">⏟</mo></munder><mtext mathvariant="normal">rate uncertainty</mtext></munder><mi>.</mi></mrow><annotation encoding="application/x-tex">
+the <strong>law of total variance</strong>, to give the count mean and
+variance</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>𝔼</mi><mo stretchy="false" form="prefix">[</mo><mi>y</mi><mo stretchy="false" form="postfix">]</mo><mo>=</mo><mi>𝔼</mi><mo stretchy="false" form="prefix">[</mo><mi>λ</mi><mo stretchy="false" form="postfix">]</mo><mo>,</mo><mspace width="2.0em"></mspace><mrow><mi mathvariant="normal">Var</mi><mo>⁡</mo></mrow><mo stretchy="false" form="prefix">[</mo><mi>y</mi><mo stretchy="false" form="postfix">]</mo><mo>=</mo><munder><munder><mrow><mi>𝔼</mi><mspace width="-0.167em"></mspace><mo minsize="120%" maxsize="120%" stretchy="true" form="prefix">[</mo><mi>λ</mi><mo>+</mo><mstyle displaystyle="false"><mfrac><msup><mi>λ</mi><mn>2</mn></msup><mi>r</mi></mfrac></mstyle><mo minsize="120%" maxsize="120%" stretchy="true" form="postfix">]</mo></mrow><mo accent="true">⏟</mo></munder><mtext mathvariant="normal">count noise</mtext></munder><mo>+</mo><munder><munder><mrow><mrow><mi mathvariant="normal">Var</mi><mo>⁡</mo></mrow><mo stretchy="false" form="prefix">[</mo><mi>λ</mi><mo stretchy="false" form="postfix">]</mo></mrow><mo accent="true">⏟</mo></munder><mtext mathvariant="normal">rate uncertainty</mtext></munder><mo>,</mo></mrow><annotation encoding="application/x-tex">
 \mathbb{E}[y] = \mathbb{E}[\lambda], \qquad
 \operatorname{Var}[y] =
   \underbrace{\mathbb{E}\!\big[\lambda + \tfrac{\lambda^2}{r}\big]}_{\text{count noise}}
-  + \underbrace{\operatorname{Var}[\lambda]}_{\text{rate uncertainty}} .
+  + \underbrace{\operatorname{Var}[\lambda]}_{\text{rate uncertainty}} ,
 </annotation></semantics></math></p>
+<p>and the 95% interval comes from a <strong>lognormal
+moment-match</strong> to that mean and variance:</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi>s</mi><mn>2</mn></msup><mo>=</mo><mrow><mi mathvariant="normal">log</mi><mo>⁡</mo></mrow><mspace width="-0.167em"></mspace><mrow><mo stretchy="true" form="prefix">(</mo><mn>1</mn><mo>+</mo><mfrac><mrow><mrow><mi mathvariant="normal">Var</mi><mo>⁡</mo></mrow><mo stretchy="false" form="prefix">[</mo><mi>y</mi><mo stretchy="false" form="postfix">]</mo></mrow><mrow><mi>𝔼</mi><mo stretchy="false" form="prefix">[</mo><mi>y</mi><msup><mo stretchy="false" form="postfix">]</mo><mn>2</mn></msup></mrow></mfrac><mo stretchy="true" form="postfix">)</mo></mrow><mo>,</mo><mspace width="2.0em"></mspace><mi>m</mi><mo>=</mo><mrow><mi mathvariant="normal">log</mi><mo>⁡</mo></mrow><mi>𝔼</mi><mo stretchy="false" form="prefix">[</mo><mi>y</mi><mo stretchy="false" form="postfix">]</mo><mo>−</mo><mstyle displaystyle="false"><mfrac><msup><mi>s</mi><mn>2</mn></msup><mn>2</mn></mfrac></mstyle><mo>,</mo></mrow><annotation encoding="application/x-tex">
+s^2 = \log\!\left(1 + \frac{\operatorname{Var}[y]}{\mathbb{E}[y]^2}\right),
+\qquad
+m = \log \mathbb{E}[y] - \tfrac{s^2}{2},
+</annotation></semantics></math></p>
+<p>with the interval given by the 2.5% and 97.5% quantiles of
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mtext mathvariant="normal">Lognormal</mtext><mo stretchy="false" form="prefix">(</mo><mi>m</mi><mo>,</mo><msup><mi>s</mi><mn>2</mn></msup><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">\text{Lognormal}(m, s^2)</annotation></semantics></math>.</p>
 </div>
 <div class="intuition">
 <p>Because it conditions on the observed set, missing weeks are filled
@@ -563,6 +649,13 @@ uncertainty on the hyperparameters themselves.</li>
 <p>For a quick, honest summary of the spatial and temporal correlation
 structure — or a sensible starting point for a fuller model — it does
 the job in about a second.</p>
+</div>
+<div class="section level2">
+<h2 id="references">References<a class="anchor" aria-label="anchor" href="#references"></a>
+</h2>
+<p>Papandreou, G. and Yuille, A. L. (2010). Gaussian sampling by local
+perturbations. <em>Advances in Neural Information Processing Systems
+23</em>.</p>
 </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside>

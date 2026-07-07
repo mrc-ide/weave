@@ -42,9 +42,8 @@ A numeric vector of length \\m\\, equal to \\(S K S^\top + D)v\\.
 ## Details
 
 Technically: for \\K = \mathrm{space}\\\otimes\\\mathrm{time}\\, returns
-\$\$S\\K\\S^{\mathsf T}\\v \\+\\ \operatorname{diag}(\sigma^2)\\v,\$\$
-i.e., the observed block of the GP plus a diagonal nugget. Implemented
-matrix-free as
+\$\$S\\K\\S^{\top}\\v \\+\\ \nu\\v,\$\$ i.e., the observed block of the
+GP plus a diagonal nugget. Implemented matrix-free as
 `kron_mv(with_nas(v, obs_idx, N), space_mat, time_mat)[obs_idx] + noise_var * v`,
-where \\S^{\mathsf T}\\ “scatters’’ into the full vector and
-\\\sigma^2\\ denotes the per-observation noise.
+where \\S^{\top}\\ "scatters" into the full vector and \\\nu\\ denotes
+the per-observation noise (scalar or per-observation vector).

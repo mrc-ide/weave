@@ -109,7 +109,9 @@ The correlation as a function of separation in time is simply the kernel
 evaluated against distance. A longer length-scale keeps points
 correlated over a wider gap:
 
-![](gaussian-processes_files/figure-html/kernel-curve-1.png)
+![Two curves of correlation against separation in time: a short
+length-scale decays quickly, a long one keeps distant days
+correlated](gaussian-processes_files/figure-html/kernel-curve-1.png)
 
 We can now *draw* functions from the GP defined by each kernel. Each
 draw is one plausible history of feeder visits consistent with our
@@ -121,7 +123,9 @@ below.
 With a short length-scale the draws are rough and turn over quickly;
 with a long one they are smooth and slow:
 
-![](gaussian-processes_files/figure-html/prior-draws-rbf-1.png)
+![Two panels of GP prior draws: rough, rapidly varying curves under a
+short length-scale; smooth, slowly varying curves under a long
+one](gaussian-processes_files/figure-html/prior-draws-rbf-1.png)
 
 ### 3.2 Periodicity: capturing the seasons
 
@@ -137,7 +141,9 @@ where $`p`$ is the period (say 52 weeks) and $`\alpha`$ controls how
 sharply the function rises and falls within each cycle. Draws from a
 periodic GP repeat their shape from one cycle to the next:
 
-![](gaussian-processes_files/figure-html/prior-draws-periodic-1.png)
+![Draws from a periodic GP: each curve repeats the same shape every
+52-week
+cycle](gaussian-processes_files/figure-html/prior-draws-periodic-1.png)
 
 ### 3.3 Combining kernels
 
@@ -149,13 +155,16 @@ slowly in amplitude and level over the long run. The package’s
 [`time_kernel()`](https://mrc-ide.github.io/weave/reference/time_kernel.md)
 builds exactly this combination:
 
-![](gaussian-processes_files/figure-html/time-kernel-1.png)
+![Draws from the product of a periodic kernel and a long-term RBF:
+seasonal cycles whose amplitude and level drift slowly across
+years](gaussian-processes_files/figure-html/time-kernel-1.png)
 
 In space, `weave` uses an RBF kernel on the distance between sites, so
 nearby facilities are expected to behave alike. Space and time are then
 combined into a single space-time covariance with a *separable*
-structure, $`K_{\text{space}} \otimes K_{\text{time}}`$, which keeps the
-model fast — a point the
+structure, $`K_{\text{space}} \otimes K_{\text{time}}`$ — the *Kronecker
+product*, a recipe that builds the one enormous space-time matrix from
+the two small ones — which keeps the model fast, a point the
 [walkthrough](https://mrc-ide.github.io/weave/articles/walkthrough.md)
 returns to. Three numbers control all of this: the spatial
 `length_scale`, the `periodic_scale`, and the `long_term_scale`.
@@ -189,27 +198,33 @@ in gaps — we never have to tell it to.
 Let us condition on a handful of noisy feeder counts. For this
 illustration we treat the counts as continuous measurements and leave
 the count-specific machinery to the walkthrough. Note the deliberate gap
-in the observations between days 25 and 55.
+in the observations between days 25 and 55. (In the package,
+[`rbf_kernel()`](https://mrc-ide.github.io/weave/reference/rbf_kernel.md)’s
+`theta` argument is the length-scale $`\ell`$, and the kernel is
+returned in correlation form — $`\sigma^2 = 1`$.)
 
 ``` r
 
 # a smooth underlying pattern we pretend not to know
 true_fn <- function(x) 12 + 6 * sin(x / 12)
 
+set.seed(1)                                        # reproducible noise
 x_obs <- c(3, 8, 14, 20, 25, 55, 62, 70, 78, 85)   # note the gap 25 -> 55
 y_obs <- true_fn(x_obs) + rnorm(length(x_obs), sd = 1.2)
 
-x_star <- seq(0, 90, length.out = 200)
+x_star  <- seq(0, 90, length.out = 200)
 ell     <- 12      # length-scale
+sigma_f <- 4       # signal sd: how far the function can range from its mean
 sigma_n <- 1.2     # observation noise
 
 # RBF kernel between two sets of inputs, via outer-difference distances
+# (rbf_kernel() returns the correlation form, so we scale by sigma_f^2)
 rbf <- function(a, b, theta) rbf_kernel(outer(a, b, "-"), theta = theta)
 
 ybar <- mean(y_obs)                                # model the centred data
-Kxx  <- rbf(x_obs,  x_obs,  ell) + sigma_n^2 * diag(length(x_obs))
-Ksx  <- rbf(x_star, x_obs,  ell)
-Kss  <- rbf(x_star, x_star, ell)
+Kxx  <- sigma_f^2 * rbf(x_obs,  x_obs,  ell) + sigma_n^2 * diag(length(x_obs))
+Ksx  <- sigma_f^2 * rbf(x_star, x_obs,  ell)
+Kss  <- sigma_f^2 * rbf(x_star, x_star, ell)
 
 Kxx_inv  <- solve(Kxx)
 post_mean <- ybar + Ksx %*% Kxx_inv %*% (y_obs - ybar)          # posterior mean
@@ -228,7 +243,10 @@ The posterior mean threads through the observations, and the 95% band
 tightens where data is plentiful and balloons across the gap — an honest
 admission that the feeder count there is genuinely uncertain.
 
-![](gaussian-processes_files/figure-html/posterior-plot-1.png)
+![GP posterior mean with a 95% band through noisy points; the band is
+narrow near observations and balloons over the observation gap, still
+covering the dashed hidden
+truth](gaussian-processes_files/figure-html/posterior-plot-1.png)
 
 This single picture is the essence of the method. Everything in the
 walkthrough is a scaled-up version of it: instead of one feeder over
@@ -245,9 +263,8 @@ shows how `weave`:
 
 1.  **estimates** the three kernel length-scales directly from observed
     counts, by maximising the Gaussian-process marginal likelihood; and
-2.  **predicts** the underlying rate at every facility and week —
-    filling in missing weeks and attaching a 95% prediction interval —
-    with
+2.  **predicts** the underlying rate at every site and week — filling in
+    missing weeks and attaching a 95% prediction interval — with
     [`gp_predict()`](https://mrc-ide.github.io/weave/reference/gp_predict.md).
 
 The same prior-to-posterior logic seen here carries through; the

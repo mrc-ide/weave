@@ -1,7 +1,9 @@
 # Radial basis function kernel
 
 Computes the radial basis function (RBF) kernel for a distance vector or
-matrix.
+matrix: \$\$k(d) = \exp\left(-\frac{d^2}{2\theta^2}\right).\$\$ This is
+the correlation form of the kernel (\\k(0) = 1\\); any global variance
+is applied separately.
 
 ## Usage
 
@@ -17,7 +19,9 @@ rbf_kernel(x, theta)
 
 - theta:
 
-  A positive numeric scalar giving the length-scale parameter.
+  A positive numeric scalar giving the length-scale parameter (the
+  \\\ell\\ of textbook presentations): correlation decays with distance
+  over this scale, so larger values give smoother functions.
 
 ## Value
 

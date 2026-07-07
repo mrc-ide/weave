@@ -1,8 +1,8 @@
-# Fast Kronecker–product matrix–vector multiply (times vary fastest)
+# Fast Kronecker-product matrix-vector multiply (times vary fastest)
 
-In plain terms: multiplies a big covariance \`K = space ⊗ time\` by a
-vector without ever forming \`K\`, using a reshape–multiply–reshape
-trick.
+In plain terms: multiplies a big covariance \\K = \mathrm{space} \otimes
+\mathrm{time}\\ by a vector without ever forming `K`, using a
+reshape-multiply-reshape trick.
 
 ## Usage
 
@@ -14,14 +14,14 @@ kron_mv(v, space, time)
 
 - v:
 
-  Numeric vector of length \`nrow(space) \* nrow(time)\`, ordered with
+  Numeric vector of length `nrow(space) * nrow(time)`, ordered with
   times varying fastest within site.
 
 - space:
 
   Spatial kernel matrix (size \\n \times n\\). Must be symmetric
   (kernels are, by construction) – the implementation relies on
-  \`t(space) == space\`.
+  `t(space) == space`.
 
 - time:
 
@@ -29,10 +29,10 @@ kron_mv(v, space, time)
 
 ## Value
 
-A numeric vector the same length as \`v\`.
+A numeric vector the same length as `v`.
 
 ## Details
 
-Technically: for \\v = \mathrm{vec}(X^\top)\\ with \`times\` varying
+Technically: for \\v = \mathrm{vec}(X^\top)\\ with `times` varying
 fastest, computes \\(space \otimes time)\\v =
 \mathrm{vec}\\\big((space\\X\\time^\top)^\top\big)\\.

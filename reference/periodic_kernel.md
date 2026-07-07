@@ -1,6 +1,7 @@
 # Periodic kernel
 
-Computes a periodic kernel for a distance vector or matrix.
+Computes a periodic kernel for a distance vector or matrix: \$\$k(d) =
+\exp\left(-\frac{2\sin^2(\pi d / p)}{\alpha^2}\right).\$\$
 
 ## Usage
 
@@ -16,11 +17,13 @@ periodic_kernel(x, alpha, period)
 
 - alpha:
 
-  A positive numeric scalar controlling the amplitude.
+  A positive numeric scalar controlling how sharply correlation falls
+  within each cycle: smaller values allow sharp seasonal peaks; larger
+  values give a gentler, smoother cycle.
 
 - period:
 
-  A positive numeric scalar giving the period.
+  A positive numeric scalar giving the period \\p\\.
 
 ## Value
 

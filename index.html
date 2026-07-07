@@ -5,7 +5,7 @@
 <meta charset="utf-8">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-<title>Health facility malaria data interpolation • weave</title>
+<title>Health Facility Malaria Data Interpolation • weave</title>
 <script src="deps/jquery-3.6.0/jquery-3.6.0.min.js"></script><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <link href="deps/bootstrap-5.3.8/bootstrap.min.css" rel="stylesheet">
 <script src="deps/bootstrap-5.3.8/bootstrap.bundle.min.js"></script><link href="deps/Fira_Sans-0.4.10/font.css" rel="stylesheet">
@@ -13,9 +13,9 @@
 <link href="deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet">
 <link href="deps/font-awesome-6.5.2/css/v4-shims.min.css" rel="stylesheet">
 <script src="deps/headroom-0.11.0/headroom.min.js"></script><script src="deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="deps/search-1.0.0/fuse.min.js"></script><script src="deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="pkgdown.js"></script><link href="extra.css" rel="stylesheet">
-<meta property="og:title" content="Health facility malaria data interpolation">
-<meta name="description" content="Interpolates routine health-facility malaria counts over space and time with a separable Gaussian process. Provides fast, deterministic kernel-hyperparameter estimation by exact marginal likelihood and matrix-free prediction (with count prediction intervals) by preconditioned conjugate gradient, conditioning on observed cells so gaps are filled by genuine interpolation.">
-<meta property="og:description" content="Interpolates routine health-facility malaria counts over space and time with a separable Gaussian process. Provides fast, deterministic kernel-hyperparameter estimation by exact marginal likelihood and matrix-free prediction (with count prediction intervals) by preconditioned conjugate gradient, conditioning on observed cells so gaps are filled by genuine interpolation.">
+<meta property="og:title" content="Health Facility Malaria Data Interpolation">
+<meta name="description" content="Interpolates routine health-facility malaria counts over space and time with a separable Gaussian process. Provides fast, deterministic kernel-hyperparameter estimation by exact marginal likelihood and matrix-free prediction (with count prediction intervals) by conjugate gradient, conditioning on observed cells so gaps are filled by genuine interpolation.">
+<meta property="og:description" content="Interpolates routine health-facility malaria counts over space and time with a separable Gaussian process. Provides fast, deterministic kernel-hyperparameter estimation by exact marginal likelihood and matrix-free prediction (with count prediction intervals) by conjugate gradient, conditioning on observed cells so gaps are filled by genuine interpolation.">
 </head>
 <body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
@@ -40,6 +40,7 @@
   <ul class="dropdown-menu" aria-labelledby="dropdown-articles">
 <li><a class="dropdown-item" href="articles/gaussian-processes.html">Gaussian processes: a gentle introduction</a></li>
     <li><a class="dropdown-item" href="articles/walkthrough.html">The weave walkthrough: estimating kernels and predicting rates</a></li>
+    <li><a class="dropdown-item" href="articles/data-preparation.html">Using weave with your own data</a></li>
     <li><a class="dropdown-item" href="articles/parallel.html">Running predictions in parallel</a></li>
   </ul>
 </li>
@@ -67,7 +68,7 @@
 <p><code>weave</code> treats the counts as arising from a smooth latent surface that varies across space and time, modelled as a separable Gaussian process — a spatial kernel combined with a temporal kernel (periodic season × long-term drift). In three steps it:</p>
 <ol style="list-style-type: decimal">
 <li>
-<strong>builds a quick plug-in field</strong> from the counts (per-site standardised <code>log(1 + y)</code>);</li>
+<strong>builds a quick rough estimate of the smooth signal</strong> behind the counts (per-site standardised <code>log(1 + y)</code> — the “plug-in field”);</li>
 <li>
 <strong>estimates the kernel hyperparameters</strong> — how fast counts decorrelate across space, within the season, and over the long term — by maximising the Gaussian-process marginal likelihood, kept fast by the kernel’s Kronecker structure; and</li>
 <li>
@@ -77,7 +78,7 @@
 <div class="section level2">
 <h2 id="installation">Installation<a class="anchor" aria-label="anchor" href="#installation"></a>
 </h2>
-<p>You can install the development version of weave from <a href="https://github.com/" class="external-link">GitHub</a> with:</p>
+<p>You can install the development version of <code>weave</code> from <a href="https://github.com/" class="external-link">GitHub</a> with:</p>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># install.packages("pak")</span></span>
 <span><span class="fu">pak</span><span class="fu">::</span><span class="fu"><a href="https://pak.r-lib.org/reference/pak.html" class="external-link">pak</a></span><span class="op">(</span><span class="st">"mrc-ide/weave"</span><span class="op">)</span></span></code></pre></div>
@@ -85,12 +86,19 @@
 <div class="section level2">
 <h2 id="getting-started">Getting started<a class="anchor" aria-label="anchor" href="#getting-started"></a>
 </h2>
-<p><code>weave</code> needs two inputs: <code>obs_data</code>, a data frame with columns <code>id</code> (site), <code>t</code> (week) and <code>y_obs</code> (the count, <code>NA</code> where missing); and <code>coordinates</code>, giving each site’s <code>lon</code>/<code>lat</code>. The workflow is two calls — estimate the kernels, then predict:</p>
+<p><code>weave</code> needs two inputs: <code>obs_data</code>, a data frame with columns <code>id</code> (site), <code>t</code> (a numeric time index whose differences encode real elapsed time, e.g. weeks since a reference) and <code>y_obs</code> (the count, <code>NA</code> where missing); and <code>coordinates</code>, giving each site’s <code>id</code> and <code>lon</code>/<code>lat</code>. If you are starting from one raw data frame, <code><a href="reference/data_process.html">data_process()</a></code> returns <code>obs_data</code>, <code>coordinates</code> and <code>nt</code> in exactly this shape. The workflow is then two calls — estimate the kernels, then predict:</p>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://mrc-ide.github.io/weave/">weave</a></span><span class="op">)</span></span>
 <span></span>
+<span><span class="va">prepared</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/data_process.html">data_process</a></span><span class="op">(</span><span class="va">raw_data</span>, <span class="va">facility_name</span><span class="op">)</span>   <span class="co"># raw -&gt; model-ready</span></span>
+<span><span class="va">obs_data</span>    <span class="op">&lt;-</span> <span class="va">prepared</span><span class="op">$</span><span class="va">obs_data</span></span>
+<span><span class="va">coordinates</span> <span class="op">&lt;-</span> <span class="va">prepared</span><span class="op">$</span><span class="va">coordinates</span></span>
+<span><span class="va">nt</span>          <span class="op">&lt;-</span> <span class="va">prepared</span><span class="op">$</span><span class="va">nt</span></span>
+<span></span>
 <span><span class="co"># 1. estimate the spatial + temporal kernel length-scales</span></span>
-<span><span class="va">est</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/infer_kernel_params.html">infer_kernel_params</a></span><span class="op">(</span><span class="va">obs_data</span>, <span class="va">coordinates</span>, nt <span class="op">=</span> <span class="va">nt</span>, period <span class="op">=</span> <span class="fl">52</span><span class="op">)</span></span>
+<span><span class="co">#    (with missing weeks, refine = TRUE removes the gap-induced bias)</span></span>
+<span><span class="va">est</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/infer_kernel_params.html">infer_kernel_params</a></span><span class="op">(</span><span class="va">obs_data</span>, <span class="va">coordinates</span>, nt <span class="op">=</span> <span class="va">nt</span>, period <span class="op">=</span> <span class="fl">52</span>,</span>
+<span>                           refine <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># 2. predict the rate, fill the gaps, and attach a 95% prediction interval</span></span>
 <span><span class="va">pred</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/gp_predict.html">gp_predict</a></span><span class="op">(</span><span class="va">obs_data</span>, <span class="va">coordinates</span>, hyperparameters <span class="op">=</span> <span class="va">est</span>,</span>
@@ -105,6 +113,10 @@
 <a href="https://mrc-ide.github.io/weave/articles/gaussian-processes.html">Gaussian processes: a gentle introduction</a> — what a Gaussian process is, the role of the kernel, and conditioning on data.</li>
 <li>
 <a href="https://mrc-ide.github.io/weave/articles/walkthrough.html">The weave walkthrough</a> — the full method worked end to end, from estimating the kernels to predicting rates with honest uncertainty.</li>
+<li>
+<a href="https://mrc-ide.github.io/weave/articles/data-preparation.html">Using weave with your own data</a> — preparing raw data with <code><a href="reference/data_process.html">data_process()</a></code>, encoding time correctly, and predicting beyond the observed weeks.</li>
+<li>
+<a href="https://mrc-ide.github.io/weave/articles/parallel.html">Running predictions in parallel</a> — one line of setup to spread the prediction draws across CPU cores; identical results.</li>
 </ul>
 </div>
 </div>

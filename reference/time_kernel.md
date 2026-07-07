@@ -1,6 +1,6 @@
-# Estimate the temporal kernel
+# Build the temporal correlation matrix
 
-Builds a temporal covariance matrix by combining periodic and long-term
+Builds a temporal correlation matrix by combining periodic and long-term
 RBF components with a nugget term for numerical stability.
 
 ## Usage
@@ -23,11 +23,13 @@ time_kernel(
 
 - periodic_scale:
 
-  A positive numeric scalar controlling the periodic variation.
+  A positive numeric scalar controlling how sharply correlation falls
+  within each seasonal cycle: smaller values allow sharp seasonal peaks;
+  larger values give a gentler, smoother cycle.
 
 - long_term_scale:
 
-  A positive numeric scalar for the long-term length scale.
+  A positive numeric scalar for the long-term length-scale.
 
 - nugget:
 
@@ -36,8 +38,9 @@ time_kernel(
 
 - period:
 
-  A positive numeric scalar giving the period of the seasonal component.
+  A positive numeric scalar giving the period of the seasonal component,
+  in the same units as `times`.
 
 ## Value
 
-A positive-definite matrix representing temporal covariance.
+A positive-definite matrix representing temporal correlation.

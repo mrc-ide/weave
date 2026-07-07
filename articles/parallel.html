@@ -38,6 +38,7 @@
   <ul class="dropdown-menu" aria-labelledby="dropdown-articles">
 <li><a class="dropdown-item" href="../articles/gaussian-processes.html">Gaussian processes: a gentle introduction</a></li>
     <li><a class="dropdown-item" href="../articles/walkthrough.html">The weave walkthrough: estimating kernels and predicting rates</a></li>
+    <li><a class="dropdown-item" href="../articles/data-preparation.html">Using weave with your own data</a></li>
     <li><a class="dropdown-item" href="../articles/parallel.html">Running predictions in parallel</a></li>
   </ul>
 </li>
@@ -68,15 +69,18 @@
 
     
     
+<p>This short article continues the example from <a href="walkthrough.html">the walkthrough</a> — <code>obs_data</code> and
+<code>est</code> below are the data and fitted hyperparameters built
+there.</p>
 <p>The expensive part of <code><a href="../reference/gp_predict.html">gp_predict()</a></code> is the set of
-<code>n_draws</code> perturbation draws that estimate how the missing
-weeks widen the prediction interval. Each draw is an independent
-conjugate-gradient solve, so at scale (many sites, many draws) they
-parallelise naturally across CPU cores.</p>
-<p>weave uses the <a href="https://future.futureverse.org/" class="external-link">future</a>
-framework for this. By default everything runs serially — nothing to
-install, nothing to configure — and you opt in with a single line before
-the call. No arguments to <code><a href="../reference/gp_predict.html">gp_predict()</a></code> change.</p>
+<code>n_draws</code> simulation draws that estimate how the missing
+weeks widen the prediction interval. Each draw is an independent solve,
+so at scale (many sites, many draws) they parallelise naturally across
+CPU cores.</p>
+<p><code>weave</code> uses the <a href="https://future.futureverse.org/" class="external-link">future</a> framework for this. By
+default everything runs serially — nothing to install, nothing to
+configure — and you opt in with a single line before the call. No
+arguments to <code><a href="../reference/gp_predict.html">gp_predict()</a></code> change.</p>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu">future</span><span class="fu">::</span><span class="fu"><a href="https://future.futureverse.org/reference/plan.html" class="external-link">plan</a></span><span class="op">(</span><span class="fu">future</span><span class="fu">::</span><span class="va"><a href="https://future.futureverse.org/reference/multisession.html" class="external-link">multisession</a></span>, workers <span class="op">=</span> <span class="fl">4</span><span class="op">)</span>   <span class="co"># 4 background R sessions</span></span>
 <span></span>
@@ -107,12 +111,12 @@ answer whether you run on 1 worker or 8.</li>
 <div class="section level2">
 <h2 id="when-it-pays-off">When it pays off<a class="anchor" aria-label="anchor" href="#when-it-pays-off"></a>
 </h2>
-<p>Each worker takes about a second to start, and receives the kernel
-matrices once. Parallelism therefore helps when
-<code>sites × draws</code> is large; for small problems the serial
-default is already the fastest option. As an indication: a 300-site ×
-260-week problem with 10% missing data and 100 draws ran about 4× faster
-with <code>workers = 4</code> on a 4-performance-core laptop.</p>
+<p>Each worker takes about a second to start and receives the kernel
+matrices once. Parallelism therefore helps when the number of sites ×
+draws is large; for small problems the serial default is already the
+fastest option. As an indication: a 300-site × 260-week problem with 10%
+missing data and 100 draws ran about 4× faster with
+<code>workers = 4</code> on a 4-performance-core laptop.</p>
 </div>
 <div class="section level2">
 <h2 id="practicalities">Practicalities<a class="anchor" aria-label="anchor" href="#practicalities"></a>

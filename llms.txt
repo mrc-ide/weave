@@ -12,8 +12,8 @@ varies across space and time, modelled as a separable Gaussian process —
 a spatial kernel combined with a temporal kernel (periodic season ×
 long-term drift). In three steps it:
 
-1.  **builds a quick plug-in field** from the counts (per-site
-    standardised `log(1 + y)`);
+1.  **builds a quick rough estimate of the smooth signal** behind the
+    counts (per-site standardised `log(1 + y)` — the “plug-in field”);
 2.  **estimates the kernel hyperparameters** — how fast counts
     decorrelate across space, within the season, and over the long term
     — by maximising the Gaussian-process marginal likelihood, kept fast
@@ -25,7 +25,7 @@ long-term drift). In three steps it:
 
 ## Installation
 
-You can install the development version of weave from
+You can install the development version of `weave` from
 [GitHub](https://github.com/) with:
 
 ``` r
@@ -37,16 +37,27 @@ pak::pak("mrc-ide/weave")
 ## Getting started
 
 `weave` needs two inputs: `obs_data`, a data frame with columns `id`
-(site), `t` (week) and `y_obs` (the count, `NA` where missing); and
-`coordinates`, giving each site’s `lon`/`lat`. The workflow is two calls
-— estimate the kernels, then predict:
+(site), `t` (a numeric time index whose differences encode real elapsed
+time, e.g. weeks since a reference) and `y_obs` (the count, `NA` where
+missing); and `coordinates`, giving each site’s `id` and `lon`/`lat`. If
+you are starting from one raw data frame,
+[`data_process()`](https://mrc-ide.github.io/weave/reference/data_process.md)
+returns `obs_data`, `coordinates` and `nt` in exactly this shape. The
+workflow is then two calls — estimate the kernels, then predict:
 
 ``` r
 
 library(weave)
 
+prepared <- data_process(raw_data, facility_name)   # raw -> model-ready
+obs_data    <- prepared$obs_data
+coordinates <- prepared$coordinates
+nt          <- prepared$nt
+
 # 1. estimate the spatial + temporal kernel length-scales
-est <- infer_kernel_params(obs_data, coordinates, nt = nt, period = 52)
+#    (with missing weeks, refine = TRUE removes the gap-induced bias)
+est <- infer_kernel_params(obs_data, coordinates, nt = nt, period = 52,
+                           refine = TRUE)
 
 # 2. predict the rate, fill the gaps, and attach a 95% prediction interval
 pred <- gp_predict(obs_data, coordinates, hyperparameters = est,
@@ -66,58 +77,60 @@ pred <- gp_predict(obs_data, coordinates, hyperparameters = est,
   walkthrough](https://mrc-ide.github.io/weave/articles/walkthrough.html)
   — the full method worked end to end, from estimating the kernels to
   predicting rates with honest uncertainty.
+- [Using weave with your own
+  data](https://mrc-ide.github.io/weave/articles/data-preparation.html)
+  — preparing raw data with
+  [`data_process()`](https://mrc-ide.github.io/weave/reference/data_process.md),
+  encoding time correctly, and predicting beyond the observed weeks.
+- [Running predictions in
+  parallel](https://mrc-ide.github.io/weave/articles/parallel.html) —
+  one line of setup to spread the prediction draws across CPU cores;
+  identical results.
 
 # Package index
 
-## All functions
+## Core workflow
 
-- [`Amv()`](https://mrc-ide.github.io/weave/reference/Amv.md) :
-  Observed-system matvec: (S K S^T + diag(noise)) v
-- [`build_plugin_field()`](https://mrc-ide.github.io/weave/reference/build_plugin_field.md)
-  : Build a plug-in latent field from observed counts
-- [`cg()`](https://mrc-ide.github.io/weave/reference/cg.md) : Conjugate
-  Gradient (CG) solver for the observed system
-- [`data_complete()`](https://mrc-ide.github.io/weave/reference/data_complete.md)
-  : Complete site-time combinations
-- [`data_missing()`](https://mrc-ide.github.io/weave/reference/data_missing.md)
-  : Drop sites with missing data
-- [`data_order_index()`](https://mrc-ide.github.io/weave/reference/data_order_index.md)
-  : Order data and assign identifiers
+Prepare the data, estimate the kernel hyperparameters, predict.
+
 - [`data_process()`](https://mrc-ide.github.io/weave/reference/data_process.md)
   : Process raw epidemiological data for the GP model
-- [`default_kernel_priors()`](https://mrc-ide.github.io/weave/reference/default_kernel_priors.md)
-  : Default priors for the kernel hyperparameters
-- [`fill_vector()`](https://mrc-ide.github.io/weave/reference/fill_vector.md)
-  : Fill observed values into a full vector
+- [`infer_kernel_params()`](https://mrc-ide.github.io/weave/reference/infer_kernel_params.md)
+  : Quick exact-marginal-likelihood estimate of the kernel
+  hyperparameters
+- [`gp_predict()`](https://mrc-ide.github.io/weave/reference/gp_predict.md)
+  : Predict the latent rate and a count prediction interval (CG)
+
+## Kernels and distances
+
+- [`space_kernel()`](https://mrc-ide.github.io/weave/reference/space_kernel.md)
+  : Build the spatial correlation matrix
+- [`time_kernel()`](https://mrc-ide.github.io/weave/reference/time_kernel.md)
+  : Build the temporal correlation matrix
+- [`rbf_kernel()`](https://mrc-ide.github.io/weave/reference/rbf_kernel.md)
+  : Radial basis function kernel
+- [`periodic_kernel()`](https://mrc-ide.github.io/weave/reference/periodic_kernel.md)
+  : Periodic kernel
 - [`get_spatial_distance()`](https://mrc-ide.github.io/weave/reference/get_spatial_distance.md)
   : Pairwise spatial distances
 - [`get_temporal_distance()`](https://mrc-ide.github.io/weave/reference/get_temporal_distance.md)
   : Pairwise temporal distances
+
+## Building blocks
+
+The pieces the workflow is assembled from, exported for direct use.
+
+- [`build_plugin_field()`](https://mrc-ide.github.io/weave/reference/build_plugin_field.md)
+  : Build a plug-in latent field from observed counts
 - [`gp_marginal_loglik()`](https://mrc-ide.github.io/weave/reference/gp_marginal_loglik.md)
   : Exact separable-GP marginal log-likelihood of a field, with a nugget
-- [`gp_posterior_var()`](https://mrc-ide.github.io/weave/reference/gp_posterior_var.md)
-  : Posterior variance of the latent field (exact part + control-variate
-  draws)
-- [`gp_predict()`](https://mrc-ide.github.io/weave/reference/gp_predict.md)
-  : Predict the latent rate and a count prediction interval (CG)
-- [`infer_kernel_params()`](https://mrc-ide.github.io/weave/reference/infer_kernel_params.md)
-  : Quick exact-marginal-likelihood estimate of the kernel
-  hyperparameters
-- [`kron_mv()`](https://mrc-ide.github.io/weave/reference/kron_mv.md) :
-  Fast Kronecker–product matrix–vector multiply (times vary fastest)
-- [`periodic_kernel()`](https://mrc-ide.github.io/weave/reference/periodic_kernel.md)
-  : Periodic kernel
+- [`default_kernel_priors()`](https://mrc-ide.github.io/weave/reference/default_kernel_priors.md)
+  : Default priors for the kernel hyperparameters
 - [`quick_mvnorm()`](https://mrc-ide.github.io/weave/reference/quick_mvnorm.md)
-  : Quick multivariate normal samples over two dimensions
+  : Quick multivariate normal draw over two dimensions
 - [`quick_mvnorm_chol()`](https://mrc-ide.github.io/weave/reference/quick_mvnorm_chol.md)
-  : Quick multivariate normal samples over two dimensions (cholesky
+  : Quick multivariate normal draw over two dimensions (Cholesky
   precomputed)
-- [`rbf_kernel()`](https://mrc-ide.github.io/weave/reference/rbf_kernel.md)
-  : Radial basis function kernel
-- [`space_kernel()`](https://mrc-ide.github.io/weave/reference/space_kernel.md)
-  : Estimate the spatial kernel
-- [`time_kernel()`](https://mrc-ide.github.io/weave/reference/time_kernel.md)
-  : Estimate the temporal kernel
 
 # Articles
 
@@ -127,5 +140,7 @@ pred <- gp_predict(obs_data, coordinates, hyperparameters = est,
   introduction](https://mrc-ide.github.io/weave/articles/gaussian-processes.md):
 - [The weave walkthrough: estimating kernels and predicting
   rates](https://mrc-ide.github.io/weave/articles/walkthrough.md):
+- [Using weave with your own
+  data](https://mrc-ide.github.io/weave/articles/data-preparation.md):
 - [Running predictions in
   parallel](https://mrc-ide.github.io/weave/articles/parallel.md):

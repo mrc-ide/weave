@@ -20,6 +20,7 @@
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
   <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="../articles/gaussian-processes.html">Gaussian processes: a gentle introduction</a></li>
     <li><a class="dropdown-item" href="../articles/walkthrough.html">The weave walkthrough: estimating kernels and predicting rates</a></li>
+    <li><a class="dropdown-item" href="../articles/data-preparation.html">Using weave with your own data</a></li>
     <li><a class="dropdown-item" href="../articles/parallel.html">Running predictions in parallel</a></li>
   </ul></li>
       </ul><ul class="navbar-nav"><li class="nav-item"><form class="form-inline" role="search">
@@ -36,7 +37,37 @@
     </div>
 
     <div class="section level2">
-      <h2 id="all-functions">All functions<a class="anchor" aria-label="anchor" href="#all-functions"></a></h2>
+      <h2 id="core-workflow">Core workflow<a class="anchor" aria-label="anchor" href="#core-workflow"></a></h2>
+
+      <div class="section-desc"><p>Prepare the data, estimate the kernel hyperparameters, predict.</p></div>
+
+      <dl></dl></div><div class="section level2">
+
+
+
+
+      <dl><dt>
+
+          <code><a href="data_process.html">data_process()</a></code>
+
+        </dt>
+        <dd>Process raw epidemiological data for the GP model</dd>
+
+        <dt>
+
+          <code><a href="infer_kernel_params.html">infer_kernel_params()</a></code>
+
+        </dt>
+        <dd>Quick exact-marginal-likelihood estimate of the kernel hyperparameters</dd>
+
+        <dt>
+
+          <code><a href="gp_predict.html">gp_predict()</a></code>
+
+        </dt>
+        <dd>Predict the latent rate and a count prediction interval (CG)</dd>
+      </dl></div><div class="section level2">
+      <h2 id="kernels-and-distances">Kernels and distances<a class="anchor" aria-label="anchor" href="#kernels-and-distances"></a></h2>
 
 
 
@@ -47,66 +78,31 @@
 
       <dl><dt>
 
-          <code><a href="Amv.html">Amv()</a></code>
+          <code><a href="space_kernel.html">space_kernel()</a></code>
 
         </dt>
-        <dd>Observed-system matvec: (S K S^T + diag(noise)) v</dd>
+        <dd>Build the spatial correlation matrix</dd>
 
         <dt>
 
-          <code><a href="build_plugin_field.html">build_plugin_field()</a></code>
+          <code><a href="time_kernel.html">time_kernel()</a></code>
 
         </dt>
-        <dd>Build a plug-in latent field from observed counts</dd>
+        <dd>Build the temporal correlation matrix</dd>
 
         <dt>
 
-          <code><a href="cg.html">cg()</a></code>
+          <code><a href="rbf_kernel.html">rbf_kernel()</a></code>
 
         </dt>
-        <dd>Conjugate Gradient (CG) solver for the observed system</dd>
+        <dd>Radial basis function kernel</dd>
 
         <dt>
 
-          <code><a href="data_complete.html">data_complete()</a></code>
+          <code><a href="periodic_kernel.html">periodic_kernel()</a></code>
 
         </dt>
-        <dd>Complete site-time combinations</dd>
-
-        <dt>
-
-          <code><a href="data_missing.html">data_missing()</a></code>
-
-        </dt>
-        <dd>Drop sites with missing data</dd>
-
-        <dt>
-
-          <code><a href="data_order_index.html">data_order_index()</a></code>
-
-        </dt>
-        <dd>Order data and assign identifiers</dd>
-
-        <dt>
-
-          <code><a href="data_process.html">data_process()</a></code>
-
-        </dt>
-        <dd>Process raw epidemiological data for the GP model</dd>
-
-        <dt>
-
-          <code><a href="default_kernel_priors.html">default_kernel_priors()</a></code>
-
-        </dt>
-        <dd>Default priors for the kernel hyperparameters</dd>
-
-        <dt>
-
-          <code><a href="fill_vector.html">fill_vector()</a></code>
-
-        </dt>
-        <dd>Fill observed values into a full vector</dd>
+        <dd>Periodic kernel</dd>
 
         <dt>
 
@@ -121,6 +117,22 @@
 
         </dt>
         <dd>Pairwise temporal distances</dd>
+      </dl></div><div class="section level2">
+      <h2 id="building-blocks">Building blocks<a class="anchor" aria-label="anchor" href="#building-blocks"></a></h2>
+
+      <div class="section-desc"><p>The pieces the workflow is assembled from, exported for direct use.</p></div>
+
+      <dl></dl></div><div class="section level2">
+
+
+
+
+      <dl><dt>
+
+          <code><a href="build_plugin_field.html">build_plugin_field()</a></code>
+
+        </dt>
+        <dd>Build a plug-in latent field from observed counts</dd>
 
         <dt>
 
@@ -131,75 +143,27 @@
 
         <dt>
 
-          <code><a href="gp_posterior_var.html">gp_posterior_var()</a></code>
+          <code><a href="default_kernel_priors.html">default_kernel_priors()</a></code>
 
         </dt>
-        <dd>Posterior variance of the latent field (exact part + control-variate draws)</dd>
-
-        <dt>
-
-          <code><a href="gp_predict.html">gp_predict()</a></code>
-
-        </dt>
-        <dd>Predict the latent rate and a count prediction interval (CG)</dd>
-
-        <dt>
-
-          <code><a href="infer_kernel_params.html">infer_kernel_params()</a></code>
-
-        </dt>
-        <dd>Quick exact-marginal-likelihood estimate of the kernel hyperparameters</dd>
-
-        <dt>
-
-          <code><a href="kron_mv.html">kron_mv()</a></code>
-
-        </dt>
-        <dd>Fast Kronecker–product matrix–vector multiply (times vary fastest)</dd>
-
-        <dt>
-
-          <code><a href="periodic_kernel.html">periodic_kernel()</a></code>
-
-        </dt>
-        <dd>Periodic kernel</dd>
+        <dd>Default priors for the kernel hyperparameters</dd>
 
         <dt>
 
           <code><a href="quick_mvnorm.html">quick_mvnorm()</a></code>
 
         </dt>
-        <dd>Quick multivariate normal samples over two dimensions</dd>
+        <dd>Quick multivariate normal draw over two dimensions</dd>
 
         <dt>
 
           <code><a href="quick_mvnorm_chol.html">quick_mvnorm_chol()</a></code>
 
         </dt>
-        <dd>Quick multivariate normal samples over two dimensions (cholesky precomputed)</dd>
-
-        <dt>
-
-          <code><a href="rbf_kernel.html">rbf_kernel()</a></code>
-
-        </dt>
-        <dd>Radial basis function kernel</dd>
-
-        <dt>
-
-          <code><a href="space_kernel.html">space_kernel()</a></code>
-
-        </dt>
-        <dd>Estimate the spatial kernel</dd>
-
-        <dt>
-
-          <code><a href="time_kernel.html">time_kernel()</a></code>
-
-        </dt>
-        <dd>Estimate the temporal kernel</dd>
+        <dd>Quick multivariate normal draw over two dimensions (Cholesky precomputed)</dd>
       </dl></div>
-  </main></div>
+  </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
+    </nav></aside></div>
 
 
     <footer><div class="pkgdown-footer-left">

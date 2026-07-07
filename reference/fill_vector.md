@@ -26,5 +26,4 @@ fill_vector(x_obs, obs_idx, N)
 
 ## Value
 
-A numeric vector of length \`N\` with \`x_obs\` scattered at
-\`obs_idx\`.
+A numeric vector of length `N` with `x_obs` scattered at `obs_idx`.
