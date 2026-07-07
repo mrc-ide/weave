@@ -39,7 +39,13 @@ to predict beyond the weeks you observed.
 
 `data_process()` builds both from a single raw data frame. It expects columns
 `t` (time), `n` (the count), `lat` and `lon`, plus any columns that together
-identify a site — passed as bare names:
+identify a site — passed as bare names.
+
+The counts should be **non-negative integers** (`NA` where missing). The
+observation model is Negative-Binomial — reducing automatically to Poisson
+when the data show no overdispersion — but the distribution only shapes the
+prediction *interval*; the fitted hyperparameters and the predicted rate come
+from a Gaussian model of `log(1 + y)` and are insensitive to it.
 
 ```{r raw-data}
 # a raw extract: two regions, facilities reporting weekly counts, some weeks

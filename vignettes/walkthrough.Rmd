@@ -67,6 +67,14 @@ f \sim \mathcal{N}\!\left(0,\ K_{\text{space}} \otimes K_{\text{time}}\right).
 - \( \otimes \) is the Kronecker product — the full space-time covariance is
   built from a small spatial kernel and a small temporal kernel
   ("separable").
+
+The Negative-Binomial assumption is lighter than it looks: it enters only the
+**prediction interval** (through the count-noise variance
+\( \lambda + \lambda^2/r \)). The hyperparameter estimates and the predicted
+rate are built from the Gaussian field on the \( \log(1+y) \) scale and do
+not depend on it. With no overdispersion the model reduces to Poisson —
+the limit \( r = \infty \), which the dispersion estimate returns
+automatically when the data show no excess variance.
 :::
 
 The kernels carry three hyperparameters — the knobs we want to estimate:

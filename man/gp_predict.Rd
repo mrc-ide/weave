@@ -44,7 +44,12 @@ variance is computed exactly and the draws only estimate the gap
 correction, modest values (25--100) already give tight intervals.}
 
 \item{r}{Negative-Binomial dispersion for the count interval. If \code{NULL}
-(default) it is estimated by method of moments from the observed counts.}
+(default) it is estimated by method of moments from the observed counts.
+\code{Inf} is valid and means Poisson observation noise (no overdispersion);
+the method-of-moments estimate returns \code{Inf} itself when the data show
+no excess variance, so \code{attr(., "r")} on the result can be \code{Inf}. The
+distribution affects only the interval width -- the \code{rate} column does
+not depend on it.}
 
 \item{value}{Name of the count column (default \code{"y_obs"}).}
 

@@ -153,6 +153,11 @@ gp_posterior_var <- function(obs_idx, N, space_mat, time_mat, noise_var,
 #'   correction, modest values (25--100) already give tight intervals.
 #' @param r Negative-Binomial dispersion for the count interval. If `NULL`
 #'   (default) it is estimated by method of moments from the observed counts.
+#'   `Inf` is valid and means Poisson observation noise (no overdispersion);
+#'   the method-of-moments estimate returns `Inf` itself when the data show
+#'   no excess variance, so `attr(., "r")` on the result can be `Inf`. The
+#'   distribution affects only the interval width -- the `rate` column does
+#'   not depend on it.
 #' @param value Name of the count column (default `"y_obs"`).
 #' @param standardise Logical; standardise the plug-in field per site (default
 #'   `TRUE`), matching [infer_kernel_params()].
