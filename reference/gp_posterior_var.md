@@ -60,7 +60,8 @@ gp_posterior_var(
 - progress_bar:
 
   Optional progress bar (from \[make_curve_bar()\]); ticked once per
-  draw.
+  draw. Only effective under a single-worker plan (parallel workers
+  cannot tick a bar in the calling session).
 
 ## Value
 
@@ -79,3 +80,10 @@ the \*same\* random numbers \\u, e\\, so their difference is nearly
 noise-free away from gaps (a control variate). Modest draw counts
 therefore give variances that plain Monte-Carlo would need hundreds of
 draws to match, and cells far from any gap are essentially exact.
+
+The draws are independent, so they run through
+\[future.apply::future_lapply()\]: serial under the default
+\[future::plan()\], parallel when the caller selects a multi-worker
+plan. \`future.seed = TRUE\` gives every draw its own pre-generated
+L'Ecuyer-CMRG stream, so results are reproducible under \[set.seed()\]
+and identical for every backend and worker count.

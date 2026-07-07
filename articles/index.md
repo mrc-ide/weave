@@ -6,3 +6,5 @@
   introduction](https://mrc-ide.github.io/weave/articles/gaussian-processes.md):
 - [The weave walkthrough: estimating kernels and predicting
   rates](https://mrc-ide.github.io/weave/articles/walkthrough.md):
+- [Running predictions in
+  parallel](https://mrc-ide.github.io/weave/articles/parallel.md):

@@ -19,7 +19,9 @@ kron_mv(v, space, time)
 
 - space:
 
-  Spatial kernel matrix (size \\n \times n\\).
+  Spatial kernel matrix (size \\n \times n\\). Must be symmetric
+  (kernels are, by construction) – the implementation relies on
+  \`t(space) == space\`.
 
 - time:
 

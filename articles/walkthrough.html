@@ -38,6 +38,7 @@
   <ul class="dropdown-menu" aria-labelledby="dropdown-articles">
 <li><a class="dropdown-item" href="../articles/gaussian-processes.html">Gaussian processes: a gentle introduction</a></li>
     <li><a class="dropdown-item" href="../articles/walkthrough.html">The weave walkthrough: estimating kernels and predicting rates</a></li>
+    <li><a class="dropdown-item" href="../articles/parallel.html">Running predictions in parallel</a></li>
   </ul>
 </li>
       </ul>
@@ -471,19 +472,23 @@ interval (<code>lower</code>, <code>upper</code>). The dispersion
 <span>                   nt <span class="op">=</span> <span class="va">nt</span>, period <span class="op">=</span> <span class="va">period</span>, n_draws <span class="op">=</span> <span class="fl">100</span><span class="op">)</span></span>
 <span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">pred</span><span class="op">)</span>            <span class="co"># one row per cell: id, t, rate, and the 95% interval</span></span>
-<span><span class="co">#&gt;   id t     rate     lower    upper</span></span>
-<span><span class="co">#&gt; 1  1 1 21.33600 10.001670 40.53555</span></span>
-<span><span class="co">#&gt; 2  1 2 19.68996  9.186160 37.45235</span></span>
-<span><span class="co">#&gt; 3  1 3 17.55220  8.077434 33.66043</span></span>
-<span><span class="co">#&gt; 4  1 4 15.13835  6.806947 29.47672</span></span>
-<span><span class="co">#&gt; 5  1 5 12.70435  5.528393 25.28300</span></span>
-<span><span class="co">#&gt; 6  1 6 10.47211  4.369851 21.42437</span></span>
+<span><span class="co">#&gt;   id t     rate    lower    upper</span></span>
+<span><span class="co">#&gt; 1  1 1 21.33600 9.960872 40.70560</span></span>
+<span><span class="co">#&gt; 2  1 2 19.68996 9.152957 37.59182</span></span>
+<span><span class="co">#&gt; 3  1 3 17.55220 8.058275 33.74290</span></span>
+<span><span class="co">#&gt; 4  1 4 15.13835 6.799116 29.51191</span></span>
+<span><span class="co">#&gt; 5  1 5 12.70435 5.525043 25.29903</span></span>
+<span><span class="co">#&gt; 6  1 6 10.47211 4.366146 21.44362</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/attr.html" class="external-link">attr</a></span><span class="op">(</span><span class="va">pred</span>, <span class="st">"r"</span><span class="op">)</span>       <span class="co"># the NB dispersion used for the interval (estimated)</span></span>
 <span><span class="co">#&gt; [1] 13.02461</span></span></code></pre></div>
 <p>The blue line is the predicted mean rate and the blue band the 95%
 prediction interval. It should track the navy true-mean line and cover
 the points — including the magenta held-out weeks it never saw.</p>
 <p><img src="walkthrough_files/figure-html/predict-plot-1.png" class="r-plt" alt="" width="1050" style="display: block; margin: auto;"></p>
+<p>At scale, the draws behind the interval can run across CPU cores: see
+the short companion article <a href="parallel.html"><em>Running
+predictions in parallel</em></a> — one line of setup, and the numbers
+are guaranteed not to change.</p>
 </div>
 <div class="section level3">
 <h3 id="did-we-fill-the-gaps-well">Did we fill the gaps well?<a class="anchor" aria-label="anchor" href="#did-we-fill-the-gaps-well"></a>
@@ -498,7 +503,7 @@ the time.</p>
 <span></span>
 <span><span class="co"># coverage: fraction of held-out counts inside the 95% interval (target ~0.95)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="va">held_out</span><span class="op">$</span><span class="va">y</span> <span class="op">&gt;=</span> <span class="va">held_out</span><span class="op">$</span><span class="va">lower</span> <span class="op">&amp;</span> <span class="va">held_out</span><span class="op">$</span><span class="va">y</span> <span class="op">&lt;=</span> <span class="va">held_out</span><span class="op">$</span><span class="va">upper</span><span class="op">)</span></span>
-<span><span class="co">#&gt; [1] 0.9201774</span></span>
+<span><span class="co">#&gt; [1] 0.9223947</span></span>
 <span></span>
 <span><span class="co"># how well the predicted rate tracks the true rate at those weeks</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/stats/cor.html" class="external-link">cor</a></span><span class="op">(</span><span class="va">held_out</span><span class="op">$</span><span class="va">rate</span>, <span class="va">held_out</span><span class="op">$</span><span class="va">lambda</span><span class="op">)</span></span>

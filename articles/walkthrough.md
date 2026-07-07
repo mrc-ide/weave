@@ -353,13 +353,13 @@ pred <- gp_predict(obs_data, coordinates, hyperparameters = est,
                    nt = nt, period = period, n_draws = 100)
 
 head(pred)            # one row per cell: id, t, rate, and the 95% interval
-#>   id t     rate     lower    upper
-#> 1  1 1 21.33600 10.001670 40.53555
-#> 2  1 2 19.68996  9.186160 37.45235
-#> 3  1 3 17.55220  8.077434 33.66043
-#> 4  1 4 15.13835  6.806947 29.47672
-#> 5  1 5 12.70435  5.528393 25.28300
-#> 6  1 6 10.47211  4.369851 21.42437
+#>   id t     rate    lower    upper
+#> 1  1 1 21.33600 9.960872 40.70560
+#> 2  1 2 19.68996 9.152957 37.59182
+#> 3  1 3 17.55220 8.058275 33.74290
+#> 4  1 4 15.13835 6.799116 29.51191
+#> 5  1 5 12.70435 5.525043 25.29903
+#> 6  1 6 10.47211 4.366146 21.44362
 attr(pred, "r")       # the NB dispersion used for the interval (estimated)
 #> [1] 13.02461
 ```
@@ -369,6 +369,11 @@ prediction interval. It should track the navy true-mean line and cover
 the points — including the magenta held-out weeks it never saw.
 
 ![](walkthrough_files/figure-html/predict-plot-1.png)
+
+At scale, the draws behind the interval can run across CPU cores: see
+the short companion article [*Running predictions in
+parallel*](https://mrc-ide.github.io/weave/articles/parallel.md) — one
+line of setup, and the numbers are guaranteed not to change.
 
 ### Did we fill the gaps well?
 
@@ -383,7 +388,7 @@ held_out <- merge(df_miss[, c("id", "t", "lambda", "y")], pred_df,
 
 # coverage: fraction of held-out counts inside the 95% interval (target ~0.95)
 mean(held_out$y >= held_out$lower & held_out$y <= held_out$upper)
-#> [1] 0.9201774
+#> [1] 0.9223947
 
 # how well the predicted rate tracks the true rate at those weeks
 cor(held_out$rate, held_out$lambda)
