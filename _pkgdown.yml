@@ -19,6 +19,7 @@ articles:
   - gaussian-processes
   - walkthrough
   - data-preparation
+  - kronecker
   - parallel
 
 reference:

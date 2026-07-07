@@ -4,7 +4,7 @@ output:
   rmarkdown::html_vignette:
     css: weave.css
     toc: true
-    toc_depth: 2
+    toc_depth: 3
 vignette: >
   %\VignetteIndexEntry{The weave walkthrough: estimating kernels and predicting rates}
   %\VignetteEncoding{UTF-8}
@@ -28,14 +28,16 @@ This article is a complete walkthrough of how `weave` turns noisy, gappy count
 data into a smooth estimate of an underlying rate. If the ideas of a Gaussian
 process and a kernel are new, the companion
 [*gentle introduction*](gaussian-processes.html) builds them up first; here we
-apply them. The walkthrough has two halves:
+apply them. The walkthrough has three parts:
 
-1. **Estimate the kernel hyperparameters** — the handful of numbers that say
-   how quickly counts become uncorrelated as we move apart in space and in
-   time.
-2. **Use them to predict** — denoise the observed counts, *fill in the missing
-   weeks*, and place an honest **prediction interval** around every estimate
-   with `gp_predict()`.
+1. **The model** — what we assume generates the counts, the kernels that
+   encode smoothness, and the simulated data we will use throughout.
+2. **Fitting the kernel hyperparameters** — how the handful of numbers that
+   say how quickly counts become uncorrelated in space and time are
+   estimated, including the EM-style handling of missing weeks.
+3. **From fitted kernels to predictions** — the best-guess rate at every
+   site and week, and an honest **prediction interval** around it, with
+   `gp_predict()`.
 
 We use a small simulated example with a *known* answer (including known missing
 weeks), so we can watch the method recover the truth. At each stage we give the
@@ -48,6 +50,8 @@ at the end.
 :::
 
 ## 1. The model
+
+### The observation model: counts by site and week
 
 ::: {.maths}
 We observe a count `y` at every site `s` (a health facility) and time `t`
@@ -66,7 +70,8 @@ f \sim \mathcal{N}\!\left(0,\ K_{\text{space}} \otimes K_{\text{time}}\right).
   how correlated two cells are as a function of their separation.
 - \( \otimes \) is the Kronecker product — the full space-time covariance is
   built from a small spatial kernel and a small temporal kernel
-  ("separable").
+  ("separable"). This structure is also why everything below is fast: see
+  [*The Kronecker trick*](kronecker.html).
 
 The Negative-Binomial assumption is lighter than it looks: it enters only the
 **prediction interval** (through the count-noise variance
@@ -77,21 +82,32 @@ the limit \( r = \infty \), which the dispersion estimate returns
 automatically when the data show no excess variance.
 :::
 
-The kernels carry three hyperparameters — the knobs we want to estimate:
+::: {.intuition}
+Each facility has a smooth underlying rate of cases. Nearby facilities, and
+nearby weeks, tend to look similar; far-apart ones drift. The kernels control
+*how quickly* that resemblance fades with distance in space and in time. Our
+whole task is to read their parameters off the data.
+:::
+
+### The kernels and their hyperparameters
+
+The spatial kernel is an RBF (squared-exponential) on the distance between
+sites; the temporal kernel is a periodic kernel (the seasonal cycle)
+multiplied by a slowly-decaying RBF (the long-run drift). Between them they
+carry three hyperparameters — the knobs we want to estimate:
 
 - `length_scale` — how far apart two sites must be before they stop looking
   alike (spatial RBF kernel);
 - `periodic_scale` — how sharply the yearly season rises and falls;
 - `long_term_scale` — how slowly the year-on-year level drifts.
 
-::: {.intuition}
-Each facility has a smooth underlying rate of cases. Nearby facilities, and
-nearby weeks, tend to look similar; far-apart ones drift. The three knobs
-control *how quickly* that resemblance fades with distance in space and in
-time. Our whole task is to read those three numbers off the data.
-:::
+A fourth, the **nugget ratio**, is estimated alongside them: the share of the
+variance that is observation noise rather than smooth signal. Its role is
+explained in part 2. (The [*gentle introduction*](gaussian-processes.html)
+shows what each kernel looks like and how its parameter changes the curves it
+generates.)
 
-### The worked example
+### The worked example: simulated data with missing weeks
 
 We simulate data with *chosen* true knobs, so we can check the answer. The
 small helpers that draw the counts and punch clustered gaps into them
@@ -222,7 +238,14 @@ ggplot() +
   theme_weave()
 ```
 
-## 2. A quick "plug-in" latent field
+## 2. Fitting the kernel hyperparameters
+
+Estimation happens in two moves: build a cheap stand-in for the latent field
+we cannot see, then search for the kernel parameters under which that
+stand-in looks most plausible. Missing weeks get a dedicated correction — an
+EM-style refinement — described at the end of this part.
+
+### A quick plug-in latent field
 
 ::: {.maths}
 We cannot see the latent field \( f \) directly, so we build a cheap stand-in
@@ -243,8 +266,6 @@ matches \( f \). Subtracting each site's average removes the baseline
 every site on the same footing, so a single set of knobs applies to all of
 them. It is noisy — but it is instant.
 :::
-
-### The worked example
 
 ```{r plugin}
 # the plug-in field: per-site centred & scaled log(1 + y), as one long vector
@@ -277,7 +298,7 @@ ggplot(plot_df, aes(t, value, colour = type)) +
   theme_weave()
 ```
 
-## 3. Score the knobs with the marginal likelihood
+### Scoring candidate hyperparameters: the marginal likelihood
 
 ::: {.maths}
 For a candidate set of hyperparameters \( \theta \) the kernels give a
@@ -317,77 +338,21 @@ kernel would have to explain the noisy plug-in field with smoothness alone,
 badly distorting the length-scales.
 :::
 
-## 4. Why it is fast: the Kronecker trick
+Evaluating \( \log|K| \) and \( g^\top K^{-1} g \) sounds hopeless — here
+\( K \) is `r n * nt` square, and the optimiser scores thousands of
+candidates. Because the kernel is separable, both quantities come exactly
+from eigendecompositions of the two *small* kernels, at
+\( O(n^3 + n_t^3) \) cost instead of \( O\big((n\,n_t)^3\big) \). How that
+works is its own short story: see
+[*The Kronecker trick*](kronecker.html).
 
-::: {.maths}
-The full covariance is \( (n \cdot n_t) \times (n \cdot n_t) \) — here
-`r n * nt` square. We never form it. Because it is a Kronecker product,
-eigendecomposing the *small* factors
-\( R_{\text{space}} = U_s \Lambda_s U_s^\top \) (size \( n \)) and
-\( R_{\text{time}} = U_t \Lambda_t U_t^\top \) (size \( n_t \)) is enough:
+### Handling the gaps: EM refinement
 
-\[
-\log\bigl|R_{\text{space}} \otimes R_{\text{time}} + \eta I\bigr|
-  = \sum_{i,j} \log(a_i b_j + \eta), \qquad
-g^\top \bigl(R_{\text{space}} \otimes R_{\text{time}} + \eta I\bigr)^{-1} g
-  = \sum_{i,j} \frac{G_{ij}^2}{a_i b_j + \eta},
-\]
-
-with \( a_i, b_j \) the eigenvalues, \( G = U_s^\top F U_t \), and \( F \) the
-field reshaped to \( n \times n_t \). The cost is \( O(n^3 + n_t^3) \) instead
-of \( O\big((n\,n_t)^3\big) \).
-:::
-
-::: {.intuition}
-A separable kernel means space and time can be handled separately. So instead
-of one enormous matrix we juggle two small ones — one for space, one for time
-— which is dramatically cheaper and gives the *exact* same answer. This is why
-the estimate takes a second rather than hours.
-:::
-
-The structure is easiest to see. Below is the full space-time covariance for
-a toy problem of 3 sites × 8 weeks: a 24 × 24 matrix, but built entirely from
-a 3 × 3 spatial kernel and an 8 × 8 temporal one. Each 8 × 8 block is the
-temporal kernel scaled by one entry of the spatial kernel — the whole matrix
-never needs to exist:
-
-```{r kron-schematic, echo = FALSE, fig.height = 4.4, fig.alt = "Heatmap of a 24-by-24 Kronecker-product covariance matrix showing a 3-by-3 grid of 8-by-8 blocks; each block is the temporal kernel scaled by one spatial kernel entry"}
-n_toy <- 3; nt_toy <- 8
-coords_toy <- data.frame(id = 1:n_toy, lon = c(0, 1, 4), lat = c(0, 1, 0))
-Ks_toy <- space_kernel(coords_toy, length_scale = 2)
-Kt_toy <- time_kernel(1:nt_toy, periodic_scale = 1, long_term_scale = 50,
-                      period = 8)
-K_toy  <- kronecker(Ks_toy, Kt_toy)
-
-kron_df <- expand.grid(row = 1:(n_toy * nt_toy), col = 1:(n_toy * nt_toy))
-kron_df$value <- as.vector(K_toy)
-
-ggplot(kron_df, aes(col, row, fill = value)) +
-  geom_tile() +
-  geom_hline(yintercept = c(8.5, 16.5), colour = "white", linewidth = 0.8) +
-  geom_vline(xintercept = c(8.5, 16.5), colour = "white", linewidth = 0.8) +
-  scale_y_reverse() +
-  scale_fill_gradient(low = "#f7f1e8", high = weave_cols[["prediction"]],
-                      name = "covariance") +
-  coord_fixed() +
-  labs(x = NULL, y = NULL,
-       title = "The full covariance for 3 sites × 8 weeks",
-       subtitle = "each 8×8 block = temporal kernel × one spatial kernel entry") +
-  theme_weave() +
-  theme(axis.text = element_blank(), panel.grid.major = element_blank())
-```
-
-## 5. Fit, and check against the truth
-
-`infer_kernel_params()` does all of the above: build the plug-in field, then
-maximise the marginal likelihood over the three length-scales plus the nugget
-ratio.
-
-We switch on `refine = TRUE`. Filling the missing weeks with a flat per-site
-mean makes the field look as if the signal dies in every gap, which biases the
-length-scales downward (the seasonal and long-run scales suffer most). With
-`refine`, the fit instead fills each gap with the GP's *own* conditional mean
-and refits a handful of times, which removes that gap-induced bias.
+Filling the missing weeks with a flat per-site mean makes the field look as
+if the signal dies in every gap, which biases the length-scales downward (the
+seasonal and long-run scales suffer most). Setting `refine = TRUE` removes
+that bias: the fit fills each gap with the GP's *own* conditional mean and
+refits a handful of times.
 
 ::: {.intuition}
 This loop is exactly the **EM algorithm** for a fit with missing data, alternating
@@ -405,9 +370,16 @@ Each pass feeds the next, and two or three are enough to converge — landing on
 essentially the estimate we would have got with *no* gaps at all. Crucially, the
 expensive conditional-mean solve runs only once per pass, never inside the
 optimiser, so the whole correction stays cheap. (It removes the bias the *gaps*
-cause; the residual plug-in attenuation below — from conditioning on a noisy
-field rather than integrating it out — is a separate matter it does not fix.)
+cause; the residual plug-in attenuation listed in the caveats — from
+conditioning on a noisy field rather than integrating it out — is a separate
+matter it does not fix.)
 :::
+
+### The worked example: fit and check
+
+`infer_kernel_params()` does all of the above: build the plug-in field, then
+maximise the score over the three length-scales plus the nugget ratio, with
+`refine = TRUE` switched on because our data has gaps.
 
 ```{r infer, warning = TRUE}
 # maximise the GP marginal likelihood to recover the three length-scales
@@ -482,16 +454,19 @@ ggplot(rbind(fit$time, true$time),
   theme_weave()
 ```
 
-## 6. Predict: smoothing, gap-filling, and prediction intervals
+## 3. From fitted kernels to predictions
 
 With the kernels estimated, we put them to work: clean up the noise, fill in
-the missing weeks, and say how *uncertain* each estimate is. A single function,
-`gp_predict()`, does all three.
+the missing weeks, and say how *uncertain* each estimate is. A single
+function, `gp_predict()`, does both of the pieces below in one call.
+
+### The best guess: the posterior mean
 
 ::: {.maths}
 `gp_predict()` conditions a separable Gaussian process on the **observed cells
 only**. The posterior **mean** of the latent field comes from one matrix-free
-solve,
+conjugate-gradient solve (cheap because multiplying by \( K \) never forms it
+— see [*The Kronecker trick*](kronecker.html)),
 
 \[
 \hat{f} = K S^\top \bigl(S K S^\top + \nu I\bigr)^{-1} g_{\text{obs}},
@@ -499,8 +474,21 @@ solve,
 
 where \( S \) simply picks out the observed cells and
 \( \nu = \sigma^2 \eta \) is the observation-noise variance implied by the
-fitted nugget ratio — so the mean is smooth and deterministic. The posterior
-**variance** splits into two parts:
+fitted nugget ratio. The mean is smooth and deterministic — it does not
+depend on how many draws are used for the interval.
+:::
+
+::: {.intuition}
+Because it conditions on the observed set, missing weeks are filled by genuine
+GP interpolation — the model's best guess given every week it *did* see,
+weighted by the fitted correlations — unlike a smoother that quietly
+mean-imputes the gaps.
+:::
+
+### The interval: exact variance plus a "gaps" correction
+
+::: {.maths}
+The posterior **variance** splits into two parts:
 
 \[
 \operatorname{Var}[f] \;=\;
@@ -552,10 +540,6 @@ with the interval given by the 2.5% and 97.5% quantiles of
 :::
 
 ::: {.intuition}
-Because it conditions on the observed set, missing weeks are filled by genuine
-GP interpolation, and their interval can *widen over gaps* — unlike a smoother
-that quietly mean-imputes the gaps.
-
 The variance trick is worth restating in plain words. Most of the uncertainty
 is known **exactly** — the only thing simulation must measure is *how much the
 gaps inflate it*. So instead of asking the draws to estimate the whole
@@ -575,7 +559,7 @@ estimate from the likelihood, so it is recovered by method of moments from the
 observed counts.
 :::
 
-### The worked example
+### The worked example: predict, then check the coverage
 
 The call returns one row per site-week with the posterior `rate` and, because
 `n_draws >= 1`, a 95% interval (`lower`, `upper`). The dispersion `r` used is
@@ -625,8 +609,6 @@ short companion article
 [*Running predictions in parallel*](parallel.html) — one line of setup, and
 the numbers are guaranteed not to change.
 
-### Did we fill the gaps well?
-
 The honest test is the **held-out** weeks: does the 95% interval contain the
 counts the model never saw? It should, about 95% of the time.
 
@@ -649,7 +631,7 @@ can drift a little here because this is a small example and the quick method
 does not propagate every source of uncertainty (see below).
 :::
 
-## 7. Caveats and approximations
+## Caveats and approximations
 
 ::: {.caveat}
 This is a fast, deterministic estimate — not a full posterior. The shortcuts

@@ -1,0 +1,150 @@
+---
+title: "The Kronecker trick: why weave is fast"
+output:
+  rmarkdown::html_vignette:
+    css: weave.css
+vignette: >
+  %\VignetteIndexEntry{The Kronecker trick: why weave is fast}
+  %\VignetteEncoding{UTF-8}
+  %\VignetteEngine{knitr::rmarkdown}
+editor_options:
+  markdown:
+    wrap: 72
+---
+
+```{r, include = FALSE}
+library(ggplot2)
+source("_common.R")
+```
+
+```{r setup, include = FALSE}
+library(weave)
+```
+
+A weave model has one cell per site and week: \( N = n \cdot n_t \) cells in
+total. The Gaussian-process covariance over those cells is an
+\( N \times N \) matrix — at 1000 sites and five years of weeks that is
+around 67 *billion* entries. weave never forms it, never inverts it, and
+never approximates it. Everything in
+[the walkthrough](walkthrough.html) — fitting the hyperparameters and
+computing the exact part of the prediction interval — stays exact because
+the covariance is **separable**, and separable covariances can be handled
+through their small factors alone. This article explains the two identities
+that make that work.
+
+## One small matrix per dimension
+
+The model assumes the covariance factorises into a spatial part and a
+temporal part:
+
+\[
+K \;=\; K_{\text{space}} \otimes K_{\text{time}},
+\]
+
+where \( K_{\text{space}} \) is \( n \times n \), \( K_{\text{time}} \) is
+\( n_t \times n_t \), and \( \otimes \) is the **Kronecker product** — a
+recipe that builds the one enormous matrix from the two small ones: the
+covariance between cell \( (s, t) \) and cell \( (s', t') \) is simply
+\( K_{\text{space}}[s, s'] \times K_{\text{time}}[t, t'] \).
+
+The structure is easiest to see. Below is the full space-time covariance for
+a toy problem of 3 sites × 8 weeks: a 24 × 24 matrix, but built entirely from
+a 3 × 3 spatial kernel and an 8 × 8 temporal one. Each 8 × 8 block is the
+temporal kernel scaled by one entry of the spatial kernel — the whole matrix
+never needs to exist:
+
+```{r kron-schematic, echo = FALSE, fig.height = 4.4, fig.alt = "Heatmap of a 24-by-24 Kronecker-product covariance matrix showing a 3-by-3 grid of 8-by-8 blocks; each block is the temporal kernel scaled by one spatial kernel entry"}
+n_toy <- 3; nt_toy <- 8
+coords_toy <- data.frame(id = 1:n_toy, lon = c(0, 1, 4), lat = c(0, 1, 0))
+Ks_toy <- space_kernel(coords_toy, length_scale = 2)
+Kt_toy <- time_kernel(1:nt_toy, periodic_scale = 1, long_term_scale = 50,
+                      period = 8)
+K_toy  <- kronecker(Ks_toy, Kt_toy)
+
+kron_df <- expand.grid(row = 1:(n_toy * nt_toy), col = 1:(n_toy * nt_toy))
+kron_df$value <- as.vector(K_toy)
+
+ggplot(kron_df, aes(col, row, fill = value)) +
+  geom_tile() +
+  geom_hline(yintercept = c(8.5, 16.5), colour = "white", linewidth = 0.8) +
+  geom_vline(xintercept = c(8.5, 16.5), colour = "white", linewidth = 0.8) +
+  scale_y_reverse() +
+  scale_fill_gradient(low = "#f7f1e8", high = weave_cols[["prediction"]],
+                      name = "covariance") +
+  coord_fixed() +
+  labs(x = NULL, y = NULL,
+       title = "The full covariance for 3 sites × 8 weeks",
+       subtitle = "each 8×8 block = temporal kernel × one spatial kernel entry") +
+  theme_weave() +
+  theme(axis.text = element_blank(), panel.grid.major = element_blank())
+```
+
+Statistically, separability says the *shape* of the temporal correlation is
+the same at every site (and vice versa) — a modelling assumption, and the
+price of everything below.
+
+## Identity 1: determinants and quadratic forms (used in fitting)
+
+Fitting the hyperparameters requires the log marginal likelihood of the
+plug-in field \( g \), which needs \( \log|K| \) and
+\( g^\top K^{-1} g \) — normally hopeless at size \( N \). Because the
+covariance is a Kronecker product plus a diagonal nugget, eigendecomposing
+the *small* factors
+\( R_{\text{space}} = U_s \Lambda_s U_s^\top \) (size \( n \)) and
+\( R_{\text{time}} = U_t \Lambda_t U_t^\top \) (size \( n_t \)) is enough:
+
+\[
+\log\bigl|R_{\text{space}} \otimes R_{\text{time}} + \eta I\bigr|
+  = \sum_{i,j} \log(a_i b_j + \eta), \qquad
+g^\top \bigl(R_{\text{space}} \otimes R_{\text{time}} + \eta I\bigr)^{-1} g
+  = \sum_{i,j} \frac{G_{ij}^2}{a_i b_j + \eta},
+\]
+
+with \( a_i, b_j \) the eigenvalues, \( G = U_s^\top F U_t \), and \( F \)
+the field reshaped to \( n \times n_t \). This works because the Kronecker
+product's eigenvectors are themselves a Kronecker product
+(\( U_s \otimes U_t \)), and a nugget \( \eta I \) only shifts the
+eigenvalues. The cost is \( O(n^3 + n_t^3) \) instead of
+\( O\big((n\,n_t)^3\big) \) — for the 1000-site example above, that is the
+difference between a second and centuries.
+
+The same eigendecomposition gives the *exact* complete-grid posterior
+variance used by the prediction interval — the
+\( V_{\text{complete}} \) term in the walkthrough — again without ever
+forming \( K \).
+
+## Identity 2: multiplying by K without forming it (used in prediction)
+
+Predicting needs solves of the form
+\( (S K S^\top + \nu I)^{-1} b \) (one for the posterior mean, one per
+perturbation draw). weave uses the conjugate-gradient method, which never
+needs \( K \) itself — only the ability to compute \( K v \) for a given
+vector \( v \). For a Kronecker product that is a reshape away:
+
+\[
+\bigl(K_{\text{space}} \otimes K_{\text{time}}\bigr)\, v
+  \;=\; \operatorname{vec}\!\bigl(K_{\text{time}}\, V\, K_{\text{space}}\bigr),
+\]
+
+where \( V \) is \( v \) reshaped to an \( n_t \times n \) matrix (weave's
+vector layout puts time fastest, and the kernels are symmetric). Each
+product costs two small matrix multiplications instead of one enormous one —
+this is the package's `kron_mv()` building block, and it is what makes each
+conjugate-gradient iteration cheap even at large \( N \).
+
+## What this buys
+
+::: {.intuition}
+A separable kernel means space and time can be handled separately. So
+instead of one enormous matrix we juggle two small ones — one for space, one
+for time — which is dramatically cheaper and gives the *exact* same answer.
+This is why the estimate takes a second rather than hours.
+:::
+
+Everything downstream inherits the speed: hyperparameter fitting evaluates
+the exact likelihood thousands of times inside the optimiser
+(identity 1), the exact part of the prediction interval is closed-form
+(identity 1 again), and the gap-correction draws each cost a handful of
+cheap matrix-vector products (identity 2). None of it is an approximation —
+the only approximations in weave are the statistical ones listed at the end
+of [the walkthrough](walkthrough.html).
