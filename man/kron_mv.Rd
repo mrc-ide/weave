@@ -10,7 +10,9 @@ kron_mv(v, space, time)
 \item{v}{Numeric vector of length `nrow(space) * nrow(time)`, ordered with
 times varying fastest within site.}
 
-\item{space}{Spatial kernel matrix (size \eqn{n \times n}).}
+\item{space}{Spatial kernel matrix (size \eqn{n \times n}). Must be
+symmetric (kernels are, by construction) -- the implementation relies on
+`t(space) == space`.}
 
 \item{time}{Temporal kernel matrix (size \eqn{nt \times nt}).}
 }

@@ -8,7 +8,9 @@
 #'
 #' @param v Numeric vector of length `nrow(space) * nrow(time)`, ordered with
 #'   times varying fastest within site.
-#' @param space Spatial kernel matrix (size \eqn{n \times n}).
+#' @param space Spatial kernel matrix (size \eqn{n \times n}). Must be
+#'   symmetric (kernels are, by construction) -- the implementation relies on
+#'   `t(space) == space`.
 #' @param time Temporal kernel matrix (size \eqn{nt \times nt}).
 #'
 #' @return A numeric vector the same length as `v`.
@@ -16,9 +18,11 @@ kron_mv <- function(v, space, time) {
   # We want vec(t(Y)) where Y = space %*% X %*% t(time) and X = sites × times.
   # Since matrix(v, n_times, n_sites) is already t(X), and
   #   t(Y) = time %*% t(X) %*% t(space),
-  # we can compute the result with NO length-N transposes (only the tiny t(space)):
+  # we can compute the result with NO transposes at all: `space` is a
+  # symmetric kernel, so t(space) = space and the n x n copy t() would
+  # otherwise allocate every CG iteration is avoided.
   Xt <- matrix(v, nrow = nrow(time), ncol = nrow(space))  # = t(X)
-  as.vector(time %*% Xt %*% t(space))
+  as.vector(time %*% Xt %*% space)
 }
 
 #' Fill observed values into a full vector

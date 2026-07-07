@@ -65,7 +65,8 @@ while the draw loop needs roughly half the CG iterations.}
 \item{progress}{Logical; show a progress bar over the posterior-draw loop
 (the expensive part). Defaults to `TRUE`, but the bar is drawn only in an
 interactive UTF-8 / truecolor terminal -- it stays silent in scripts,
-knitr, logs and CI. Set `FALSE` to disable it entirely.}
+knitr, logs and CI. Under a multi-worker [future::plan()] the bar is
+suppressed (workers cannot tick it). Set `FALSE` to disable it entirely.}
 }
 \value{
 A data frame with one row per cell and columns `id`, `t`, `rate`
@@ -91,6 +92,32 @@ Because the fit conditions on the observed set, missing cells are filled by
 genuine GP interpolation and their prediction interval can widen over gaps --
 unlike a completed-grid smoother that mean-imputes the gaps.
 }
+\section{Parallel execution}{
+
+The `n_draws` perturbation draws are independent CG solves and run through
+the future framework. By default (no [future::plan()] set) they run
+serially, exactly as before. To spread them across CPU cores, set a plan
+before calling and reset it after:
+
+```r
+future::plan(future::multisession, workers = 4)
+pred <- gp_predict(...)
+future::plan(future::sequential)
+```
+
+Results are identical for every backend and worker count, and reproducible
+under [set.seed()] (each draw gets its own pre-generated L'Ecuyer-CMRG
+stream). Parallelism pays off when `n * n_draws` is large: each worker
+costs about a second to start and receives the kernel matrices once. For
+very large site counts you may need to raise
+`options(future.globals.maxSize = ...)` (the matrices shipped to workers
+are ~40 MB at 1000 sites x 260 weeks; the default cap is 500 MiB). If R
+uses a multithreaded BLAS (e.g. OpenBLAS/MKL), cap its threads inside
+workers to avoid oversubscription; R's shipped BLAS is single-threaded, so
+by default there is nothing to do. See
+`vignette("parallel", package = "weave")` for a walkthrough.
+}
+
 \seealso{
 [infer_kernel_params()]
 }

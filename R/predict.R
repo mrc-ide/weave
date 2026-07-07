@@ -40,6 +40,13 @@
 #' Monte-Carlo would need hundreds of draws to match, and cells far from any
 #' gap are essentially exact.
 #'
+#' The draws are independent, so they run through
+#' [future.apply::future_lapply()]: serial under the default
+#' [future::plan()], parallel when the caller selects a multi-worker plan.
+#' `future.seed = TRUE` gives every draw its own pre-generated
+#' L'Ecuyer-CMRG stream, so results are reproducible under [set.seed()] and
+#' identical for every backend and worker count.
+#'
 #' @param obs_idx Integer indices of observed cells in the full vector.
 #' @param N Total number of cells (`n * nt`).
 #' @param space_mat Spatial kernel matrix (variance-scaled).
@@ -49,7 +56,8 @@
 #' @param n_draws Number of paired draws for the missing-data correction.
 #' @param tol CG tolerance for the draw solves.
 #' @param progress_bar Optional progress bar (from [make_curve_bar()]); ticked
-#'   once per draw.
+#'   once per draw. Only effective under a single-worker plan (parallel
+#'   workers cannot tick a bar in the calling session).
 #'
 #' @return Numeric vector of length `N`: the posterior variance of the field.
 gp_posterior_var <- function(obs_idx, N, space_mat, time_mat, noise_var,
@@ -59,34 +67,44 @@ gp_posterior_var <- function(obs_idx, N, space_mat, time_mat, noise_var,
   nt <- nrow(time_mat)
   eig_s <- eig_sym(space_mat)
   eig_t <- eig_sym(time_mat)
+  Us <- eig_s$vectors
+  Ut <- eig_t$vectors
+  UsT <- t(Us)
+  sqrt_nv <- sqrt(noise_var)
   d_eig <- outer(eig_t$values, eig_s$values) # nt x n eigenvalues of K
   shrink <- d_eig / (d_eig + noise_var)
 
   # exact complete-grid posterior variance: diag(K - K (K + nu I)^{-1} K),
   # per cell (time b, site a) = sum_ij Ut[b,j]^2 Us[a,i]^2 * d_ij nu / (d_ij + nu)
-  v_complete <- as.vector(
-    (eig_t$vectors^2) %*% (noise_var * shrink) %*% t(eig_s$vectors^2)
-  )
+  v_complete <- as.vector((Ut^2) %*% (noise_var * shrink) %*% t(Us^2))
 
-  ss_corr <- numeric(N)
-  for (i in seq_len(n_draws)) {
+  one_draw <- function(k) {
     # zero-mean perturbation draw conditioned on the observed cells:
     #   u ~ N(0, K);  e ~ N(0, nu I);  d = u - K S^T (S K S^T + nu I)^{-1} (Su + Se)
     u <- quick_mvnorm_chol(Rs_chol, Rt_chol)
-    e <- stats::rnorm(N, sd = sqrt(noise_var))
+    e <- stats::rnorm(N, sd = sqrt_nv)
     alpha <- cg(u[obs_idx] + e[obs_idx], obs_idx, N, space_mat, time_mat,
                 noise_var, tol = tol)
     d_obs <- u - kron_mv(fill_vector(alpha, obs_idx, N), space_mat, time_mat)
 
     # its complete-grid twin, exact in the eigenbasis, sharing the same u and e
     w <- matrix(u + e, nrow = nt, ncol = n)
-    coef <- crossprod(eig_t$vectors, w) %*% eig_s$vectors
-    d_complete <- u -
-      as.vector(eig_t$vectors %*% (coef * shrink) %*% t(eig_s$vectors))
+    coef <- crossprod(Ut, w) %*% Us
+    d_complete <- u - as.vector(Ut %*% (coef * shrink) %*% UsT)
 
-    ss_corr <- ss_corr + (d_obs^2 - d_complete^2)
     if (!is.null(progress_bar)) progress_bar$tick()
+    d_obs^2 - d_complete^2
   }
+
+  # future.seed = TRUE: one CMRG stream per draw, so output is reproducible
+  # under set.seed() and identical for every plan/worker count.
+  # future.stdout = NA: don't sink stdout, so the (sequential-only) progress
+  # bar renders live rather than after the last draw.
+  contrib <- future.apply::future_lapply(
+    seq_len(n_draws), one_draw,
+    future.seed = TRUE, future.stdout = NA
+  )
+  ss_corr <- Reduce(`+`, contrib)
   pmax(v_complete + ss_corr / n_draws, 0)
 }
 
@@ -143,7 +161,32 @@ gp_posterior_var <- function(obs_idx, N, space_mat, time_mat, noise_var,
 #' @param progress Logical; show a progress bar over the posterior-draw loop
 #'   (the expensive part). Defaults to `TRUE`, but the bar is drawn only in an
 #'   interactive UTF-8 / truecolor terminal -- it stays silent in scripts,
-#'   knitr, logs and CI. Set `FALSE` to disable it entirely.
+#'   knitr, logs and CI. Under a multi-worker [future::plan()] the bar is
+#'   suppressed (workers cannot tick it). Set `FALSE` to disable it entirely.
+#'
+#' @section Parallel execution:
+#' The `n_draws` perturbation draws are independent CG solves and run through
+#' the future framework. By default (no [future::plan()] set) they run
+#' serially, exactly as before. To spread them across CPU cores, set a plan
+#' before calling and reset it after:
+#'
+#' ```r
+#' future::plan(future::multisession, workers = 4)
+#' pred <- gp_predict(...)
+#' future::plan(future::sequential)
+#' ```
+#'
+#' Results are identical for every backend and worker count, and reproducible
+#' under [set.seed()] (each draw gets its own pre-generated L'Ecuyer-CMRG
+#' stream). Parallelism pays off when `n * n_draws` is large: each worker
+#' costs about a second to start and receives the kernel matrices once. For
+#' very large site counts you may need to raise
+#' `options(future.globals.maxSize = ...)` (the matrices shipped to workers
+#' are ~40 MB at 1000 sites x 260 weeks; the default cap is 500 MiB). If R
+#' uses a multithreaded BLAS (e.g. OpenBLAS/MKL), cap its threads inside
+#' workers to avoid oversubscription; R's shipped BLAS is single-threaded, so
+#' by default there is nothing to do. See
+#' `vignette("parallel", package = "weave")` for a walkthrough.
 #'
 #' @return A data frame with one row per cell and columns `id`, `t`, `rate`
 #'   (posterior point estimate of \eqn{\lambda}), and -- when `n_draws >= 1` --
@@ -268,7 +311,9 @@ gp_predict <- function(
 
   if (n_draws >= 1) {
     # --- posterior VARIANCE of the log-rate: exact part + draw correction ----
-    show_bar <- isTRUE(progress) && ansi_tty()
+    # The bar only makes sense under a single-worker plan: sequential futures
+    # run in this process (the tick closure fires), parallel workers do not.
+    show_bar <- isTRUE(progress) && ansi_tty() && future::nbrOfWorkers() == 1L
     pb <- if (show_bar) make_curve_bar(total = n_draws) else NULL
     vstd <- gp_posterior_var(
       obs_idx,

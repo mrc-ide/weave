@@ -499,6 +499,11 @@ ggplot() +
   theme_weave()
 ```
 
+At scale, the draws behind the interval can run across CPU cores: see the
+short companion article
+[*Running predictions in parallel*](parallel.html) — one line of setup, and
+the numbers are guaranteed not to change.
+
 ### Did we fill the gaps well?
 
 The honest test is the **held-out** weeks: does the 95% interval contain the
