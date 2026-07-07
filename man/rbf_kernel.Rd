@@ -9,12 +9,17 @@ rbf_kernel(x, theta)
 \arguments{
 \item{x}{A numeric vector or matrix of distances.}
 
-\item{theta}{A positive numeric scalar giving the length-scale parameter.}
+\item{theta}{A positive numeric scalar giving the length-scale parameter
+(the \eqn{\ell} of textbook presentations): correlation decays with
+distance over this scale, so larger values give smoother functions.}
 }
 \value{
 A numeric vector or matrix with RBF kernel values.
 }
 \description{
 Computes the radial basis function (RBF) kernel for a distance vector
-or matrix.
+or matrix:
+\deqn{k(d) = \exp\left(-\frac{d^2}{2\theta^2}\right).}
+This is the correlation form of the kernel (\eqn{k(0) = 1}); any global
+variance is applied separately.
 }

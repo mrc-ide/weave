@@ -7,11 +7,15 @@
 get_spatial_distance(coordinates)
 }
 \arguments{
-\item{coordinates}{A data frame with columns `lon` and `lat` in degrees.}
+\item{coordinates}{A data frame with columns \code{lon} and \code{lat}.}
 }
 \value{
 A symmetric matrix of pairwise spatial distances.
 }
 \description{
-Computes pairwise Euclidean distances between locations.
+Computes pairwise Euclidean distances between locations, in the units of
+the coordinates. No great-circle correction is applied: with raw
+longitude/latitude degrees, one degree of longitude shrinks with latitude,
+so for large or high-latitude extents project the coordinates first (e.g.
+to km) and interpret \code{length_scale} in those units.
 }

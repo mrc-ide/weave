@@ -20,104 +20,115 @@ gp_predict(
 )
 }
 \arguments{
-\item{obs_data}{Data frame with `id` (site), `t` (time) and a count column
-named by `value` (`NA` where missing). `t` is a numeric time index whose
-*differences* encode real elapsed time, so gaps and uneven spacing between
+\item{obs_data}{Data frame with \code{id} (site), \code{t} (time) and a count column
+named by \code{value} (\code{NA} where missing). \code{t} is a numeric time index whose
+\emph{differences} encode real elapsed time, so gaps and uneven spacing between
 time points are modelled as genuine time distances (use e.g. weeks or days
-since a reference). Must use the same `t` encoding as [infer_kernel_params()].}
+since a reference). Must use the same \code{t} encoding as \code{\link[=infer_kernel_params]{infer_kernel_params()}}.}
 
-\item{coordinates}{Site coordinates (data frame with `id`, `lon`, `lat`).}
+\item{coordinates}{Site coordinates (data frame with \code{id}, \code{lon}, \code{lat}).}
 
-\item{hyperparameters}{A list with elements `length_scale`, `periodic_scale`,
-`long_term_scale`, `nugget_ratio` and `sigma2` -- the value returned by
-[infer_kernel_params()].}
+\item{hyperparameters}{A list with elements \code{length_scale}, \code{periodic_scale},
+\code{long_term_scale}, \code{nugget_ratio} and \code{sigma2} -- the value returned by
+\code{\link[=infer_kernel_params]{infer_kernel_params()}}.}
 
 \item{nt}{Number of time points.}
 
-\item{period}{Period of the seasonal cycle, in the same units as `t`.}
+\item{period}{Period of the seasonal cycle, in the same units as \code{t}.}
 
 \item{n_draws}{Number of paired posterior draws used to estimate the
 missing-data correction to the variance (the prediction interval).
-Controls only the interval, not the mean. Use `0` to return the smooth
+Controls only the interval, not the mean. Use \code{0} to return the smooth
 posterior-mean rate only (one solve, no interval). Because most of the
 variance is computed exactly and the draws only estimate the gap
 correction, modest values (25--100) already give tight intervals.}
 
-\item{r}{Negative-Binomial dispersion for the count interval. If `NULL`
-(default) it is estimated by method of moments from the observed counts.}
+\item{r}{Negative-Binomial dispersion for the count interval. If \code{NULL}
+(default) it is estimated by method of moments from the observed counts.
+\code{Inf} is valid and means Poisson observation noise (no overdispersion);
+the method-of-moments estimate returns \code{Inf} itself when the data show
+no excess variance, so \code{attr(., "r")} on the result can be \code{Inf}. The
+distribution affects only the interval width -- the \code{rate} column does
+not depend on it.}
 
-\item{value}{Name of the count column (default `"y_obs"`).}
+\item{value}{Name of the count column (default \code{"y_obs"}).}
 
 \item{standardise}{Logical; standardise the plug-in field per site (default
-`TRUE`), matching [infer_kernel_params()].}
+\code{TRUE}), matching \code{\link[=infer_kernel_params]{infer_kernel_params()}}.}
 
 \item{cg_tol}{Convergence tolerance for the single posterior-mean CG solve
 (the deterministic part of the prediction).}
 
-\item{cg_draw_tol}{Convergence tolerance for the `n_draws` perturbation-draw
-CG solves. Deliberately looser than `cg_tol`: the draws only feed a
+\item{cg_draw_tol}{Convergence tolerance for the \code{n_draws} perturbation-draw
+CG solves. Deliberately looser than \code{cg_tol}: the draws only feed a
 Monte-Carlo variance whose own relative error is
-\eqn{\approx 1/\sqrt{2\,(n_{draws}-1)}} (about 5% at 200 draws), so
-solver error below that is wasted work. At the default `1e-3` the
-posterior sd typically changes by well under 1% relative to a tight solve,
+\eqn{\approx 1/\sqrt{2\,(n_{draws}-1)}} (about 5\% at 200 draws), so
+solver error below that is wasted work. At the default \code{1e-3} the
+posterior sd typically changes by well under 1\% relative to a tight solve,
 while the draw loop needs roughly half the CG iterations.}
 
 \item{progress}{Logical; show a progress bar over the posterior-draw loop
-(the expensive part). Defaults to `TRUE`, but the bar is drawn only in an
+(the expensive part). Defaults to \code{TRUE}, but the bar is drawn only in an
 interactive UTF-8 / truecolor terminal -- it stays silent in scripts,
-knitr, logs and CI. Under a multi-worker [future::plan()] the bar is
-suppressed (workers cannot tick it). Set `FALSE` to disable it entirely.}
+knitr, logs, and CI. Under a multi-worker \code{\link[future:plan]{future::plan()}} the bar is
+suppressed (workers cannot tick it). Set \code{FALSE} to disable it entirely.}
 }
 \value{
-A data frame with one row per cell and columns `id`, `t`, `rate`
-  (posterior point estimate of \eqn{\lambda}), and -- when `n_draws >= 1` --
-  `lower` and `upper` (the 95% count prediction interval). The dispersion `r`
-  used and `n_draws` are attached as attributes.
+A data frame with one row per site-by-time cell (site-week) and
+columns \code{id}, \code{t}, \code{rate}
+(posterior point estimate of \eqn{\lambda}), and -- when \code{n_draws >= 1} --
+\code{lower} and \code{upper} (the 95\% count prediction interval). The dispersion \code{r}
+used and \code{n_draws} are attached as attributes.
 }
 \description{
-Given kernel hyperparameters (e.g. from [infer_kernel_params()]), predicts the
+Given kernel hyperparameters (e.g. from \code{\link[=infer_kernel_params]{infer_kernel_params()}}), predicts the
 latent rate \eqn{\lambda = e^{\mu_s + f_{st}}} at every site-by-time cell by
 conditioning a separable Gaussian process on the observed counts only. The
 posterior mean is obtained from a single matrix-free CG solve (so it is
 smooth and deterministic). The posterior variance splits into an exact
 closed-form "no gaps" part (via the Kronecker eigendecomposition) plus a
-missing-data correction estimated from `n_draws` paired perturbation draws
-(a control variate; see [gp_posterior_var()]), so modest draw counts give
+missing-data correction estimated from \code{n_draws} paired perturbation draws
+(a control variate; see \code{\link[=gp_posterior_var]{gp_posterior_var()}}), so modest draw counts give
 tight intervals. The latent-rate posterior is then combined with
 Negative-Binomial observation noise (law of total variance, lognormal
-moment-match) to give a 95% count prediction interval.
+moment-match) to give a 95\% count prediction interval.
 }
 \details{
 Because the fit conditions on the observed set, missing cells are filled by
 genuine GP interpolation and their prediction interval can widen over gaps --
 unlike a completed-grid smoother that mean-imputes the gaps.
+
+Predictions are made at every \verb{(id, t)} cell present in \code{obs_data}. To
+predict at time points with no data anywhere (e.g. a future week), append
+rows with \code{NA} counts for those times (every site) and increase \code{nt}
+accordingly; the interval widens with distance from the data. Treat
+extrapolation beyond the observed range with the usual caution.
 }
 \section{Parallel execution}{
 
-The `n_draws` perturbation draws are independent CG solves and run through
-the future framework. By default (no [future::plan()] set) they run
+The \code{n_draws} perturbation draws are independent CG solves and run through
+the future framework. By default (no \code{\link[future:plan]{future::plan()}} set) they run
 serially, exactly as before. To spread them across CPU cores, set a plan
 before calling and reset it after:
 
-```r
-future::plan(future::multisession, workers = 4)
+\if{html}{\out{<div class="sourceCode r">}}\preformatted{future::plan(future::multisession, workers = 4)
 pred <- gp_predict(...)
 future::plan(future::sequential)
-```
+}\if{html}{\out{</div>}}
 
 Results are identical for every backend and worker count, and reproducible
-under [set.seed()] (each draw gets its own pre-generated L'Ecuyer-CMRG
-stream). Parallelism pays off when `n * n_draws` is large: each worker
+under \code{\link[=set.seed]{set.seed()}} (each draw gets its own pre-generated L'Ecuyer-CMRG
+stream). Parallelism pays off when \code{n * n_draws} is large: each worker
 costs about a second to start and receives the kernel matrices once. For
 very large site counts you may need to raise
-`options(future.globals.maxSize = ...)` (the matrices shipped to workers
+\code{options(future.globals.maxSize = ...)} (the matrices shipped to workers
 are ~40 MB at 1000 sites x 260 weeks; the default cap is 500 MiB). If R
 uses a multithreaded BLAS (e.g. OpenBLAS/MKL), cap its threads inside
 workers to avoid oversubscription; R's shipped BLAS is single-threaded, so
 by default there is nothing to do. See
-`vignette("parallel", package = "weave")` for a walkthrough.
+\code{vignette("parallel", package = "weave")} for a walkthrough.
 }
 
 \seealso{
-[infer_kernel_params()]
+\code{\link[=infer_kernel_params]{infer_kernel_params()}}
 }

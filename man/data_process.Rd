@@ -7,28 +7,28 @@
 data_process(data, ..., drop_zero = FALSE)
 }
 \arguments{
-\item{data}{A data frame containing site identifiers, time `t`,
-counts `n`, and coordinates `lat` and `lon`.}
+\item{data}{A data frame containing site identifiers, time \code{t},
+counts \code{n}, and coordinates \code{lat} and \code{lon}.}
 
-\item{...}{Columns identifying sites passed to [dplyr::group_by()]
-(unquoted).}
+\item{...}{Bare (unquoted) column names that jointly identify a site,
+e.g. \code{data_process(raw, region, facility_name)}.}
 
-\item{drop_zero}{Logical; passed to [data_missing()] -- also drop sites whose
-observed counts sum to zero (default `FALSE`).}
+\item{drop_zero}{Logical; passed to \code{\link[=data_missing]{data_missing()}} -- also drop sites whose
+observed counts sum to zero (default \code{FALSE}).}
 }
 \value{
 A list with three elements ready to pass to the model functions:
-  \describe{
-    \item{`obs_data`}{Observations with the site-identifier columns, the
-      factor `id`, time `t`, and the count column `y_obs` (`NA` where
-      missing).}
-    \item{`coordinates`}{One row per site with `id`, `lon` and `lat`.}
-    \item{`nt`}{The number of time points.}
-  }
+\describe{
+\item{\code{obs_data}}{Observations with the site-identifier columns, the
+factor \code{id}, time \code{t}, and the count column \code{y_obs} (\code{NA} where
+missing).}
+\item{\code{coordinates}}{One row per site with \code{id}, \code{lon} and \code{lat}.}
+\item{\code{nt}}{The number of time points.}
+}
 }
 \description{
 Validates and prepares input data into the shape consumed by
-[infer_kernel_params()] and [gp_predict()]: it completes the site-by-time
-grid, drops sites that cannot be modelled, assigns a factor site `id`, and
+\code{\link[=infer_kernel_params]{infer_kernel_params()}} and \code{\link[=gp_predict]{gp_predict()}}: it completes the site-by-time
+grid, drops sites that cannot be modelled, assigns a factor site \code{id}, and
 returns the observations and coordinates as separate, ready-to-use frames.
 }

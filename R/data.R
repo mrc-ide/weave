@@ -5,11 +5,12 @@
 #'
 #' @param data A data frame containing site identifiers, time `t`,
 #'   counts `n`, and coordinates `lat` and `lon`.
-#' @param ... Columns identifying sites passed to [dplyr::group_by()]
-#'   (unquoted).
+#' @param ... Bare (unquoted) column names that jointly identify a site,
+#'   e.g. `region, facility_name`.
 #'
 #' @return A data frame with missing site-time combinations filled in and
 #'   `n` set to `NA`.
+#' @keywords internal
 data_complete <- function(data, ...){
   site_names <- rlang::ensyms(...)
 
@@ -41,12 +42,13 @@ data_complete <- function(data, ...){
 #'
 #' @param data A data frame containing site identifiers, time `t`,
 #'   counts `n`, and coordinates `lat` and `lon`.
-#' @param ... Columns identifying sites passed to [dplyr::group_by()]
-#'   (unquoted).
+#' @param ... Bare (unquoted) column names that jointly identify a site,
+#'   e.g. `region, facility_name`.
 #' @param drop_zero Logical; also drop sites whose observed counts sum to zero
 #'   (default `FALSE`).
 #'
 #' @return A data frame with problem sites removed.
+#' @keywords internal
 data_missing <- function(data, ..., drop_zero = FALSE){
   site_names <- rlang::enquos(...)
 
@@ -112,10 +114,11 @@ data_missing <- function(data, ..., drop_zero = FALSE){
 #' Arranges data by site and time and creates a factor `id` per site.
 #'
 #' @param data A data frame containing site identifiers and time `t`.
-#' @param ... Columns identifying sites passed to [dplyr::group_by()]
-#'   (unquoted).
+#' @param ... Bare (unquoted) column names that jointly identify a site,
+#'   e.g. `region, facility_name`.
 #'
 #' @return A data frame ordered by site and time with an `id` column.
+#' @keywords internal
 data_order_index <- function(data, ...){
   site_names <- rlang::enquos(...)
 
@@ -145,8 +148,8 @@ data_order_index <- function(data, ...){
 #'
 #' @param data A data frame containing site identifiers, time `t`,
 #'   counts `n`, and coordinates `lat` and `lon`.
-#' @param ... Columns identifying sites passed to [dplyr::group_by()]
-#'   (unquoted).
+#' @param ... Bare (unquoted) column names that jointly identify a site,
+#'   e.g. `data_process(raw, region, facility_name)`.
 #' @param drop_zero Logical; passed to [data_missing()] -- also drop sites whose
 #'   observed counts sum to zero (default `FALSE`).
 #'
@@ -161,7 +164,7 @@ data_order_index <- function(data, ...){
 #' @export
 data_process <- function(data, ..., drop_zero = FALSE){
   if(!all(c("t", "n", "lat", "lon") %in% colnames(data))){
-    stop("Input data must include the following columns: t, n, lat and lon"
+    stop("Input data must include the following columns: t, n, lat, and lon"
     )
   }
 

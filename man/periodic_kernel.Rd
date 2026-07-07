@@ -9,13 +9,16 @@ periodic_kernel(x, alpha, period)
 \arguments{
 \item{x}{A numeric vector or matrix of distances.}
 
-\item{alpha}{A positive numeric scalar controlling the amplitude.}
+\item{alpha}{A positive numeric scalar controlling how sharply correlation
+falls within each cycle: smaller values allow sharp seasonal peaks;
+larger values give a gentler, smoother cycle.}
 
-\item{period}{A positive numeric scalar giving the period.}
+\item{period}{A positive numeric scalar giving the period \eqn{p}.}
 }
 \value{
 A numeric vector or matrix of periodic kernel values.
 }
 \description{
-Computes a periodic kernel for a distance vector or matrix.
+Computes a periodic kernel for a distance vector or matrix:
+\deqn{k(d) = \exp\left(-\frac{2\sin^2(\pi d / p)}{\alpha^2}\right).}
 }

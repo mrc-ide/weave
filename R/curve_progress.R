@@ -13,7 +13,7 @@
 #
 # Internal helper (not exported); used by gp_predict() for the
 # posterior-draw loop. Requires a UTF-8 terminal with ANSI truecolor
-# (any modern terminal, or the RStudio terminal pane).
+# (any modern terminal, or the RStudio/Positron console).
 #
 # Usage:
 #   pb <- make_curve_bar(total = 100)

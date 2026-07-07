@@ -7,12 +7,12 @@
 default_kernel_priors()
 }
 \value{
-A named list of `list(meanlog, sdlog)` priors.
+A named list of \code{list(meanlog, sdlog)} priors.
 }
 \description{
-Weakly-informative log-normal priors (i.e. Normal priors on the log scale) on
-`length_scale`, `periodic_scale`, `long_term_scale` and the noise-to-signal
-ratio `nugget_ratio`. They act as mild regularisation on an otherwise
-maximum-likelihood fit, keeping weakly-identified parameters (notably
-`long_term_scale`) away from the boundary.
+Weakly informative log-normal priors (i.e. Normal priors on the log scale) on
+\code{length_scale}, \code{periodic_scale}, \code{long_term_scale} and the noise-to-signal
+ratio \code{nugget_ratio}. They act as mild regularisation on an otherwise
+maximum-likelihood fit, keeping weakly identified parameters (notably
+\code{long_term_scale}) away from the boundary.
 }

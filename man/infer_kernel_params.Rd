@@ -20,58 +20,59 @@ infer_kernel_params(
 )
 }
 \arguments{
-\item{obs_data}{Data frame with `id` (site), `t` (time) and the count column
-named by `value`. `t` is a numeric time index whose *differences* encode
+\item{obs_data}{Data frame with \code{id} (site), \code{t} (time) and the count column
+named by \code{value}. \code{t} is a numeric time index whose \emph{differences} encode
 real elapsed time, so gaps and uneven spacing between time points are
 modelled as genuine time distances (use e.g. weeks or days since a
-reference). [gp_predict()] must be given the same `t` encoding.}
+reference). \code{\link[=gp_predict]{gp_predict()}} must be given the same \code{t} encoding.}
 
-\item{coordinates}{Site coordinates (data frame with `lon`, `lat`), ordered
-to match `sort(unique(obs_data$id))`.}
+\item{coordinates}{Site coordinates: a data frame with \code{id}, \code{lon}, \code{lat},
+one row per site in \code{obs_data} (rows are matched by \code{id}, so order does
+not matter).}
 
 \item{nt}{Number of time points.}
 
-\item{period}{Period of the seasonal cycle, in the same units as `t`.}
+\item{period}{Period of the seasonal cycle, in the same units as \code{t}.}
 
-\item{value}{Name of the count column (default `"y_obs"`).}
+\item{value}{Name of the count column (default \code{"y_obs"}).}
 
 \item{standardise}{Logical; standardise the plug-in field per site (default
-`TRUE`).}
+\code{TRUE}).}
 
-\item{priors}{Log-normal priors, see [default_kernel_priors()].}
+\item{priors}{Log-normal priors, see \code{\link[=default_kernel_priors]{default_kernel_priors()}}.}
 
 \item{start}{Named/length-4 starting values on the natural scale
-(`length_scale`, `periodic_scale`, `long_term_scale`, `nugget_ratio`).}
+(\code{length_scale}, \code{periodic_scale}, \code{long_term_scale}, \code{nugget_ratio}).}
 
 \item{n_sites}{Optional integer. If supplied and smaller than the number of
 sites, the hyperparameters are estimated from a random subsample of this
 many sites. The kernel hyperparameters are shared, population-level
-quantities, so a representative site subsample estimates the same length
-scales at a fraction of the \eqn{O(n^3)} cost -- useful for very large site
-counts. Default `NULL` uses all sites. The subsample is drawn from the
-current RNG state, so set a seed beforehand (e.g. [set.seed()]) for a
-reproducible estimate. Note: this subsamples *sites* only, not time points
+quantities, so a representative site subsample estimates the same
+length-scales at a fraction of the \eqn{O(n^3)} cost -- useful for very large site
+counts. Default \code{NULL} uses all sites. The subsample is drawn from the
+current RNG state, so set a seed beforehand (e.g. \code{\link[=set.seed]{set.seed()}}) for a
+reproducible estimate. Note: this subsamples \emph{sites} only, not time points
 (the temporal kernel needs the full series to resolve the periodic and
 long-term scales).}
 
-\item{refine}{Logical; if `TRUE`, run `refine_iter` EM-style refinement passes
+\item{refine}{Logical; if \code{TRUE}, run \code{refine_iter} EM-style refinement passes
 that re-fit after filling the gaps with the GP conditional mean (see
-Details). Default `FALSE` (the fast single-pass estimate). Recommended when
+Details). Default \code{FALSE} (the fast single-pass estimate). Recommended when
 missingness is non-trivial.}
 
-\item{refine_iter}{Number of refinement passes when `refine = TRUE` (default
-`3`). Ignored when `refine = FALSE`.}
+\item{refine_iter}{Number of refinement passes when \code{refine = TRUE} (default
+\code{3}). Ignored when \code{refine = FALSE}.}
 }
 \value{
-A list with `length_scale`, `periodic_scale`, `long_term_scale`,
-  `nugget_ratio`, the profiled `sigma2`, the maximised `log_posterior`, and
-  `convergence` (the `optim` code; 0 = success).
+A list with \code{length_scale}, \code{periodic_scale}, \code{long_term_scale},
+\code{nugget_ratio}, the profiled \code{sigma2}, the maximised \code{log_posterior}, and
+\code{convergence} (the \code{optim} code; 0 = success).
 }
 \description{
-Estimates `(length_scale, periodic_scale, long_term_scale)` plus a
+Estimates \verb{(length_scale, periodic_scale, long_term_scale)} plus a
 noise-to-signal ratio by maximising the exact GP marginal likelihood of a
 plug-in latent field, using the Kronecker eigendecomposition so the full
-`(n * nt)`-square covariance is never formed. Fast and deterministic -- no
+\code{(n * nt)}-square covariance is never formed. Fast and deterministic -- no
 MCMC, no iterative solver.
 }
 \details{
@@ -79,11 +80,17 @@ This is the recommended quick estimator when a fast hyperparameter estimate is
 wanted (e.g. as a starting point for a downstream sampler, or as a standalone
 summary).
 
-Set `refine` to enable an EM-style refinement that removes the bias missing
+Strictly, the score maximised is the marginal likelihood \emph{plus} weakly
+informative log-normal priors on the four parameters (a MAP estimate; see
+\code{\link[=default_kernel_priors]{default_kernel_priors()}}). The priors act as mild regularisation that
+keeps weakly identified parameters -- notably \code{long_term_scale} -- away
+from the boundary; pass \code{priors} to change them.
+
+Set \code{refine} to enable an EM-style refinement that removes the bias missing
 cells introduce. Each pass refits after replacing the gaps with the GP
 posterior (conditional) mean under the current estimate -- a correlation-aware
 fill, not the flat mean-imputation -- using the same matrix-free CG solve as
-[gp_predict()]. The expensive observed-cell solve runs only once per pass (not
+\code{\link[=gp_predict]{gp_predict()}}. The expensive observed-cell solve runs only once per pass (not
 inside the optimiser), so it stays cheap, and it typically converges in 2-3
 passes to the estimate you would get with no missing data at all. It does not
 remove the intrinsic plug-in attenuation (conditioning on a noisy field rather
