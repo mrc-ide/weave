@@ -47,37 +47,110 @@ recipe that builds the one enormous matrix from the two small ones: the
 covariance between cell \( (s, t) \) and cell \( (s', t') \) is simply
 \( K_{\text{space}}[s, s'] \times K_{\text{time}}[t, t'] \).
 
-The structure is easiest to see. Below is the full space-time covariance for
-a toy problem of 3 sites × 8 weeks: a 24 × 24 matrix, but built entirely from
-a 3 × 3 spatial kernel and an 8 × 8 temporal one. Each 8 × 8 block is the
-temporal kernel scaled by one entry of the spatial kernel — the whole matrix
-never needs to exist:
+### Seeing the structure
 
-```{r kron-schematic, echo = FALSE, fig.height = 4.4, fig.alt = "Heatmap of a 24-by-24 Kronecker-product covariance matrix showing a 3-by-3 grid of 8-by-8 blocks; each block is the temporal kernel scaled by one spatial kernel entry"}
+A toy problem makes the recipe concrete: 3 sites × 8 weeks, so 24 cells and a
+24 × 24 covariance. We build it from the two small pieces.
+
+**The spatial kernel** holds one correlation per *pair of sites*. In the toy,
+sites 1 and 2 sit close together and site 3 sits far away — and the matrix
+says exactly that:
+
+```{r kron-space, echo = FALSE, fig.height = 2.8, fig.alt = "A 3-by-3 spatial correlation matrix shown as a heatmap with the numeric value printed in each cell; sites 1 and 2 are strongly correlated (0.78), site 3 is weakly correlated with both"}
 n_toy <- 3; nt_toy <- 8
 coords_toy <- data.frame(id = 1:n_toy, lon = c(0, 1, 4), lat = c(0, 1, 0))
 Ks_toy <- space_kernel(coords_toy, length_scale = 2)
-Kt_toy <- time_kernel(1:nt_toy, periodic_scale = 1, long_term_scale = 50,
-                      period = 8)
+Kt_toy <- time_kernel(1:nt_toy, periodic_scale = 1, long_term_scale = 4,
+                      period = 52)
 K_toy  <- kronecker(Ks_toy, Kt_toy)
 
-kron_df <- expand.grid(row = 1:(n_toy * nt_toy), col = 1:(n_toy * nt_toy))
-kron_df$value <- as.vector(K_toy)
+tile_df <- function(M) {
+  d <- expand.grid(row = seq_len(nrow(M)), col = seq_len(ncol(M)))
+  d$value <- M[cbind(d$row, d$col)]
+  d
+}
 
-ggplot(kron_df, aes(col, row, fill = value)) +
-  geom_tile() +
-  geom_hline(yintercept = c(8.5, 16.5), colour = "white", linewidth = 0.8) +
-  geom_vline(xintercept = c(8.5, 16.5), colour = "white", linewidth = 0.8) +
-  scale_y_reverse() +
+ggplot(tile_df(Ks_toy), aes(col, row, fill = value)) +
+  geom_tile(colour = "white", linewidth = 1) +
+  geom_text(aes(label = sprintf("%.2f", value),
+                colour = value > 0.5), size = 4.2, fontface = "bold") +
+  scale_colour_manual(values = c(`TRUE` = "white", `FALSE` = weave_navy),
+                      guide = "none") +
+  scale_y_reverse(breaks = 1:3, labels = paste("site", 1:3)) +
+  scale_x_continuous(breaks = 1:3, labels = paste("site", 1:3),
+                     position = "top") +
   scale_fill_gradient(low = "#f7f1e8", high = weave_cols[["prediction"]],
-                      name = "covariance") +
+                      limits = c(0, 1), oob = scales::squish,
+                      guide = "none") +
   coord_fixed() +
-  labs(x = NULL, y = NULL,
-       title = "The full covariance for 3 sites × 8 weeks",
-       subtitle = "each 8×8 block = temporal kernel × one spatial kernel entry") +
+  labs(x = NULL, y = NULL, title = "Spatial kernel (3 × 3)",
+       subtitle = "one correlation per pair of sites") +
   theme_weave() +
-  theme(axis.text = element_blank(), panel.grid.major = element_blank())
+  theme(panel.grid.major = element_blank(),
+        axis.line = element_blank(), axis.ticks = element_blank())
 ```
+
+**The temporal kernel** holds one correlation per *pair of weeks*. Its banded
+shape says that nearby weeks look alike and the resemblance fades with lag:
+
+```{r kron-time, echo = FALSE, fig.height = 3.2, fig.alt = "An 8-by-8 temporal correlation matrix shown as a heatmap with a banded structure: strong correlation near the diagonal fading with temporal lag"}
+ggplot(tile_df(Kt_toy), aes(col, row, fill = value)) +
+  geom_tile(colour = "white", linewidth = 0.4) +
+  geom_text(aes(label = sprintf("%.2f", value),
+                colour = value > 0.5), size = 2.6) +
+  scale_colour_manual(values = c(`TRUE` = "white", `FALSE` = weave_navy),
+                      guide = "none") +
+  scale_y_reverse(breaks = 1:8, labels = paste("week", 1:8)) +
+  scale_x_continuous(breaks = 1:8, position = "top") +
+  scale_fill_gradient(low = "#f7f1e8", high = weave_cols[["prediction"]],
+                      limits = c(0, 1), oob = scales::squish,
+                      guide = "none") +
+  coord_fixed() +
+  labs(x = NULL, y = NULL, title = "Temporal kernel (8 × 8)",
+       subtitle = "one correlation per pair of weeks, fading with lag") +
+  theme_weave() +
+  theme(panel.grid.major = element_blank(),
+        axis.line = element_blank(), axis.ticks = element_blank())
+```
+
+**The Kronecker product assembles the full covariance from those two.** Lay
+out a 3 × 3 grid of blocks — one block per pair of sites — and make each
+block a copy of the whole 8 × 8 temporal kernel, dimmed by that site pair's
+spatial correlation. Sites 1 and 2 are highly correlated (0.78), so their
+off-diagonal blocks are nearly as strong as the diagonal; site 3 is far from
+site 1 (0.14), so their block — outlined in navy below — is the same temporal
+pattern, just faint:
+
+```{r kron-product, echo = FALSE, fig.height = 4.8, fig.alt = "The full 24-by-24 space-time covariance as a heatmap of 9 blocks in a 3-by-3 grid; each block repeats the temporal kernel scaled by one spatial correlation, and the faint block linking site 1 and site 3 is outlined in navy"}
+ggplot(tile_df(K_toy), aes(col, row, fill = value)) +
+  geom_tile() +
+  geom_hline(yintercept = c(8.5, 16.5), colour = "white", linewidth = 1) +
+  geom_vline(xintercept = c(8.5, 16.5), colour = "white", linewidth = 1) +
+  annotate("rect", xmin = 16.5, xmax = 24.5, ymin = 0.5, ymax = 8.5,
+           fill = NA, colour = weave_navy, linewidth = 1) +
+  annotate("text", x = 20.5, y = 4.5, label = "0.14 x the\ntemporal kernel",
+           colour = weave_navy, size = 3.4, fontface = "bold", lineheight = 1) +
+  scale_y_reverse(breaks = c(4.5, 12.5, 20.5), labels = paste("site", 1:3)) +
+  scale_x_continuous(breaks = c(4.5, 12.5, 20.5), labels = paste("site", 1:3),
+                     position = "top") +
+  scale_fill_gradient(low = "#f7f1e8", high = weave_cols[["prediction"]],
+                      limits = c(0, 1), oob = scales::squish,
+                      name = "correlation") +
+  coord_fixed(clip = "off") +
+  labs(x = NULL, y = NULL,
+       title = "Space-time covariance (24 × 24)",
+       subtitle = "each block = the temporal kernel × one spatial entry") +
+  theme_weave() +
+  theme(panel.grid.major = element_blank(),
+        axis.line = element_blank(), axis.ticks = element_blank())
+```
+
+Read any single entry the same way: the covariance between cell
+\( (s, t) \) and cell \( (s', t') \) is
+\( K_{\text{space}}[s, s'] \times K_{\text{time}}[t, t'] \) — always a
+product of one number from each small matrix. That is all \( \otimes \)
+means, and it is why the 24 × 24 matrix (or the 67-billion-entry one) never
+needs to exist: the two small matrices carry every entry implicitly.
 
 Statistically, separability says the *shape* of the temporal correlation is
 the same at every site (and vice versa) — a modelling assumption, and the
