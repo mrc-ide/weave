@@ -39,6 +39,7 @@
 <li><a class="dropdown-item" href="../articles/gaussian-processes.html">Gaussian processes: a gentle introduction</a></li>
     <li><a class="dropdown-item" href="../articles/walkthrough.html">The weave walkthrough: estimating kernels and predicting rates</a></li>
     <li><a class="dropdown-item" href="../articles/data-preparation.html">Using weave with your own data</a></li>
+    <li><a class="dropdown-item" href="../articles/kronecker.html">The Kronecker trick: why weave is fast</a></li>
     <li><a class="dropdown-item" href="../articles/parallel.html">Running predictions in parallel</a></li>
   </ul>
 </li>
@@ -76,17 +77,21 @@ turns noisy, gappy count data into a smooth estimate of an underlying
 rate. If the ideas of a Gaussian process and a kernel are new, the
 companion <a href="gaussian-processes.html"><em>gentle
 introduction</em></a> builds them up first; here we apply them. The
-walkthrough has two halves:</p>
+walkthrough has three parts:</p>
 <ol style="list-style-type: decimal">
 <li>
-<strong>Estimate the kernel hyperparameters</strong> — the handful
-of numbers that say how quickly counts become uncorrelated as we move
-apart in space and in time.</li>
+<strong>The model</strong> — what we assume generates the counts,
+the kernels that encode smoothness, and the simulated data we will use
+throughout.</li>
 <li>
-<strong>Use them to predict</strong> — denoise the observed counts,
-<em>fill in the missing weeks</em>, and place an honest
-<strong>prediction interval</strong> around every estimate with
-<code><a href="../reference/gp_predict.html">gp_predict()</a></code>.</li>
+<strong>Fitting the kernel hyperparameters</strong> — how the
+parameters that control how quickly counts become uncorrelated in space
+and time are estimated, including the EM-style handling of missing
+weeks.</li>
+<li>
+<strong>From fitted kernels to predictions</strong> — the best-guess
+rate at every site and week, and an honest <strong>prediction
+interval</strong> around it, with <code><a href="../reference/gp_predict.html">gp_predict()</a></code>.</li>
 </ol>
 <p>We use a small simulated example with a <em>known</em> answer
 (including known missing weeks), so we can watch the method recover the
@@ -101,6 +106,9 @@ that speed are listed honestly at the end.</p>
 <div class="section level2">
 <h2 id="the-model">1. The model<a class="anchor" aria-label="anchor" href="#the-model"></a>
 </h2>
+<div class="section level3">
+<h3 id="the-observation-model-counts-by-site-and-week">The observation model: counts by site and week<a class="anchor" aria-label="anchor" href="#the-observation-model-counts-by-site-and-week"></a>
+</h3>
 <div class="maths">
 <p>We observe a count <code>y</code> at every site <code>s</code> (a
 health facility) and time <code>t</code> (a week), and assume</p>
@@ -126,7 +134,8 @@ function of their separation.</li>
 <li>
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>⊗</mi><annotation encoding="application/x-tex">\otimes</annotation></semantics></math>
 is the Kronecker product — the full space-time covariance is built from
-a small spatial kernel and a small temporal kernel (“separable”).</li>
+a small spatial kernel and a small temporal kernel (“separable”). This
+structure is also why everything below is fast: see <a href="kronecker.html"><em>The Kronecker trick</em></a>.</li>
 </ul>
 <p>The Negative-Binomial assumption is lighter than it looks: it enters
 only the <strong>prediction interval</strong> (through the count-noise
@@ -141,7 +150,21 @@ to Poisson — the limit
 which the dispersion estimate returns automatically when the data show
 no excess variance.</p>
 </div>
-<p>The kernels carry three hyperparameters — the knobs we want to
+<div class="intuition">
+<p>Each facility has a smooth underlying rate of cases. Nearby
+facilities, and nearby weeks, tend to look similar; far-apart ones
+drift. The kernels control <em>how quickly</em> that resemblance fades
+with distance in space and in time. Our whole task is to read their
+parameters off the data.</p>
+</div>
+</div>
+<div class="section level3">
+<h3 id="the-kernels-and-their-hyperparameters">The kernels and their hyperparameters<a class="anchor" aria-label="anchor" href="#the-kernels-and-their-hyperparameters"></a>
+</h3>
+<p>The spatial kernel is an RBF (squared-exponential) on the distance
+between sites; the temporal kernel is a periodic kernel (the seasonal
+cycle) multiplied by a slowly-decaying RBF (the long-run drift). Between
+them they carry three hyperparameters — the quantities we want to
 estimate:</p>
 <ul>
 <li>
@@ -154,28 +177,27 @@ and falls;</li>
 <code>long_term_scale</code> — how slowly the year-on-year level
 drifts.</li>
 </ul>
-<div class="intuition">
-<p>Each facility has a smooth underlying rate of cases. Nearby
-facilities, and nearby weeks, tend to look similar; far-apart ones
-drift. The three knobs control <em>how quickly</em> that resemblance
-fades with distance in space and in time. Our whole task is to read
-those three numbers off the data.</p>
+<p>A fourth, the <strong>nugget ratio</strong>, is estimated alongside
+them: the share of the variance that is observation noise rather than
+smooth signal. Its role is explained in part 2. (The <a href="gaussian-processes.html"><em>gentle introduction</em></a> shows
+what each kernel looks like and how its parameter changes the curves it
+generates.)</p>
 </div>
 <div class="section level3">
-<h3 id="the-worked-example">The worked example<a class="anchor" aria-label="anchor" href="#the-worked-example"></a>
+<h3 id="the-worked-example-simulated-data-with-missing-weeks">The worked example: simulated data with missing weeks<a class="anchor" aria-label="anchor" href="#the-worked-example-simulated-data-with-missing-weeks"></a>
 </h3>
-<p>We simulate data with <em>chosen</em> true knobs, so we can check the
-answer. The small helpers that draw the counts and punch clustered gaps
-into them (<code>simulate_data()</code>, <code>observed_data()</code>)
-are example scaffolding, not part of the package, so they are hidden
-here.</p>
+<p>We simulate data with <em>chosen</em> true hyperparameters, so we can
+check the answer. The small helpers that draw the counts and remove
+clustered runs of weeks (<code>simulate_data()</code>,
+<code>observed_data()</code>) are example scaffolding, not part of the
+package, so they are hidden here.</p>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># example dimensions</span></span>
 <span><span class="va">n</span>      <span class="op">&lt;-</span> <span class="fl">20</span>          <span class="co"># sites (health facilities)</span></span>
 <span><span class="va">nt</span>     <span class="op">&lt;-</span> <span class="fl">52</span> <span class="op">*</span> <span class="fl">3</span>      <span class="co"># weeks (3 years)</span></span>
 <span><span class="va">period</span> <span class="op">&lt;-</span> <span class="fl">52</span>          <span class="co"># weeks per seasonal cycle</span></span>
 <span></span>
-<span><span class="co"># the "true" kernel knobs we will try to recover</span></span>
+<span><span class="co"># the true kernel hyperparameters we will try to recover</span></span>
 <span><span class="va">true_length_scale</span>    <span class="op">&lt;-</span> <span class="fl">2</span>     <span class="co"># spatial smoothness</span></span>
 <span><span class="va">true_periodic_scale</span>  <span class="op">&lt;-</span> <span class="fl">1.1</span>   <span class="co"># how sharp the season is</span></span>
 <span><span class="va">true_long_term_scale</span> <span class="op">&lt;-</span> <span class="fl">150</span>   <span class="co"># long-run drift</span></span>
@@ -226,8 +248,16 @@ to see.</p>
 </div>
 </div>
 <div class="section level2">
-<h2 id="a-quick-plug-in-latent-field">2. A quick “plug-in” latent field<a class="anchor" aria-label="anchor" href="#a-quick-plug-in-latent-field"></a>
+<h2 id="fitting-the-kernel-hyperparameters">2. Fitting the kernel hyperparameters<a class="anchor" aria-label="anchor" href="#fitting-the-kernel-hyperparameters"></a>
 </h2>
+<p>Estimation happens in two moves: build a cheap stand-in for the
+latent field we cannot see, then search for the kernel parameters under
+which that stand-in looks most plausible. Missing weeks get a dedicated
+correction — an EM-style refinement — described at the end of this
+part.</p>
+<div class="section level3">
+<h3 id="a-quick-plug-in-latent-field">A quick plug-in latent field<a class="anchor" aria-label="anchor" href="#a-quick-plug-in-latent-field"></a>
+</h3>
 <div class="maths">
 <p>We cannot see the latent field
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>f</mi><annotation encoding="application/x-tex">f</annotation></semantics></math>
@@ -249,12 +279,9 @@ one that matches
 Subtracting each site’s average removes the baseline
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>μ</mi><mi>s</mi></msub><annotation encoding="application/x-tex">\mu_s</annotation></semantics></math>
 (which we do not care about here), and dividing by the spread puts every
-site on the same footing, so a single set of knobs applies to all of
-them. It is noisy — but it is instant.</p>
+site on the same footing, so a single set of hyperparameters applies to
+all of them. It is noisy — but it is instant.</p>
 </div>
-<div class="section level3">
-<h3 id="the-worked-example-1">The worked example<a class="anchor" aria-label="anchor" href="#the-worked-example-1"></a>
-</h3>
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># the plug-in field: per-site centred &amp; scaled log(1 + y), as one long vector</span></span>
 <span><span class="co"># (length n * nt, with time varying fastest)</span></span>
@@ -265,10 +292,9 @@ them. It is noisy — but it is instant.</p>
 with observation noise layered on top:</p>
 <p><img src="walkthrough_files/figure-html/plugin-plot-1.png" class="r-plt" alt="" width="1050" style="display: block; margin: auto;"></p>
 </div>
-</div>
-<div class="section level2">
-<h2 id="score-the-knobs-with-the-marginal-likelihood">3. Score the knobs with the marginal likelihood<a class="anchor" aria-label="anchor" href="#score-the-knobs-with-the-marginal-likelihood"></a>
-</h2>
+<div class="section level3">
+<h3 id="scoring-candidate-hyperparameters-the-marginal-likelihood">Scoring candidate hyperparameters: the marginal likelihood<a class="anchor" aria-label="anchor" href="#scoring-candidate-hyperparameters-the-marginal-likelihood"></a>
+</h3>
 <div class="maths">
 <p>For a candidate set of hyperparameters
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>θ</mi><annotation encoding="application/x-tex">\theta</annotation></semantics></math>
@@ -306,13 +332,13 @@ regularisation that keeps weakly identified parameters (notably
 <code>long_term_scale</code>) off the boundary.</p>
 </div>
 <div class="intuition">
-<p>For any guess at the knobs we can ask: <em>how plausible is the
-plug-in field if the world really had this much smoothness?</em> The
+<p>For any candidate hyperparameters we can ask: <em>how plausible is
+the plug-in field if the world really had this much smoothness?</em> The
 first term
 (<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mrow><mi mathvariant="normal">log</mi><mo>⁡</mo></mrow><mo stretchy="false" form="prefix">|</mo><mi>K</mi><mo stretchy="false" form="prefix">|</mo></mrow><annotation encoding="application/x-tex">\log|K|</annotation></semantics></math>)
 penalises over-flexible kernels (an “Occam” penalty); the second rewards
-kernels that explain the field well. We turn the dial until the score is
-best.</p>
+kernels that explain the field well. We adjust the hyperparameters until
+the score is best.</p>
 <p>The <strong>nugget</strong>
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>η</mi><annotation encoding="application/x-tex">\eta</annotation></semantics></math>
 is the important addition: a slice of pure noise the model may attribute
@@ -320,68 +346,29 @@ to observation error rather than signal. Without it the kernel would
 have to explain the noisy plug-in field with smoothness alone, badly
 distorting the length-scales.</p>
 </div>
-</div>
-<div class="section level2">
-<h2 id="why-it-is-fast-the-kronecker-trick">4. Why it is fast: the Kronecker trick<a class="anchor" aria-label="anchor" href="#why-it-is-fast-the-kronecker-trick"></a>
-</h2>
-<div class="maths">
-<p>The full covariance is
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false" form="prefix">(</mo><mi>n</mi><mo>⋅</mo><msub><mi>n</mi><mi>t</mi></msub><mo stretchy="false" form="postfix">)</mo><mo>×</mo><mo stretchy="false" form="prefix">(</mo><mi>n</mi><mo>⋅</mo><msub><mi>n</mi><mi>t</mi></msub><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">(n \cdot n_t) \times (n \cdot n_t)</annotation></semantics></math>
-— here 3120 square. We never form it. Because it is a Kronecker product,
-eigendecomposing the <em>small</em> factors
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>R</mi><mtext mathvariant="normal">space</mtext></msub><mo>=</mo><msub><mi>U</mi><mi>s</mi></msub><msub><mi mathvariant="normal">Λ</mi><mi>s</mi></msub><msubsup><mi>U</mi><mi>s</mi><mi>⊤</mi></msubsup></mrow><annotation encoding="application/x-tex">R_{\text{space}} = U_s \Lambda_s U_s^\top</annotation></semantics></math>
-(size
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>n</mi><annotation encoding="application/x-tex">n</annotation></semantics></math>)
+<p>Evaluating
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mrow><mi mathvariant="normal">log</mi><mo>⁡</mo></mrow><mo stretchy="false" form="prefix">|</mo><mi>K</mi><mo stretchy="false" form="prefix">|</mo></mrow><annotation encoding="application/x-tex">\log|K|</annotation></semantics></math>
 and
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>R</mi><mtext mathvariant="normal">time</mtext></msub><mo>=</mo><msub><mi>U</mi><mi>t</mi></msub><msub><mi mathvariant="normal">Λ</mi><mi>t</mi></msub><msubsup><mi>U</mi><mi>t</mi><mi>⊤</mi></msubsup></mrow><annotation encoding="application/x-tex">R_{\text{time}} = U_t \Lambda_t U_t^\top</annotation></semantics></math>
-(size
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>n</mi><mi>t</mi></msub><annotation encoding="application/x-tex">n_t</annotation></semantics></math>)
-is enough:</p>
-<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mrow><mi mathvariant="normal">log</mi><mo>⁡</mo></mrow><mo minsize="120%" maxsize="120%" stretchy="true" form="prefix">|</mo><msub><mi>R</mi><mtext mathvariant="normal">space</mtext></msub><mo>⊗</mo><msub><mi>R</mi><mtext mathvariant="normal">time</mtext></msub><mo>+</mo><mi>η</mi><mi>I</mi><mo minsize="120%" maxsize="120%" stretchy="true" form="prefix">|</mo><mo>=</mo><munder><mo>∑</mo><mrow><mi>i</mi><mo>,</mo><mi>j</mi></mrow></munder><mrow><mi mathvariant="normal">log</mi><mo>⁡</mo></mrow><mo stretchy="false" form="prefix">(</mo><msub><mi>a</mi><mi>i</mi></msub><msub><mi>b</mi><mi>j</mi></msub><mo>+</mo><mi>η</mi><mo stretchy="false" form="postfix">)</mo><mo>,</mo><mspace width="2.0em"></mspace><msup><mi>g</mi><mi>⊤</mi></msup><mo minsize="120%" maxsize="120%" stretchy="true" form="prefix">(</mo><msub><mi>R</mi><mtext mathvariant="normal">space</mtext></msub><mo>⊗</mo><msub><mi>R</mi><mtext mathvariant="normal">time</mtext></msub><mo>+</mo><mi>η</mi><mi>I</mi><msup><mo minsize="120%" maxsize="120%" stretchy="true" form="postfix">)</mo><mrow><mi>−</mi><mn>1</mn></mrow></msup><mi>g</mi><mo>=</mo><munder><mo>∑</mo><mrow><mi>i</mi><mo>,</mo><mi>j</mi></mrow></munder><mfrac><msubsup><mi>G</mi><mrow><mi>i</mi><mi>j</mi></mrow><mn>2</mn></msubsup><mrow><msub><mi>a</mi><mi>i</mi></msub><msub><mi>b</mi><mi>j</mi></msub><mo>+</mo><mi>η</mi></mrow></mfrac><mo>,</mo></mrow><annotation encoding="application/x-tex">
-\log\bigl|R_{\text{space}} \otimes R_{\text{time}} + \eta I\bigr|
-  = \sum_{i,j} \log(a_i b_j + \eta), \qquad
-g^\top \bigl(R_{\text{space}} \otimes R_{\text{time}} + \eta I\bigr)^{-1} g
-  = \sum_{i,j} \frac{G_{ij}^2}{a_i b_j + \eta},
-</annotation></semantics></math></p>
-<p>with
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>a</mi><mi>i</mi></msub><mo>,</mo><msub><mi>b</mi><mi>j</mi></msub></mrow><annotation encoding="application/x-tex">a_i, b_j</annotation></semantics></math>
-the eigenvalues,
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>G</mi><mo>=</mo><msubsup><mi>U</mi><mi>s</mi><mi>⊤</mi></msubsup><mi>F</mi><msub><mi>U</mi><mi>t</mi></msub></mrow><annotation encoding="application/x-tex">G = U_s^\top F U_t</annotation></semantics></math>,
-and
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>F</mi><annotation encoding="application/x-tex">F</annotation></semantics></math>
-the field reshaped to
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi><mo>×</mo><msub><mi>n</mi><mi>t</mi></msub></mrow><annotation encoding="application/x-tex">n \times n_t</annotation></semantics></math>.
-The cost is
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi>g</mi><mi>⊤</mi></msup><msup><mi>K</mi><mrow><mi>−</mi><mn>1</mn></mrow></msup><mi>g</mi></mrow><annotation encoding="application/x-tex">g^\top K^{-1} g</annotation></semantics></math>
+sounds hopeless — here
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>K</mi><annotation encoding="application/x-tex">K</annotation></semantics></math>
+is 3120 square, and the optimiser scores thousands of candidates.
+Because the kernel is separable, both quantities come exactly from
+eigendecompositions of the two <em>small</em> kernels, at
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>O</mi><mo stretchy="false" form="prefix">(</mo><msup><mi>n</mi><mn>3</mn></msup><mo>+</mo><msubsup><mi>n</mi><mi>t</mi><mn>3</mn></msubsup><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">O(n^3 + n_t^3)</annotation></semantics></math>
-instead of
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>O</mi><mo minsize="120%" maxsize="120%" stretchy="true" form="prefix">(</mo><mo stretchy="false" form="prefix">(</mo><mi>n</mi><mspace width="0.167em"></mspace><msub><mi>n</mi><mi>t</mi></msub><msup><mo stretchy="false" form="postfix">)</mo><mn>3</mn></msup><mo minsize="120%" maxsize="120%" stretchy="true" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">O\big((n\,n_t)^3\big)</annotation></semantics></math>.</p>
+cost instead of
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>O</mi><mo minsize="120%" maxsize="120%" stretchy="true" form="prefix">(</mo><mo stretchy="false" form="prefix">(</mo><mi>n</mi><mspace width="0.167em"></mspace><msub><mi>n</mi><mi>t</mi></msub><msup><mo stretchy="false" form="postfix">)</mo><mn>3</mn></msup><mo minsize="120%" maxsize="120%" stretchy="true" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">O\big((n\,n_t)^3\big)</annotation></semantics></math>.
+How that works is its own short story: see <a href="kronecker.html"><em>The Kronecker trick</em></a>.</p>
 </div>
-<div class="intuition">
-<p>A separable kernel means space and time can be handled separately. So
-instead of one enormous matrix we juggle two small ones — one for space,
-one for time — which is dramatically cheaper and gives the
-<em>exact</em> same answer. This is why the estimate takes a second
-rather than hours.</p>
-</div>
-<p>The structure is easiest to see. Below is the full space-time
-covariance for a toy problem of 3 sites × 8 weeks: a 24 × 24 matrix, but
-built entirely from a 3 × 3 spatial kernel and an 8 × 8 temporal one.
-Each 8 × 8 block is the temporal kernel scaled by one entry of the
-spatial kernel — the whole matrix never needs to exist:</p>
-<p><img src="walkthrough_files/figure-html/kron-schematic-1.png" class="r-plt" alt="Heatmap of a 24-by-24 Kronecker-product covariance matrix showing a 3-by-3 grid of 8-by-8 blocks; each block is the temporal kernel scaled by one spatial kernel entry" width="1050" style="display: block; margin: auto;"></p>
-</div>
-<div class="section level2">
-<h2 id="fit-and-check-against-the-truth">5. Fit, and check against the truth<a class="anchor" aria-label="anchor" href="#fit-and-check-against-the-truth"></a>
-</h2>
-<p><code><a href="../reference/infer_kernel_params.html">infer_kernel_params()</a></code> does all of the above: build the
-plug-in field, then maximise the marginal likelihood over the three
-length-scales plus the nugget ratio.</p>
-<p>We switch on <code>refine = TRUE</code>. Filling the missing weeks
-with a flat per-site mean makes the field look as if the signal dies in
-every gap, which biases the length-scales downward (the seasonal and
-long-run scales suffer most). With <code>refine</code>, the fit instead
-fills each gap with the GP’s <em>own</em> conditional mean and refits a
-handful of times, which removes that gap-induced bias.</p>
+<div class="section level3">
+<h3 id="handling-the-gaps-em-refinement">Handling the gaps: EM refinement<a class="anchor" aria-label="anchor" href="#handling-the-gaps-em-refinement"></a>
+</h3>
+<p>Filling the missing weeks with a flat per-site mean makes the field
+look as if the signal dies in every gap, which biases the length-scales
+downward (the seasonal and long-run scales suffer most). Setting
+<code>refine = TRUE</code> removes that bias: the fit fills each gap
+with the GP’s <em>own</em> conditional mean and refits a handful of
+times.</p>
 <div class="intuition">
 <p>This loop is exactly the <strong>EM algorithm</strong> for a fit with
 missing data, alternating two steps:</p>
@@ -402,9 +389,18 @@ landing on essentially the estimate we would have got with <em>no</em>
 gaps at all. Crucially, the expensive conditional-mean solve runs only
 once per pass, never inside the optimiser, so the whole correction stays
 cheap. (It removes the bias the <em>gaps</em> cause; the residual
-plug-in attenuation below — from conditioning on a noisy field rather
-than integrating it out — is a separate matter it does not fix.)</p>
+plug-in attenuation listed in the caveats — from conditioning on a noisy
+field rather than integrating it out — is a separate matter it does not
+fix.)</p>
 </div>
+</div>
+<div class="section level3">
+<h3 id="the-worked-example-fit-and-check">The worked example: fit and check<a class="anchor" aria-label="anchor" href="#the-worked-example-fit-and-check"></a>
+</h3>
+<p><code><a href="../reference/infer_kernel_params.html">infer_kernel_params()</a></code> does all of the above: build the
+plug-in field, then maximise the score over the three length-scales plus
+the nugget ratio, with <code>refine = TRUE</code> switched on because
+our data has gaps.</p>
 <div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># maximise the GP marginal likelihood to recover the three length-scales</span></span>
 <span><span class="co"># (plus a noise/nugget ratio); the global variance sigma^2 is profiled out.</span></span>
@@ -413,7 +409,7 @@ than integrating it out — is a separate matter it does not fix.)</p>
 <span><span class="va">est</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/infer_kernel_params.html">infer_kernel_params</a></span><span class="op">(</span><span class="va">obs_data</span>, <span class="va">coordinates</span>, nt <span class="op">=</span> <span class="va">nt</span>, period <span class="op">=</span> <span class="va">period</span>,</span>
 <span>                           refine <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># did we recover the knobs we simulated from?</span></span>
+<span><span class="co"># did we recover the hyperparameters we simulated from?</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
 <span>  parameter <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"length_scale"</span>, <span class="st">"periodic_scale"</span>, <span class="st">"long_term_scale"</span><span class="op">)</span>,</span>
 <span>  truth     <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">true_length_scale</span>, <span class="va">true_periodic_scale</span>, <span class="va">true_long_term_scale</span><span class="op">)</span>,</span>
@@ -448,17 +444,25 @@ interval draws, which parallelise — see <a href="parallel.html"><em>Running pr
 method worked, they overlap.</p>
 <p><img src="walkthrough_files/figure-html/kernel-check-1.png" class="r-plt" alt="" width="1050" style="display: block; margin: auto;"><img src="walkthrough_files/figure-html/kernel-check-2.png" class="r-plt" alt="" width="1050" style="display: block; margin: auto;"></p>
 </div>
+</div>
 <div class="section level2">
-<h2 id="predict-smoothing-gap-filling-and-prediction-intervals">6. Predict: smoothing, gap-filling, and prediction intervals<a class="anchor" aria-label="anchor" href="#predict-smoothing-gap-filling-and-prediction-intervals"></a>
+<h2 id="from-fitted-kernels-to-predictions">3. From fitted kernels to predictions<a class="anchor" aria-label="anchor" href="#from-fitted-kernels-to-predictions"></a>
 </h2>
 <p>With the kernels estimated, we put them to work: clean up the noise,
 fill in the missing weeks, and say how <em>uncertain</em> each estimate
-is. A single function, <code><a href="../reference/gp_predict.html">gp_predict()</a></code>, does all three.</p>
+is. A single function, <code><a href="../reference/gp_predict.html">gp_predict()</a></code>, does both of the
+pieces below in one call.</p>
+<div class="section level3">
+<h3 id="the-best-guess-the-posterior-mean">The best guess: the posterior mean<a class="anchor" aria-label="anchor" href="#the-best-guess-the-posterior-mean"></a>
+</h3>
 <div class="maths">
 <p><code><a href="../reference/gp_predict.html">gp_predict()</a></code> conditions a separable Gaussian process on
 the <strong>observed cells only</strong>. The posterior
 <strong>mean</strong> of the latent field comes from one matrix-free
-solve,</p>
+conjugate-gradient solve (cheap because multiplying by
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>K</mi><annotation encoding="application/x-tex">K</annotation></semantics></math>
+never forms it — see <a href="kronecker.html"><em>The Kronecker
+trick</em></a>),</p>
 <p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mover><mi>f</mi><mo accent="true">̂</mo></mover><mo>=</mo><mi>K</mi><msup><mi>S</mi><mi>⊤</mi></msup><mo minsize="120%" maxsize="120%" stretchy="true" form="prefix">(</mo><mi>S</mi><mi>K</mi><msup><mi>S</mi><mi>⊤</mi></msup><mo>+</mo><mi>ν</mi><mi>I</mi><msup><mo minsize="120%" maxsize="120%" stretchy="true" form="postfix">)</mo><mrow><mi>−</mi><mn>1</mn></mrow></msup><msub><mi>g</mi><mtext mathvariant="normal">obs</mtext></msub><mo>,</mo></mrow><annotation encoding="application/x-tex">
 \hat{f} = K S^\top \bigl(S K S^\top + \nu I\bigr)^{-1} g_{\text{obs}},
 </annotation></semantics></math></p>
@@ -466,9 +470,22 @@ solve,</p>
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>S</mi><annotation encoding="application/x-tex">S</annotation></semantics></math>
 simply picks out the observed cells and
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>ν</mi><mo>=</mo><msup><mi>σ</mi><mn>2</mn></msup><mi>η</mi></mrow><annotation encoding="application/x-tex">\nu = \sigma^2 \eta</annotation></semantics></math>
-is the observation-noise variance implied by the fitted nugget ratio —
-so the mean is smooth and deterministic. The posterior
-<strong>variance</strong> splits into two parts:</p>
+is the observation-noise variance implied by the fitted nugget ratio.
+The mean is smooth and deterministic — it does not depend on how many
+draws are used for the interval.</p>
+</div>
+<div class="intuition">
+<p>Because it conditions on the observed set, missing weeks are filled
+by genuine GP interpolation — the model’s best guess given every week it
+<em>did</em> see, weighted by the fitted correlations — unlike a
+smoother that quietly mean-imputes the gaps.</p>
+</div>
+</div>
+<div class="section level3">
+<h3 id="the-interval-exact-variance-plus-a-gaps-correction">The interval: exact variance plus a “gaps” correction<a class="anchor" aria-label="anchor" href="#the-interval-exact-variance-plus-a-gaps-correction"></a>
+</h3>
+<div class="maths">
+<p>The posterior <strong>variance</strong> splits into two parts:</p>
 <p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mrow><mi mathvariant="normal">Var</mi><mo>⁡</mo></mrow><mo stretchy="false" form="prefix">[</mo><mi>f</mi><mo stretchy="false" form="postfix">]</mo><mspace width="0.278em"></mspace><mo>=</mo><mspace width="0.278em"></mspace><munder><munder><msub><mi>V</mi><mtext mathvariant="normal">complete</mtext></msub><mo accent="true">⏟</mo></munder><mtext mathvariant="normal">exact, closed form</mtext></munder><mspace width="0.278em"></mspace><mo>+</mo><mspace width="0.278em"></mspace><munder><munder><msub><mi mathvariant="normal">Δ</mi><mtext mathvariant="normal">gaps</mtext></msub><mo accent="true">⏟</mo></munder><mrow><mrow><mtext mathvariant="normal">estimated from </mtext><mspace width="0.333em"></mspace></mrow><msub><mi>n</mi><mtext mathvariant="normal">draws</mtext></msub><mrow><mspace width="0.333em"></mspace><mtext mathvariant="normal"> paired draws</mtext></mrow></mrow></munder><mi>.</mi></mrow><annotation encoding="application/x-tex">
 \operatorname{Var}[f] \;=\;
   \underbrace{V_{\text{complete}}}_{\text{exact, closed form}}
@@ -520,9 +537,6 @@ m = \log \mathbb{E}[y] - \tfrac{s^2}{2},
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mtext mathvariant="normal">Lognormal</mtext><mo stretchy="false" form="prefix">(</mo><mi>m</mi><mo>,</mo><msup><mi>s</mi><mn>2</mn></msup><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">\text{Lognormal}(m, s^2)</annotation></semantics></math>.</p>
 </div>
 <div class="intuition">
-<p>Because it conditions on the observed set, missing weeks are filled
-by genuine GP interpolation, and their interval can <em>widen over
-gaps</em> — unlike a smoother that quietly mean-imputes the gaps.</p>
 <p>The variance trick is worth restating in plain words. Most of the
 uncertainty is known <strong>exactly</strong> — the only thing
 simulation must measure is <em>how much the gaps inflate it</em>. So
@@ -542,8 +556,9 @@ rate. An honest interval includes both. The dispersion
 method does not estimate from the likelihood, so it is recovered by
 method of moments from the observed counts.</p>
 </div>
+</div>
 <div class="section level3">
-<h3 id="the-worked-example-2">The worked example<a class="anchor" aria-label="anchor" href="#the-worked-example-2"></a>
+<h3 id="the-worked-example-predict-then-check-the-coverage">The worked example: predict, then check the coverage<a class="anchor" aria-label="anchor" href="#the-worked-example-predict-then-check-the-coverage"></a>
 </h3>
 <p>The call returns one row per site-week with the posterior
 <code>rate</code> and, because <code>n_draws &gt;= 1</code>, a 95%
@@ -575,10 +590,6 @@ the points — including the magenta held-out weeks it never saw.</p>
 the short companion article <a href="parallel.html"><em>Running
 predictions in parallel</em></a> — one line of setup, and the numbers
 are guaranteed not to change.</p>
-</div>
-<div class="section level3">
-<h3 id="did-we-fill-the-gaps-well">Did we fill the gaps well?<a class="anchor" aria-label="anchor" href="#did-we-fill-the-gaps-well"></a>
-</h3>
 <p>The honest test is the <strong>held-out</strong> weeks: does the 95%
 interval contain the counts the model never saw? It should, about 95% of
 the time.</p>
@@ -604,7 +615,7 @@ below).</p>
 </div>
 </div>
 <div class="section level2">
-<h2 id="caveats-and-approximations">7. Caveats and approximations<a class="anchor" aria-label="anchor" href="#caveats-and-approximations"></a>
+<h2 id="caveats-and-approximations">Caveats and approximations<a class="anchor" aria-label="anchor" href="#caveats-and-approximations"></a>
 </h2>
 <div class="caveat">
 <p>This is a fast, deterministic estimate — not a full posterior. The
@@ -668,7 +679,7 @@ perturbations. <em>Advances in Neural Information Processing Systems
 </div>
 
 <div class="pkgdown-footer-right">
-  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.0.</p>
+  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.1.</p>
 </div>
 
     </footer>

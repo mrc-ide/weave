@@ -164,11 +164,12 @@ nearby facilities are expected to behave alike. Space and time are then
 combined into a single space-time covariance with a *separable*
 structure, $`K_{\text{space}} \otimes K_{\text{time}}`$ — the *Kronecker
 product*, a recipe that builds the one enormous space-time matrix from
-the two small ones — which keeps the model fast, a point the
-[walkthrough](https://mrc-ide.github.io/weave/articles/walkthrough.md)
-returns to. Three numbers control all of this: the spatial
-`length_scale`, the `periodic_scale`, and the `long_term_scale`.
-Estimating them from data is the subject of that article.
+the two small ones — which keeps the model fast (explained in [*The
+Kronecker
+trick*](https://mrc-ide.github.io/weave/articles/kronecker.md)). Three
+numbers control all of this: the spatial `length_scale`, the
+`periodic_scale`, and the `long_term_scale`. Estimating them from data
+is the subject of that article.
 
 ## 4. From prior to posterior: conditioning on data
 

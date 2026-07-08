@@ -82,6 +82,9 @@ pred <- gp_predict(obs_data, coordinates, hyperparameters = est,
   — preparing raw data with
   [`data_process()`](https://mrc-ide.github.io/weave/reference/data_process.md),
   encoding time correctly, and predicting beyond the observed weeks.
+- [The Kronecker
+  trick](https://mrc-ide.github.io/weave/articles/kronecker.html) — why
+  fitting and prediction stay fast and exact at scale.
 - [Running predictions in
   parallel](https://mrc-ide.github.io/weave/articles/parallel.html) —
   one line of setup to spread the prediction draws across CPU cores;
@@ -142,5 +145,7 @@ The pieces the workflow is assembled from, exported for direct use.
   rates](https://mrc-ide.github.io/weave/articles/walkthrough.md):
 - [Using weave with your own
   data](https://mrc-ide.github.io/weave/articles/data-preparation.md):
+- [The Kronecker trick: why weave is
+  fast](https://mrc-ide.github.io/weave/articles/kronecker.md):
 - [Running predictions in
   parallel](https://mrc-ide.github.io/weave/articles/parallel.md):

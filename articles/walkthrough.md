@@ -9,15 +9,18 @@ This article is a complete walkthrough of how `weave` turns noisy, gappy
 count data into a smooth estimate of an underlying rate. If the ideas of
 a Gaussian process and a kernel are new, the companion [*gentle
 introduction*](https://mrc-ide.github.io/weave/articles/gaussian-processes.md)
-builds them up first; here we apply them. The walkthrough has two
-halves:
+builds them up first; here we apply them. The walkthrough has three
+parts:
 
-1.  **Estimate the kernel hyperparameters** — the handful of numbers
-    that say how quickly counts become uncorrelated as we move apart in
-    space and in time.
-2.  **Use them to predict** — denoise the observed counts, *fill in the
-    missing weeks*, and place an honest **prediction interval** around
-    every estimate with
+1.  **The model** — what we assume generates the counts, the kernels
+    that encode smoothness, and the simulated data we will use
+    throughout.
+2.  **Fitting the kernel hyperparameters** — how the parameters that
+    control how quickly counts become uncorrelated in space and time are
+    estimated, including the EM-style handling of missing weeks.
+3.  **From fitted kernels to predictions** — the best-guess rate at
+    every site and week, and an honest **prediction interval** around
+    it, with
     [`gp_predict()`](https://mrc-ide.github.io/weave/reference/gp_predict.md).
 
 We use a small simulated example with a *known* answer (including known
@@ -30,6 +33,8 @@ rather than a full Bayesian fit. The approximations that buy that speed
 are listed honestly at the end.
 
 ## 1. The model
+
+### The observation model: counts by site and week
 
 We observe a count `y` at every site `s` (a health facility) and time
 `t` (a week), and assume
@@ -47,7 +52,9 @@ f \sim \mathcal{N}\!\left(0,\ K_{\text{space}} \otimes K_{\text{time}}\right).
   how correlated two cells are as a function of their separation.
 - $`\otimes`$ is the Kronecker product — the full space-time covariance
   is built from a small spatial kernel and a small temporal kernel
-  (“separable”).
+  (“separable”). This structure is also why everything below is fast:
+  see [*The Kronecker
+  trick*](https://mrc-ide.github.io/weave/articles/kronecker.md).
 
 The Negative-Binomial assumption is lighter than it looks: it enters
 only the **prediction interval** (through the count-noise variance
@@ -57,25 +64,38 @@ scale and do not depend on it. With no overdispersion the model reduces
 to Poisson — the limit $`r = \infty`$, which the dispersion estimate
 returns automatically when the data show no excess variance.
 
-The kernels carry three hyperparameters — the knobs we want to estimate:
+Each facility has a smooth underlying rate of cases. Nearby facilities,
+and nearby weeks, tend to look similar; far-apart ones drift. The
+kernels control *how quickly* that resemblance fades with distance in
+space and in time. Our whole task is to read their parameters off the
+data.
+
+### The kernels and their hyperparameters
+
+The spatial kernel is an RBF (squared-exponential) on the distance
+between sites; the temporal kernel is a periodic kernel (the seasonal
+cycle) multiplied by a slowly-decaying RBF (the long-run drift). Between
+them they carry three hyperparameters — the quantities we want to
+estimate:
 
 - `length_scale` — how far apart two sites must be before they stop
   looking alike (spatial RBF kernel);
 - `periodic_scale` — how sharply the yearly season rises and falls;
 - `long_term_scale` — how slowly the year-on-year level drifts.
 
-Each facility has a smooth underlying rate of cases. Nearby facilities,
-and nearby weeks, tend to look similar; far-apart ones drift. The three
-knobs control *how quickly* that resemblance fades with distance in
-space and in time. Our whole task is to read those three numbers off the
-data.
+A fourth, the **nugget ratio**, is estimated alongside them: the share
+of the variance that is observation noise rather than smooth signal. Its
+role is explained in part 2. (The [*gentle
+introduction*](https://mrc-ide.github.io/weave/articles/gaussian-processes.md)
+shows what each kernel looks like and how its parameter changes the
+curves it generates.)
 
-### The worked example
+### The worked example: simulated data with missing weeks
 
-We simulate data with *chosen* true knobs, so we can check the answer.
-The small helpers that draw the counts and punch clustered gaps into
-them (`simulate_data()`, `observed_data()`) are example scaffolding, not
-part of the package, so they are hidden here.
+We simulate data with *chosen* true hyperparameters, so we can check the
+answer. The small helpers that draw the counts and remove clustered runs
+of weeks (`simulate_data()`, `observed_data()`) are example scaffolding,
+not part of the package, so they are hidden here.
 
 ``` r
 
@@ -84,7 +104,7 @@ n      <- 20          # sites (health facilities)
 nt     <- 52 * 3      # weeks (3 years)
 period <- 52          # weeks per seasonal cycle
 
-# the "true" kernel knobs we will try to recover
+# the true kernel hyperparameters we will try to recover
 true_length_scale    <- 2     # spatial smoothness
 true_periodic_scale  <- 1.1   # how sharp the season is
 true_long_term_scale <- 150   # long-run drift
@@ -137,7 +157,14 @@ gets to see.
 
 ![](walkthrough_files/figure-html/truth-plot-1.png)
 
-## 2. A quick “plug-in” latent field
+## 2. Fitting the kernel hyperparameters
+
+Estimation happens in two moves: build a cheap stand-in for the latent
+field we cannot see, then search for the kernel parameters under which
+that stand-in looks most plausible. Missing weeks get a dedicated
+correction — an EM-style refinement — described at the end of this part.
+
+### A quick plug-in latent field
 
 We cannot see the latent field $`f`$ directly, so we build a cheap
 stand-in $`g`$ from the counts:
@@ -152,10 +179,8 @@ mean and divide by its standard deviation.
 The logarithm turns the multiplicative “rate” scale into an additive one
 that matches $`f`$. Subtracting each site’s average removes the baseline
 $`\mu_s`$ (which we do not care about here), and dividing by the spread
-puts every site on the same footing, so a single set of knobs applies to
-all of them. It is noisy — but it is instant.
-
-### The worked example
+puts every site on the same footing, so a single set of hyperparameters
+applies to all of them. It is noisy — but it is instant.
 
 ``` r
 
@@ -171,7 +196,7 @@ observation noise layered on top:
 
 ![](walkthrough_files/figure-html/plugin-plot-1.png)
 
-## 3. Score the knobs with the marginal likelihood
+### Scoring candidate hyperparameters: the marginal likelihood
 
 For a candidate set of hyperparameters $`\theta`$ the kernels give a
 covariance $`K(\theta)`$. We add a **nugget** — a noise term $`\eta`$ —
@@ -200,64 +225,32 @@ so the estimate is a MAP rather than a pure maximum likelihood — mild
 regularisation that keeps weakly identified parameters (notably
 `long_term_scale`) off the boundary.
 
-For any guess at the knobs we can ask: *how plausible is the plug-in
-field if the world really had this much smoothness?* The first term
-($`\log|K|`$) penalises over-flexible kernels (an “Occam” penalty); the
-second rewards kernels that explain the field well. We turn the dial
-until the score is best.
+For any candidate hyperparameters we can ask: *how plausible is the
+plug-in field if the world really had this much smoothness?* The first
+term ($`\log|K|`$) penalises over-flexible kernels (an “Occam” penalty);
+the second rewards kernels that explain the field well. We adjust the
+hyperparameters until the score is best.
 
 The **nugget** $`\eta`$ is the important addition: a slice of pure noise
 the model may attribute to observation error rather than signal. Without
 it the kernel would have to explain the noisy plug-in field with
 smoothness alone, badly distorting the length-scales.
 
-## 4. Why it is fast: the Kronecker trick
+Evaluating $`\log|K|`$ and $`g^\top K^{-1} g`$ sounds hopeless — here
+$`K`$ is 3120 square, and the optimiser scores thousands of candidates.
+Because the kernel is separable, both quantities come exactly from
+eigendecompositions of the two *small* kernels, at $`O(n^3 + n_t^3)`$
+cost instead of $`O\big((n\,n_t)^3\big)`$. How that works is its own
+short story: see [*The Kronecker
+trick*](https://mrc-ide.github.io/weave/articles/kronecker.md).
 
-The full covariance is $`(n \cdot n_t) \times (n \cdot n_t)`$ — here
-3120 square. We never form it. Because it is a Kronecker product,
-eigendecomposing the *small* factors
-$`R_{\text{space}} = U_s \Lambda_s U_s^\top`$ (size $`n`$) and
-$`R_{\text{time}} = U_t \Lambda_t U_t^\top`$ (size $`n_t`$) is enough:
+### Handling the gaps: EM refinement
 
-``` math
-\log\bigl|R_{\text{space}} \otimes R_{\text{time}} + \eta I\bigr|
-  = \sum_{i,j} \log(a_i b_j + \eta), \qquad
-g^\top \bigl(R_{\text{space}} \otimes R_{\text{time}} + \eta I\bigr)^{-1} g
-  = \sum_{i,j} \frac{G_{ij}^2}{a_i b_j + \eta},
-```
-
-with $`a_i, b_j`$ the eigenvalues, $`G = U_s^\top F U_t`$, and $`F`$ the
-field reshaped to $`n \times n_t`$. The cost is $`O(n^3 + n_t^3)`$
-instead of $`O\big((n\,n_t)^3\big)`$.
-
-A separable kernel means space and time can be handled separately. So
-instead of one enormous matrix we juggle two small ones — one for space,
-one for time — which is dramatically cheaper and gives the *exact* same
-answer. This is why the estimate takes a second rather than hours.
-
-The structure is easiest to see. Below is the full space-time covariance
-for a toy problem of 3 sites × 8 weeks: a 24 × 24 matrix, but built
-entirely from a 3 × 3 spatial kernel and an 8 × 8 temporal one. Each 8 ×
-8 block is the temporal kernel scaled by one entry of the spatial kernel
-— the whole matrix never needs to exist:
-
-![Heatmap of a 24-by-24 Kronecker-product covariance matrix showing a
-3-by-3 grid of 8-by-8 blocks; each block is the temporal kernel scaled
-by one spatial kernel
-entry](walkthrough_files/figure-html/kron-schematic-1.png)
-
-## 5. Fit, and check against the truth
-
-[`infer_kernel_params()`](https://mrc-ide.github.io/weave/reference/infer_kernel_params.md)
-does all of the above: build the plug-in field, then maximise the
-marginal likelihood over the three length-scales plus the nugget ratio.
-
-We switch on `refine = TRUE`. Filling the missing weeks with a flat
-per-site mean makes the field look as if the signal dies in every gap,
-which biases the length-scales downward (the seasonal and long-run
-scales suffer most). With `refine`, the fit instead fills each gap with
-the GP’s *own* conditional mean and refits a handful of times, which
-removes that gap-induced bias.
+Filling the missing weeks with a flat per-site mean makes the field look
+as if the signal dies in every gap, which biases the length-scales
+downward (the seasonal and long-run scales suffer most). Setting
+`refine = TRUE` removes that bias: the fit fills each gap with the GP’s
+*own* conditional mean and refits a handful of times.
 
 This loop is exactly the **EM algorithm** for a fit with missing data,
 alternating two steps:
@@ -277,8 +270,15 @@ landing on essentially the estimate we would have got with *no* gaps at
 all. Crucially, the expensive conditional-mean solve runs only once per
 pass, never inside the optimiser, so the whole correction stays cheap.
 (It removes the bias the *gaps* cause; the residual plug-in attenuation
-below — from conditioning on a noisy field rather than integrating it
-out — is a separate matter it does not fix.)
+listed in the caveats — from conditioning on a noisy field rather than
+integrating it out — is a separate matter it does not fix.)
+
+### The worked example: fit and check
+
+[`infer_kernel_params()`](https://mrc-ide.github.io/weave/reference/infer_kernel_params.md)
+does all of the above: build the plug-in field, then maximise the score
+over the three length-scales plus the nugget ratio, with `refine = TRUE`
+switched on because our data has gaps.
 
 ``` r
 
@@ -289,7 +289,7 @@ out — is a separate matter it does not fix.)
 est <- infer_kernel_params(obs_data, coordinates, nt = nt, period = period,
                            refine = TRUE)
 
-# did we recover the knobs we simulated from?
+# did we recover the hyperparameters we simulated from?
 data.frame(
   parameter = c("length_scale", "periodic_scale", "long_term_scale"),
   truth     = c(true_length_scale, true_periodic_scale, true_long_term_scale),
@@ -328,18 +328,22 @@ the **true** ones (navy, dashed). If the method worked, they overlap.
 
 ![](walkthrough_files/figure-html/kernel-check-1.png)![](walkthrough_files/figure-html/kernel-check-2.png)
 
-## 6. Predict: smoothing, gap-filling, and prediction intervals
+## 3. From fitted kernels to predictions
 
 With the kernels estimated, we put them to work: clean up the noise,
 fill in the missing weeks, and say how *uncertain* each estimate is. A
 single function,
 [`gp_predict()`](https://mrc-ide.github.io/weave/reference/gp_predict.md),
-does all three.
+does both of the pieces below in one call.
+
+### The best guess: the posterior mean
 
 [`gp_predict()`](https://mrc-ide.github.io/weave/reference/gp_predict.md)
 conditions a separable Gaussian process on the **observed cells only**.
 The posterior **mean** of the latent field comes from one matrix-free
-solve,
+conjugate-gradient solve (cheap because multiplying by $`K`$ never forms
+it — see [*The Kronecker
+trick*](https://mrc-ide.github.io/weave/articles/kronecker.md)),
 
 ``` math
 \hat{f} = K S^\top \bigl(S K S^\top + \nu I\bigr)^{-1} g_{\text{obs}},
@@ -347,8 +351,17 @@ solve,
 
 where $`S`$ simply picks out the observed cells and
 $`\nu = \sigma^2 \eta`$ is the observation-noise variance implied by the
-fitted nugget ratio — so the mean is smooth and deterministic. The
-posterior **variance** splits into two parts:
+fitted nugget ratio. The mean is smooth and deterministic — it does not
+depend on how many draws are used for the interval.
+
+Because it conditions on the observed set, missing weeks are filled by
+genuine GP interpolation — the model’s best guess given every week it
+*did* see, weighted by the fitted correlations — unlike a smoother that
+quietly mean-imputes the gaps.
+
+### The interval: exact variance plus a “gaps” correction
+
+The posterior **variance** splits into two parts:
 
 ``` math
 \operatorname{Var}[f] \;=\;
@@ -399,10 +412,6 @@ m = \log \mathbb{E}[y] - \tfrac{s^2}{2},
 with the interval given by the 2.5% and 97.5% quantiles of
 $`\text{Lognormal}(m, s^2)`$.
 
-Because it conditions on the observed set, missing weeks are filled by
-genuine GP interpolation, and their interval can *widen over gaps* —
-unlike a smoother that quietly mean-imputes the gaps.
-
 The variance trick is worth restating in plain words. Most of the
 uncertainty is known **exactly** — the only thing simulation must
 measure is *how much the gaps inflate it*. So instead of asking the
@@ -422,7 +431,7 @@ counts are — is the one quantity this quick method does not estimate
 from the likelihood, so it is recovered by method of moments from the
 observed counts.
 
-### The worked example
+### The worked example: predict, then check the coverage
 
 The call returns one row per site-week with the posterior `rate` and,
 because `n_draws >= 1`, a 95% interval (`lower`, `upper`). The
@@ -460,8 +469,6 @@ the short companion article [*Running predictions in
 parallel*](https://mrc-ide.github.io/weave/articles/parallel.md) — one
 line of setup, and the numbers are guaranteed not to change.
 
-### Did we fill the gaps well?
-
 The honest test is the **held-out** weeks: does the 95% interval contain
 the counts the model never saw? It should, about 95% of the time.
 
@@ -486,7 +493,7 @@ its job. Both can drift a little here because this is a small example
 and the quick method does not propagate every source of uncertainty (see
 below).
 
-## 7. Caveats and approximations
+## Caveats and approximations
 
 This is a fast, deterministic estimate — not a full posterior. The
 shortcuts that make it quick also limit it:

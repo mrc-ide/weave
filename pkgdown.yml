@@ -1,12 +1,13 @@
 pandoc: 3.8.3
-pkgdown: 2.2.0
+pkgdown: 2.2.1
 pkgdown_sha: ~
 articles:
   data-preparation: data-preparation.html
   gaussian-processes: gaussian-processes.html
+  kronecker: kronecker.html
   parallel: parallel.html
   walkthrough: walkthrough.html
-last_built: 2026-07-07T15:12Z
+last_built: 2026-07-08T05:58Z
 urls:
   reference: https://mrc-ide.github.io/weave/reference
   article: https://mrc-ide.github.io/weave/articles

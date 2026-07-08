@@ -39,6 +39,7 @@
 <li><a class="dropdown-item" href="../articles/gaussian-processes.html">Gaussian processes: a gentle introduction</a></li>
     <li><a class="dropdown-item" href="../articles/walkthrough.html">The weave walkthrough: estimating kernels and predicting rates</a></li>
     <li><a class="dropdown-item" href="../articles/data-preparation.html">Using weave with your own data</a></li>
+    <li><a class="dropdown-item" href="../articles/kronecker.html">The Kronecker trick: why weave is fast</a></li>
     <li><a class="dropdown-item" href="../articles/parallel.html">Running predictions in parallel</a></li>
   </ul>
 </li>
@@ -220,11 +221,12 @@ and time are then combined into a single space-time covariance with a
 <em>separable</em> structure,
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>K</mi><mtext mathvariant="normal">space</mtext></msub><mo>⊗</mo><msub><mi>K</mi><mtext mathvariant="normal">time</mtext></msub></mrow><annotation encoding="application/x-tex">K_{\text{space}} \otimes K_{\text{time}}</annotation></semantics></math>
 — the <em>Kronecker product</em>, a recipe that builds the one enormous
-space-time matrix from the two small ones — which keeps the model fast,
-a point the <a href="walkthrough.html">walkthrough</a> returns to. Three
-numbers control all of this: the spatial <code>length_scale</code>, the
-<code>periodic_scale</code>, and the <code>long_term_scale</code>.
-Estimating them from data is the subject of that article.</p>
+space-time matrix from the two small ones — which keeps the model fast
+(explained in <a href="kronecker.html"><em>The Kronecker
+trick</em></a>). Three numbers control all of this: the spatial
+<code>length_scale</code>, the <code>periodic_scale</code>, and the
+<code>long_term_scale</code>. Estimating them from data is the subject
+of that article.</p>
 </div>
 </div>
 <div class="section level2">
@@ -346,7 +348,7 @@ handles counts honestly.</p>
 </div>
 
 <div class="pkgdown-footer-right">
-  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.0.</p>
+  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.1.</p>
 </div>
 
     </footer>
