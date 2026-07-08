@@ -140,7 +140,7 @@ curves$length_scale <- factor(curves$length_scale,
 
 ggplot(curves, aes(lag, correlation, colour = length_scale)) +
   geom_line(linewidth = 1.1) +
-  scale_colour_manual(values = unname(weave_pal[c("violet", "green")]), name = NULL) +
+  scale_colour_manual(values = unname(weave_pal[c("rose", "teal")]), name = NULL) +
   labs(x = "Separation in time (days)", y = "Correlation",
        title = "The RBF kernel: correlation fades with distance",
        subtitle = "A longer length-scale keeps distant days correlated") +
@@ -274,6 +274,13 @@ between observed inputs, \( K_* \) between new and observed inputs, and
 \text{mean} = K_*\bigl(K + \sigma_n^2 I\bigr)^{-1}\mathbf{y}, \qquad
 \text{cov}  = K_{**} - K_*\bigl(K + \sigma_n^2 I\bigr)^{-1}K_*^{\top}.
 \]
+
+The noise term \( \sigma_n^2 I \) added to the kernel's diagonal is what
+geostatistics calls a **nugget**: the slice of the variance that is
+measurement scatter rather than smooth signal. In `weave` it is estimated
+alongside the kernel parameters as the *nugget ratio* — noise variance as a
+share of signal variance — and the [walkthrough](walkthrough.html) explains
+why the ratio, rather than the absolute noise, is the natural quantity.
 :::
 
 ::: {.intuition}
@@ -343,7 +350,7 @@ ggplot() +
              colour = weave_cols[["observed"]], size = 2.2) +
   labs(x = "Day", y = "Hummingbird visits",
        title = "Posterior: best guess with honest uncertainty",
-       subtitle = "grey = observations · blue = mean + 95% band · navy dashed = truth") +
+       subtitle = "grey = observations · teal = mean + 95% band · deep green dashed = truth") +
   theme_weave()
 ```
 

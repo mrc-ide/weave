@@ -6,8 +6,8 @@
 # knitr chunk defaults and defines a single ggplot2 theme + palette so every
 # figure across the vignettes shares one visual identity.
 #
-# The palette is taken from the hex logo (man/figures/Weave.png): a dark-navy
-# border, a warm woven-linen background, and the vivid multicolour lettering.
+# The palette is drawn from the hummingbird photograph used in the gentle
+# introduction (man/figures/Hummingbird.jpg): pine, teal, rose, moss, cream.
 # =============================================================================
 
 knitr::opts_chunk$set(
@@ -23,28 +23,31 @@ knitr::opts_chunk$set(
 )
 
 # --- brand colours -----------------------------------------------------------
-weave_navy   <- "#1b2a4a"  # logo border / headings / axis text
-weave_linen  <- "#f7f1e8"  # logo background, softened for panels and strips
-weave_grid   <- "#e7ded0"  # faint warm grid line
+# The palette is drawn from the hummingbird photograph that opens the gentle
+# introduction (man/figures/Hummingbird.jpg): deep pine plumage, an iridescent
+# teal back, hibiscus rose, moss-green leaves, and a cream bokeh background.
+weave_navy   <- "#2c463f"  # deep pine: headings / axis text / the truth
+weave_linen  <- "#f7f4ea"  # cream bokeh, for panels and strips
+weave_grid   <- "#e4e7d9"  # faint sage grid line
 
-# Vivid lettering, used as the categorical palette for GP draws etc.
+# Categorical palette for GP draws etc., in the same photograph's hues.
 weave_pal <- c(
-  violet  = "#7b2ff7",
-  magenta = "#ff2d95",
-  blue    = "#2e7fff",
-  green   = "#1dd1a1",
-  gold    = "#feca57",
-  sky     = "#48dbfb"
+  teal  = "#2f8f77",  # iridescent back
+  rose  = "#d4699e",  # hibiscus petals
+  moss  = "#7ba05b",  # leaves
+  honey = "#c9973b",  # warm bokeh light
+  pine  = "#2c463f",
+  sage  = "#a7bfae"
 )
 
 # Stable, named colours so the same role keeps the same colour across plots.
 weave_cols <- c(
   truth      = weave_navy,
-  prediction = "#2e7fff",   # logo blue
-  estimate   = "#2e7fff",
-  held_out   = "#ff2d95",   # logo magenta
-  observed   = "grey55",
-  kernel     = "#7b2ff7"    # logo violet
+  prediction = "#2f8f77",   # teal
+  estimate   = "#2f8f77",
+  held_out   = "#d4699e",   # rose
+  observed   = "#8f8779",   # warm taupe (the bird's breast)
+  kernel     = "#b23a6f"    # deep rose (the flower's centre)
 )
 
 # --- one theme for every figure ----------------------------------------------

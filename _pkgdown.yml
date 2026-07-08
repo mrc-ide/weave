@@ -4,12 +4,12 @@ template:
   bslib:
     version: 5
     bg: "#fffdfb"
-    fg: "#1b2a4a"
-    primary: "#2e7fff"
+    fg: "#2c463f"
+    primary: "#2f8f77"
     base_font: {google: "Fira Sans"}
     heading_font: {google: "Fira Sans"}
     code_font: {google: "Fira Code"}
-    code-bg: "#f7f1e8"
+    code-bg: "#f7f4ea"
     code-color: "#7a3d00"
 
 articles:
