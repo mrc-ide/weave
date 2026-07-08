@@ -355,13 +355,16 @@ ggplot() +
   geom_rect(data = bands, aes(xmin = xmin, xmax = xmax,
                               ymin = -Inf, ymax = Inf),
             fill = weave_grid, alpha = 0.6) +
-  geom_line(data = plot_df, aes(t, value, colour = type, linewidth = type)) +
-  scale_colour_manual(values = c("plug-in (start)" = weave_pal[["sage"]],
-                                 "EM pass 1"       = "#6fb5a0",
-                                 "EM pass 2"       = weave_cols[["estimate"]],
+  geom_line(data = plot_df, aes(t, value, colour = type, linewidth = type,
+                                linetype = type)) +
+  scale_colour_manual(values = c("plug-in (start)" = weave_pal[["honey"]],
+                                 "EM pass 1"       = "#8fd0bc",
+                                 "EM pass 2"       = "#1d7a63",
                                  "true field"      = weave_cols[["truth"]]),
                       name = NULL) +
-  scale_linewidth_manual(values = c(0.5, 0.7, 0.7, 0.5), guide = "none") +
+  scale_linewidth_manual(values = c(0.6, 0.8, 0.8, 0.5), guide = "none") +
+  scale_linetype_manual(values = c("solid", "solid", "solid", "22"),
+                        guide = "none") +
   labs(x = "Week", y = "Standardised latent field",
        title = sprintf("Site %d: the EM loop fills the gaps", site),
        subtitle = "shaded = missing weeks · the passes only move the field inside them") +
