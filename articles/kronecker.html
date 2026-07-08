@@ -40,6 +40,7 @@
     <li><a class="dropdown-item" href="../articles/walkthrough.html">The weave walkthrough: estimating kernels and predicting rates</a></li>
     <li><a class="dropdown-item" href="../articles/data-preparation.html">Using weave with your own data</a></li>
     <li><a class="dropdown-item" href="../articles/kronecker.html">The Kronecker trick: why weave is fast</a></li>
+    <li><a class="dropdown-item" href="../articles/noise.html">The nugget and the dispersion: two views of one noise</a></li>
     <li><a class="dropdown-item" href="../articles/parallel.html">Running predictions in parallel</a></li>
   </ul>
 </li>
@@ -126,8 +127,9 @@ of sites — and make each block a copy of the whole 8 × 8 temporal
 kernel, dimmed by that site pair’s spatial correlation. Sites 1 and 2
 are highly correlated (0.78), so their off-diagonal blocks are nearly as
 strong as the diagonal; site 3 is far from site 1 (0.14), so their block
-— outlined in navy below — is the same temporal pattern, just faint:</p>
-<p><img src="kronecker_files/figure-html/kron-product-1.png" class="r-plt" alt="The full 24-by-24 space-time covariance as a heatmap of 9 blocks in a 3-by-3 grid; each block repeats the temporal kernel scaled by one spatial correlation, and the faint block linking site 1 and site 3 is outlined in navy" width="1050" style="display: block; margin: auto;"></p>
+— outlined in deep green below — is the same temporal pattern, just
+faint:</p>
+<p><img src="kronecker_files/figure-html/kron-product-1.png" class="r-plt" alt="The full 24-by-24 space-time covariance as a heatmap of 9 blocks in a 3-by-3 grid; each block repeats the temporal kernel scaled by one spatial correlation, and the faint block linking site 1 and site 3 is outlined in deep green" width="1050" style="display: block; margin: auto;"></p>
 <p>Read any single entry the same way: the covariance between cell
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false" form="prefix">(</mo><mi>s</mi><mo>,</mo><mi>t</mi><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">(s, t)</annotation></semantics></math>
 and cell

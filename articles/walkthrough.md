@@ -85,10 +85,10 @@ estimate:
 
 A fourth, the **nugget ratio**, is estimated alongside them: the share
 of the variance that is observation noise rather than smooth signal. Its
-role is explained in part 2. (The [*gentle
-introduction*](https://mrc-ide.github.io/weave/articles/gaussian-processes.md)
-shows what each kernel looks like and how its parameter changes the
-curves it generates.)
+role — and why it is a *ratio* — is explained in part 2, where it enters
+the model. (For what each kernel looks like and how its parameter
+changes the curves it generates, see the [*gentle
+introduction*](https://mrc-ide.github.io/weave/articles/gaussian-processes.md).)
 
 ### The worked example: simulated data with missing weeks
 
@@ -145,26 +145,29 @@ The gaps are not scattered at random: they arrive in *clustered runs*,
 the way real reporting drops out — a facility goes quiet for a stretch,
 then comes back. Magenta marks the missing weeks:
 
-![Heatmap of sites by weeks: observed weeks in grey, missing weeks in
-magenta, with the missing weeks forming horizontal clustered runs within
+![Heatmap of sites by weeks: observed weeks in pale sage, missing weeks
+in rose, with the missing weeks forming horizontal clustered runs within
 sites](walkthrough_files/figure-html/missingness-map-1.png)
 
-Here are the first four sites. The **navy line** is the true underlying
-mean ($`\lambda = e^{\mu_s + f_{st}}`$); **grey points** are the counts
-we actually observe; and **magenta points** are the *held-out truth* at
-the weeks that went missing — what the model must reconstruct but never
-gets to see.
+Here are the first four sites. The **deep-green line** is the true
+underlying mean ($`\lambda = e^{\mu_s + f_{st}}`$); **grey points** are
+the counts we actually observe; and **rose points** are the *held-out
+truth* at the weeks that went missing — what the model must reconstruct
+but never gets to see.
 
 ![](walkthrough_files/figure-html/truth-plot-1.png)
 
 ## 2. Fitting the kernel hyperparameters
 
-Estimation happens in two moves: build a cheap stand-in for the latent
-field we cannot see, then search for the kernel parameters under which
-that stand-in looks most plausible. Missing weeks get a dedicated
-correction — an EM-style refinement — described at the end of this part.
+The estimator is one method with two moving parts, alternated until they
+agree: a **stand-in for the latent field** we cannot see (starting from
+a cheap plug-in, with the model itself progressively refilling the
+missing weeks), and an **exact score** — the marginal likelihood —
+maximised over the hyperparameters given the current stand-in. With no
+missing data the loop collapses to a single pass; with gaps it is
+exactly the EM algorithm.
 
-### A quick plug-in latent field
+### The latent field: a plug-in start, refined by EM
 
 We cannot see the latent field $`f`$ directly, so we build a cheap
 stand-in $`g`$ from the counts:
@@ -174,7 +177,9 @@ g_{st} = \frac{\log(1 + y_{st}) - \bar{g}_s}{\text{sd}_s},
 ```
 
 that is, take $`\log(1+y)`$, then for each site subtract that site’s
-mean and divide by its standard deviation.
+mean and divide by its standard deviation. Weeks with no data enter as
+the per-site mean — zero after centring — a deliberately neutral
+starting fill that the EM loop below revisits.
 
 The logarithm turns the multiplicative “rate” scale into an additive one
 that matches $`f`$. Subtracting each site’s average removes the baseline
@@ -191,10 +196,46 @@ str(g)
 #>  num [1:3120] 1.008 1.094 1.391 1.692 0.603 ...
 ```
 
-For one site, the plug-in field tracks the true latent field, just with
-observation noise layered on top:
+On the observed weeks, the plug-in field tracks the true latent field
+with observation noise layered on top. On the *missing* weeks it is flat
+and zero — every gap looks like a stretch where the signal died, and
+left alone that biases the length-scales downward (the seasonal and
+long-run scales suffer most). Setting `refine = TRUE` treats the plug-in
+field as just the starting point of an EM loop:
 
-![](walkthrough_files/figure-html/plugin-plot-1.png)
+This loop is exactly the **EM algorithm** for a fit with missing data,
+alternating two steps (the plug-in field with its neutral fill is
+iteration zero):
+
+- **E-step.** With the current hyperparameters, replace each missing
+  week by its expected value under the model — the GP **conditional
+  mean** given the weeks we *did* observe (the same conditional-mean
+  solve
+  [`gp_predict()`](https://mrc-ide.github.io/weave/reference/gp_predict.md)
+  performs; “kriging”, in geostatistics jargon).
+- **M-step.** Treat that completed grid as if it were fully observed and
+  re-maximise the marginal likelihood — the score defined in the next
+  subsection — to get updated hyperparameters.
+
+Each pass feeds the next, and two or three are enough to converge —
+landing on essentially the estimate we would have got with *no* gaps at
+all. Crucially, the expensive conditional-mean solve runs only once per
+pass, never inside the optimiser, so the whole correction stays cheap.
+(It removes the bias the *gaps* cause; the residual plug-in attenuation
+listed in the caveats — from conditioning on a noisy field rather than
+integrating it out — is a separate matter it does not fix.)
+
+The loop at work, on the site with the most missing weeks (gaps shaded).
+The plug-in start is flat at zero in every gap; the first EM pass
+replaces those stretches with the GP conditional mean; the second pass
+barely moves it — the loop has converged. The observed weeks never
+change, only the gaps:
+
+![One site's latent field across weeks: shaded bands mark missing
+stretches; the plug-in line sits flat at zero inside them, the EM pass 1
+line fills them with a smooth curve, EM pass 2 lies almost on top of
+pass 1, and the true field is shown for
+comparison](walkthrough_files/figure-html/em-rounds-1.png)
 
 ### Scoring candidate hyperparameters: the marginal likelihood
 
@@ -206,9 +247,13 @@ and a global variance $`\sigma^2`$:
 g \sim \mathcal{N}\!\Big(0,\ \sigma^2\big[(R_{\text{space}} \otimes R_{\text{time}}) + \eta I\big]\Big),
 ```
 
-where $`R`$ are *correlation* kernels (unit diagonal). Writing $`K`$ for
-this whole covariance and $`N = n \cdot n_t`$ for the number of cells,
-the score for $`\theta`$ is the log marginal likelihood
+where $`R`$ are *correlation* kernels (unit diagonal). The nugget is
+expressed as a **ratio** because the global variance $`\sigma^2`$
+multiplies the whole covariance — signal and noise alike — so only the
+noise-to-signal ratio $`\eta`$ is separately identifiable; the absolute
+noise variance is recovered afterwards as $`\nu = \sigma^2 \eta`$.
+Writing $`K`$ for this whole covariance and $`N = n \cdot n_t`$ for the
+number of cells, the score for $`\theta`$ is the log marginal likelihood
 
 ``` math
 \log p(g \mid \theta) = -\tfrac{1}{2}\Big(\log|K| + g^\top K^{-1} g + N\log 2\pi\Big).
@@ -234,44 +279,24 @@ hyperparameters until the score is best.
 The **nugget** $`\eta`$ is the important addition: a slice of pure noise
 the model may attribute to observation error rather than signal. Without
 it the kernel would have to explain the noisy plug-in field with
-smoothness alone, badly distorting the length-scales.
+smoothness alone, badly distorting the length-scales. (The nugget and
+the Negative-Binomial dispersion of part 3 are two views of the same
+count scatter — see [*The nugget and the
+dispersion*](https://mrc-ide.github.io/weave/articles/noise.md).)
 
-Evaluating $`\log|K|`$ and $`g^\top K^{-1} g`$ sounds hopeless — here
-$`K`$ is 3120 square, and the optimiser scores thousands of candidates.
-Because the kernel is separable, both quantities come exactly from
-eigendecompositions of the two *small* kernels, at $`O(n^3 + n_t^3)`$
-cost instead of $`O\big((n\,n_t)^3\big)`$. How that works is its own
-short story: see [*The Kronecker
+Evaluating $`\log|K|`$ and $`g^\top K^{-1} g`$ sounds hopeless, for two
+compounding reasons. First, $`K`$ has one row and one column per
+site-week *cell* — 3120 × 3120 even in this small example, and around
+260,000 × 260,000 (68 billion entries) at a realistic 1000 sites × five
+years — and determinants and inverses cost $`O(N^3)`$: work that grows
+with the *cube* of the cell count. Second, this is the inner loop — the
+optimiser needs the score at every candidate $`\theta`$ it tries,
+typically hundreds of evaluations. Because the kernel is separable, both
+quantities instead come exactly from eigendecompositions of the two
+*small* kernels, at $`O(n^3 + n_t^3)`$ cost instead of
+$`O\big((n\,n_t)^3\big)`$. How that works is its own short story: see
+[*The Kronecker
 trick*](https://mrc-ide.github.io/weave/articles/kronecker.md).
-
-### Handling the gaps: EM refinement
-
-Filling the missing weeks with a flat per-site mean makes the field look
-as if the signal dies in every gap, which biases the length-scales
-downward (the seasonal and long-run scales suffer most). Setting
-`refine = TRUE` removes that bias: the fit fills each gap with the GP’s
-*own* conditional mean and refits a handful of times.
-
-This loop is exactly the **EM algorithm** for a fit with missing data,
-alternating two steps:
-
-- **E-step.** With the current hyperparameters, replace each missing
-  week by its expected value under the model — the GP **conditional
-  mean** given the weeks we *did* observe (the same conditional-mean
-  solve
-  [`gp_predict()`](https://mrc-ide.github.io/weave/reference/gp_predict.md)
-  performs; “kriging”, in geostatistics jargon).
-- **M-step.** Treat that completed grid as if it were fully observed and
-  re-maximise the fast (Kronecker) marginal likelihood to get updated
-  hyperparameters.
-
-Each pass feeds the next, and two or three are enough to converge —
-landing on essentially the estimate we would have got with *no* gaps at
-all. Crucially, the expensive conditional-mean solve runs only once per
-pass, never inside the optimiser, so the whole correction stays cheap.
-(It removes the bias the *gaps* cause; the residual plug-in attenuation
-listed in the caveats — from conditioning on a noisy field rather than
-integrating it out — is a separate matter it does not fix.)
 
 ### The worked example: fit and check
 
@@ -323,8 +348,9 @@ Prediction cost is dominated by the interval draws, which parallelise —
 see [*Running predictions in
 parallel*](https://mrc-ide.github.io/weave/articles/parallel.md).
 
-The clearest check is to draw the **fitted** kernels (blue) on top of
-the **true** ones (navy, dashed). If the method worked, they overlap.
+The clearest check is to draw the **fitted** kernels (teal) on top of
+the **true** ones (deep green, dashed). If the method worked, they
+overlap.
 
 ![](walkthrough_files/figure-html/kernel-check-1.png)![](walkthrough_files/figure-html/kernel-check-2.png)
 
@@ -429,7 +455,12 @@ underlying rate, **and** counts scatter around any given rate. An honest
 interval includes both. The dispersion $`r`$ — how overdispersed the
 counts are — is the one quantity this quick method does not estimate
 from the likelihood, so it is recovered by method of moments from the
-observed counts.
+observed counts. (If it seems the observation noise has now been
+modelled twice — once as the nugget, once as $`r`$ — it has not: the two
+feed different terms of the variance above. The short companion note
+[*The nugget and the
+dispersion*](https://mrc-ide.github.io/weave/articles/noise.md) explains
+how they relate.)
 
 ### The worked example: predict, then check the coverage
 
@@ -458,9 +489,9 @@ attr(pred, "r")       # the NB dispersion used for the interval (estimated)
 #> [1] 13.02461
 ```
 
-The blue line is the predicted mean rate and the blue band the 95%
-prediction interval. It should track the navy true-mean line and cover
-the points — including the magenta held-out weeks it never saw.
+The teal line is the predicted mean rate and the teal band the 95%
+prediction interval. It should track the deep-green true-mean line and
+cover the points — including the rose held-out weeks it never saw.
 
 ![](walkthrough_files/figure-html/predict-plot-1.png)
 
@@ -498,16 +529,29 @@ below).
 This is a fast, deterministic estimate — not a full posterior. The
 shortcuts that make it quick also limit it:
 
-- **Plug-in, not Bayesian.** We condition on a single noisy estimate of
-  the latent field rather than integrating it out. This *attenuates* the
-  length-scales (`periodic_scale` and `long_term_scale` tend to come out
-  a little low). The nugget mitigates this but does not remove it.
-- **`log(1 + y)`** is a crude stand-in for the latent log-rate, and is
-  poorest at very low counts.
-- **Per-site scaling** folds all per-site variance into a single global
-  $`\sigma^2`$ and amplifies noise at low-count sites.
-- **One homoscedastic nugget.** Real count noise is heteroscedastic (it
-  grows with the rate); we summarise it with a single ratio $`\eta`$.
+- **Plug-in, not Bayesian.** A full Bayesian treatment would average the
+  score over every latent field consistent with the counts; we condition
+  on a single noisy estimate instead and treat it as data. Because that
+  estimate carries observation noise, some of the noise gets read as
+  real short-range structure, which *attenuates* the length-scales
+  (`periodic_scale` and `long_term_scale` tend to come out a little
+  low). The nugget absorbs most of this — it gives the noise somewhere
+  else to go — but not all of it.
+- **`log(1 + y)`** is a crude stand-in for the latent log-rate. It is
+  poorest at very low counts, where the `+1` dominates (the step from 0
+  to 1 case is huge on this scale) and where Poisson-level noise is
+  strongly asymmetric after the log — so sites with sparse counts
+  contribute a distorted signal.
+- **Per-site scaling** puts every site on the same footing so one global
+  $`\sigma^2`$ can serve them all — but the scale factor is itself
+  estimated from that site’s data, noisily when a site has few observed
+  weeks, and a site whose true variability differs from the rest is
+  forced to look the same.
+- **One homoscedastic nugget.** Real count noise is heteroscedastic — a
+  high-count week is noisier in absolute terms than a low-count one —
+  but the model summarises all of it with the single ratio $`\eta`$. The
+  effect is mild over-smoothing where counts are high and
+  under-smoothing where they are low.
 - **Missing cells.** With `refine = TRUE` (used above) the fit fills the
   gaps with the GP conditional mean and refits, so missingness no longer
   biases the length-scales; the default `refine = FALSE` mean-imputes
@@ -515,10 +559,16 @@ shortcuts that make it quick also limit it:
   ([`gp_predict()`](https://mrc-ide.github.io/weave/reference/gp_predict.md)
   always conditions on the observed cells only, so its interval widens
   over gaps either way.)
-- **The dispersion $`r`$** is recovered by a rough method of moments, so
-  the *width* of the count prediction interval inherits that error.
+- **The dispersion $`r`$** is recovered by a rough method of moments
+  rather than estimated in the likelihood, and moment estimators are
+  sensitive to outliers and to misfit in the mean. Errors in $`r`$
+  change the *width* of the count prediction interval (too-small $`r`$
+  widens it, too-large narrows it), not the predicted rate.
 - **A point estimate.** We report the maximiser, with no uncertainty on
-  the hyperparameters themselves.
+  the hyperparameters themselves — the prediction interval treats them
+  as known. With plenty of sites and weeks this matters little (the
+  hyperparameters are well pinned down); with short series or few sites
+  the interval is somewhat narrower than it should be.
 
 For a quick, honest summary of the spatial and temporal correlation
 structure — or a sensible starting point for a fuller model — it does

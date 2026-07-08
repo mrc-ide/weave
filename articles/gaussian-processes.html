@@ -40,6 +40,7 @@
     <li><a class="dropdown-item" href="../articles/walkthrough.html">The weave walkthrough: estimating kernels and predicting rates</a></li>
     <li><a class="dropdown-item" href="../articles/data-preparation.html">Using weave with your own data</a></li>
     <li><a class="dropdown-item" href="../articles/kronecker.html">The Kronecker trick: why weave is fast</a></li>
+    <li><a class="dropdown-item" href="../articles/noise.html">The nugget and the dispersion: two views of one noise</a></li>
     <li><a class="dropdown-item" href="../articles/parallel.html">Running predictions in parallel</a></li>
   </ul>
 </li>
@@ -257,6 +258,14 @@ among the new inputs, the posterior is Gaussian with</p>
 \text{mean} = K_*\bigl(K + \sigma_n^2 I\bigr)^{-1}\mathbf{y}, \qquad
 \text{cov}  = K_{**} - K_*\bigl(K + \sigma_n^2 I\bigr)^{-1}K_*^{\top}.
 </annotation></semantics></math></p>
+<p>The noise term
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msubsup><mi>σ</mi><mi>n</mi><mn>2</mn></msubsup><mi>I</mi></mrow><annotation encoding="application/x-tex">\sigma_n^2 I</annotation></semantics></math>
+added to the kernel’s diagonal is what geostatistics calls a
+<strong>nugget</strong>: the slice of the variance that is measurement
+scatter rather than smooth signal. In <code>weave</code> it is estimated
+alongside the kernel parameters as the <em>nugget ratio</em> — noise
+variance as a share of signal variance — and the <a href="walkthrough.html">walkthrough</a> explains why the ratio, rather
+than the absolute noise, is the natural quantity.</p>
 </div>
 <div class="intuition">
 <p>The posterior mean is the GP’s best guess; the posterior variance is

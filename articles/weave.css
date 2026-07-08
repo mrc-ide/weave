@@ -1,8 +1,9 @@
 /* ===========================================================================
    weave vignette styling.
 
-   A light, warm reading surface that matches the hex logo: navy headings,
-   woven-linen accents, and the vivid lettering colours for callouts and links.
+   A light, warm reading surface that matches the hummingbird photograph
+   in the gentle introduction: pine headings, cream surfaces, teal links, and
+   rose/moss/honey callout accents.
    Used both by the standalone HTML vignettes (via the `css:` YAML field) and,
    through _pkgdown.yml, by the pkgdown articles.
    =========================================================================== */
@@ -10,12 +11,12 @@
 @import url('https://fonts.googleapis.com/css2?family=Fira+Sans:ital,wght@0,400;0,600;0,700;1,400&family=Fira+Code:wght@400;500&display=swap');
 
 :root {
-  --weave-navy:   #1b2a4a;
-  --weave-blue:   #2e7fff;
-  --weave-violet: #7b2ff7;
-  --weave-green:  #0f9d76;
-  --weave-gold:   #b8860b;
-  --weave-linen:  #f7f1e8;
+  --weave-navy:   #2c463f;
+  --weave-blue:   #2f8f77;
+  --weave-violet: #b23a6f;
+  --weave-green:  #5c8a46;
+  --weave-gold:   #a9781f;
+  --weave-linen:  #f7f4ea;
   --weave-ink:    #2b2f38;
 }
 
@@ -67,7 +68,7 @@ code {
 }
 pre {
   background: var(--weave-linen);
-  border: 1px solid #ece2d0;
+  border: 1px solid #e2e4d4;
   border-radius: 8px;
   padding: 0.9em 1.1em;
   overflow-x: auto;
@@ -76,7 +77,7 @@ pre {
 pre code { background: none; color: var(--weave-ink); padding: 0; }
 
 /* knitr output blocks (comment = "#>") sit a touch lighter */
-pre:not([class]) { background: #fbf9f4; color: #475569; }
+pre:not([class]) { background: #fafaf3; color: #475569; }
 
 /* ---- callouts (pandoc fenced divs: ::: {.maths} ) ------------------------ */
 .callout, .maths, .intuition, .caveat {
@@ -96,13 +97,13 @@ pre:not([class]) { background: #fbf9f4; color: #475569; }
   margin-bottom: 0.5em;
 }
 
-.maths { background: #f4f6fb; border-color: var(--weave-blue); }
+.maths { background: #eef5f1; border-color: var(--weave-blue); }
 .maths::before { content: "The maths"; color: var(--weave-blue); }
 
-.intuition { background: var(--weave-linen); border-color: #1dd1a1; }
+.intuition { background: var(--weave-linen); border-color: #7ba05b; }
 .intuition::before { content: "In plain language"; color: var(--weave-green); }
 
-.caveat { background: #fdf6e3; border-color: #feca57; }
+.caveat { background: #faf3e2; border-color: #c9973b; }
 .caveat::before { content: "Good to know"; color: var(--weave-gold); }
 
 /* ---- tables -------------------------------------------------------------- */
@@ -112,15 +113,15 @@ table {
   width: 100%;
   font-size: 0.95em;
 }
-th, td { padding: 0.5em 0.8em; text-align: left; border-bottom: 1px solid #ece2d0; }
+th, td { padding: 0.5em 0.8em; text-align: left; border-bottom: 1px solid #e2e4d4; }
 th { background: var(--weave-navy); color: #fff; font-weight: 600; }
-tr:nth-child(even) td { background: #fbf9f4; }
+tr:nth-child(even) td { background: #fafaf3; }
 
 /* ---- figures & misc ------------------------------------------------------ */
 img { max-width: 100%; height: auto; display: block; margin: 1.2em auto; }
 blockquote {
   border-left: 3px solid var(--weave-violet);
-  background: #faf7ff;
+  background: #fbf4f7;
   margin: 1.4em 0;
   padding: 0.6em 1.1em;
   color: #3b3b4f;

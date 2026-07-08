@@ -55,12 +55,12 @@ each block a copy of the whole 8 × 8 temporal kernel, dimmed by that
 site pair’s spatial correlation. Sites 1 and 2 are highly correlated
 (0.78), so their off-diagonal blocks are nearly as strong as the
 diagonal; site 3 is far from site 1 (0.14), so their block — outlined in
-navy below — is the same temporal pattern, just faint:
+deep green below — is the same temporal pattern, just faint:
 
 ![The full 24-by-24 space-time covariance as a heatmap of 9 blocks in a
 3-by-3 grid; each block repeats the temporal kernel scaled by one
 spatial correlation, and the faint block linking site 1 and site 3 is
-outlined in navy](kronecker_files/figure-html/kron-product-1.png)
+outlined in deep green](kronecker_files/figure-html/kron-product-1.png)
 
 Read any single entry the same way: the covariance between cell
 $`(s, t)`$ and cell $`(s', t')`$ is

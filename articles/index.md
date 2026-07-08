@@ -10,5 +10,7 @@
   data](https://mrc-ide.github.io/weave/articles/data-preparation.md):
 - [The Kronecker trick: why weave is
   fast](https://mrc-ide.github.io/weave/articles/kronecker.md):
+- [The nugget and the dispersion: two views of one
+  noise](https://mrc-ide.github.io/weave/articles/noise.md):
 - [Running predictions in
   parallel](https://mrc-ide.github.io/weave/articles/parallel.md):

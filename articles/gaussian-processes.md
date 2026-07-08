@@ -190,6 +190,15 @@ with
 \text{cov}  = K_{**} - K_*\bigl(K + \sigma_n^2 I\bigr)^{-1}K_*^{\top}.
 ```
 
+The noise term $`\sigma_n^2 I`$ added to the kernel’s diagonal is what
+geostatistics calls a **nugget**: the slice of the variance that is
+measurement scatter rather than smooth signal. In `weave` it is
+estimated alongside the kernel parameters as the *nugget ratio* — noise
+variance as a share of signal variance — and the
+[walkthrough](https://mrc-ide.github.io/weave/articles/walkthrough.md)
+explains why the ratio, rather than the absolute noise, is the natural
+quantity.
+
 The posterior mean is the GP’s best guess; the posterior variance is its
 honesty. Near observations the function is pinned down and the
 uncertainty is small; away from them the GP reverts towards the prior

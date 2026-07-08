@@ -40,6 +40,7 @@
     <li><a class="dropdown-item" href="../articles/walkthrough.html">The weave walkthrough: estimating kernels and predicting rates</a></li>
     <li><a class="dropdown-item" href="../articles/data-preparation.html">Using weave with your own data</a></li>
     <li><a class="dropdown-item" href="../articles/kronecker.html">The Kronecker trick: why weave is fast</a></li>
+    <li><a class="dropdown-item" href="../articles/noise.html">The nugget and the dispersion: two views of one noise</a></li>
     <li><a class="dropdown-item" href="../articles/parallel.html">Running predictions in parallel</a></li>
   </ul>
 </li>
@@ -179,9 +180,9 @@ drifts.</li>
 </ul>
 <p>A fourth, the <strong>nugget ratio</strong>, is estimated alongside
 them: the share of the variance that is observation noise rather than
-smooth signal. Its role is explained in part 2. (The <a href="gaussian-processes.html"><em>gentle introduction</em></a> shows
-what each kernel looks like and how its parameter changes the curves it
-generates.)</p>
+smooth signal. Its role — and why it is a <em>ratio</em> — is explained
+in part 2, where it enters the model. (For what each kernel looks like
+and how its parameter changes the curves it generates, see the <a href="gaussian-processes.html"><em>gentle introduction</em></a>.)</p>
 </div>
 <div class="section level3">
 <h3 id="the-worked-example-simulated-data-with-missing-weeks">The worked example: simulated data with missing weeks<a class="anchor" aria-label="anchor" href="#the-worked-example-simulated-data-with-missing-weeks"></a>
@@ -236,12 +237,12 @@ own data</em></a>.</p>
 <p>The gaps are not scattered at random: they arrive in <em>clustered
 runs</em>, the way real reporting drops out — a facility goes quiet for
 a stretch, then comes back. Magenta marks the missing weeks:</p>
-<p><img src="walkthrough_files/figure-html/missingness-map-1.png" class="r-plt" alt="Heatmap of sites by weeks: observed weeks in grey, missing weeks in magenta, with the missing weeks forming horizontal clustered runs within sites" width="1050" style="display: block; margin: auto;"></p>
-<p>Here are the first four sites. The <strong>navy line</strong> is the
-true underlying mean
+<p><img src="walkthrough_files/figure-html/missingness-map-1.png" class="r-plt" alt="Heatmap of sites by weeks: observed weeks in pale sage, missing weeks in rose, with the missing weeks forming horizontal clustered runs within sites" width="1050" style="display: block; margin: auto;"></p>
+<p>Here are the first four sites. The <strong>deep-green line</strong>
+is the true underlying mean
 (<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>λ</mi><mo>=</mo><msup><mi>e</mi><mrow><msub><mi>μ</mi><mi>s</mi></msub><mo>+</mo><msub><mi>f</mi><mrow><mi>s</mi><mi>t</mi></mrow></msub></mrow></msup></mrow><annotation encoding="application/x-tex">\lambda = e^{\mu_s + f_{st}}</annotation></semantics></math>);
 <strong>grey points</strong> are the counts we actually observe; and
-<strong>magenta points</strong> are the <em>held-out truth</em> at the
+<strong>rose points</strong> are the <em>held-out truth</em> at the
 weeks that went missing — what the model must reconstruct but never gets
 to see.</p>
 <p><img src="walkthrough_files/figure-html/truth-plot-1.png" class="r-plt" alt="" width="1050" style="display: block; margin: auto;"></p>
@@ -250,13 +251,15 @@ to see.</p>
 <div class="section level2">
 <h2 id="fitting-the-kernel-hyperparameters">2. Fitting the kernel hyperparameters<a class="anchor" aria-label="anchor" href="#fitting-the-kernel-hyperparameters"></a>
 </h2>
-<p>Estimation happens in two moves: build a cheap stand-in for the
-latent field we cannot see, then search for the kernel parameters under
-which that stand-in looks most plausible. Missing weeks get a dedicated
-correction — an EM-style refinement — described at the end of this
-part.</p>
+<p>The estimator is one method with two moving parts, alternated until
+they agree: a <strong>stand-in for the latent field</strong> we cannot
+see (starting from a cheap plug-in, with the model itself progressively
+refilling the missing weeks), and an <strong>exact score</strong> — the
+marginal likelihood — maximised over the hyperparameters given the
+current stand-in. With no missing data the loop collapses to a single
+pass; with gaps it is exactly the EM algorithm.</p>
 <div class="section level3">
-<h3 id="a-quick-plug-in-latent-field">A quick plug-in latent field<a class="anchor" aria-label="anchor" href="#a-quick-plug-in-latent-field"></a>
+<h3 id="the-latent-field-a-plug-in-start-refined-by-em">The latent field: a plug-in start, refined by EM<a class="anchor" aria-label="anchor" href="#the-latent-field-a-plug-in-start-refined-by-em"></a>
 </h3>
 <div class="maths">
 <p>We cannot see the latent field
@@ -270,7 +273,9 @@ g_{st} = \frac{\log(1 + y_{st}) - \bar{g}_s}{\text{sd}_s},
 <p>that is, take
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mrow><mi mathvariant="normal">log</mi><mo>⁡</mo></mrow><mo stretchy="false" form="prefix">(</mo><mn>1</mn><mo>+</mo><mi>y</mi><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">\log(1+y)</annotation></semantics></math>,
 then for each site subtract that site’s mean and divide by its standard
-deviation.</p>
+deviation. Weeks with no data enter as the per-site mean — zero after
+centring — a deliberately neutral starting fill that the EM loop below
+revisits.</p>
 </div>
 <div class="intuition">
 <p>The logarithm turns the multiplicative “rate” scale into an additive
@@ -288,9 +293,43 @@ all of them. It is noisy — but it is instant.</p>
 <span><span class="va">g</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/build_plugin_field.html">build_plugin_field</a></span><span class="op">(</span><span class="va">obs_data</span>, n <span class="op">=</span> <span class="va">n</span>, nt <span class="op">=</span> <span class="va">nt</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/utils/str.html" class="external-link">str</a></span><span class="op">(</span><span class="va">g</span><span class="op">)</span></span>
 <span><span class="co">#&gt;  num [1:3120] 1.008 1.094 1.391 1.692 0.603 ...</span></span></code></pre></div>
-<p>For one site, the plug-in field tracks the true latent field, just
-with observation noise layered on top:</p>
-<p><img src="walkthrough_files/figure-html/plugin-plot-1.png" class="r-plt" alt="" width="1050" style="display: block; margin: auto;"></p>
+<p>On the observed weeks, the plug-in field tracks the true latent field
+with observation noise layered on top. On the <em>missing</em> weeks it
+is flat and zero — every gap looks like a stretch where the signal died,
+and left alone that biases the length-scales downward (the seasonal and
+long-run scales suffer most). Setting <code>refine = TRUE</code> treats
+the plug-in field as just the starting point of an EM loop:</p>
+<div class="intuition">
+<p>This loop is exactly the <strong>EM algorithm</strong> for a fit with
+missing data, alternating two steps (the plug-in field with its neutral
+fill is iteration zero):</p>
+<ul>
+<li>
+<strong>E-step.</strong> With the current hyperparameters, replace
+each missing week by its expected value under the model — the GP
+<strong>conditional mean</strong> given the weeks we <em>did</em>
+observe (the same conditional-mean solve <code><a href="../reference/gp_predict.html">gp_predict()</a></code>
+performs; “kriging”, in geostatistics jargon).</li>
+<li>
+<strong>M-step.</strong> Treat that completed grid as if it were
+fully observed and re-maximise the marginal likelihood — the score
+defined in the next subsection — to get updated hyperparameters.</li>
+</ul>
+<p>Each pass feeds the next, and two or three are enough to converge —
+landing on essentially the estimate we would have got with <em>no</em>
+gaps at all. Crucially, the expensive conditional-mean solve runs only
+once per pass, never inside the optimiser, so the whole correction stays
+cheap. (It removes the bias the <em>gaps</em> cause; the residual
+plug-in attenuation listed in the caveats — from conditioning on a noisy
+field rather than integrating it out — is a separate matter it does not
+fix.)</p>
+</div>
+<p>The loop at work, on the site with the most missing weeks (gaps
+shaded). The plug-in start is flat at zero in every gap; the first EM
+pass replaces those stretches with the GP conditional mean; the second
+pass barely moves it — the loop has converged. The observed weeks never
+change, only the gaps:</p>
+<p><img src="walkthrough_files/figure-html/em-rounds-1.png" class="r-plt" alt="One site's latent field across weeks: shaded bands mark missing stretches; the plug-in line sits flat at zero inside them, the EM pass 1 line fills them with a smooth curve, EM pass 2 lies almost on top of pass 1, and the true field is shown for comparison" width="1050" style="display: block; margin: auto;"></p>
 </div>
 <div class="section level3">
 <h3 id="scoring-candidate-hyperparameters-the-marginal-likelihood">Scoring candidate hyperparameters: the marginal likelihood<a class="anchor" aria-label="anchor" href="#scoring-candidate-hyperparameters-the-marginal-likelihood"></a>
@@ -309,7 +348,16 @@ g \sim \mathcal{N}\!\Big(0,\ \sigma^2\big[(R_{\text{space}} \otimes R_{\text{tim
 </annotation></semantics></math></p>
 <p>where
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>R</mi><annotation encoding="application/x-tex">R</annotation></semantics></math>
-are <em>correlation</em> kernels (unit diagonal). Writing
+are <em>correlation</em> kernels (unit diagonal). The nugget is
+expressed as a <strong>ratio</strong> because the global variance
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msup><mi>σ</mi><mn>2</mn></msup><annotation encoding="application/x-tex">\sigma^2</annotation></semantics></math>
+multiplies the whole covariance — signal and noise alike — so only the
+noise-to-signal ratio
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>η</mi><annotation encoding="application/x-tex">\eta</annotation></semantics></math>
+is separately identifiable; the absolute noise variance is recovered
+afterwards as
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>ν</mi><mo>=</mo><msup><mi>σ</mi><mn>2</mn></msup><mi>η</mi></mrow><annotation encoding="application/x-tex">\nu = \sigma^2 \eta</annotation></semantics></math>.
+Writing
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>K</mi><annotation encoding="application/x-tex">K</annotation></semantics></math>
 for this whole covariance and
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>N</mi><mo>=</mo><mi>n</mi><mo>⋅</mo><msub><mi>n</mi><mi>t</mi></msub></mrow><annotation encoding="application/x-tex">N = n \cdot n_t</annotation></semantics></math>
@@ -344,55 +392,30 @@ the score is best.</p>
 is the important addition: a slice of pure noise the model may attribute
 to observation error rather than signal. Without it the kernel would
 have to explain the noisy plug-in field with smoothness alone, badly
-distorting the length-scales.</p>
+distorting the length-scales. (The nugget and the Negative-Binomial
+dispersion of part 3 are two views of the same count scatter — see <a href="noise.html"><em>The nugget and the dispersion</em></a>.)</p>
 </div>
 <p>Evaluating
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mrow><mi mathvariant="normal">log</mi><mo>⁡</mo></mrow><mo stretchy="false" form="prefix">|</mo><mi>K</mi><mo stretchy="false" form="prefix">|</mo></mrow><annotation encoding="application/x-tex">\log|K|</annotation></semantics></math>
 and
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi>g</mi><mi>⊤</mi></msup><msup><mi>K</mi><mrow><mi>−</mi><mn>1</mn></mrow></msup><mi>g</mi></mrow><annotation encoding="application/x-tex">g^\top K^{-1} g</annotation></semantics></math>
-sounds hopeless — here
+sounds hopeless, for two compounding reasons. First,
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>K</mi><annotation encoding="application/x-tex">K</annotation></semantics></math>
-is 3120 square, and the optimiser scores thousands of candidates.
-Because the kernel is separable, both quantities come exactly from
-eigendecompositions of the two <em>small</em> kernels, at
+has one row and one column per site-week <em>cell</em> — 3120 × 3120
+even in this small example, and around 260,000 × 260,000 (68 billion
+entries) at a realistic 1000 sites × five years — and determinants and
+inverses cost
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>O</mi><mo stretchy="false" form="prefix">(</mo><msup><mi>N</mi><mn>3</mn></msup><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">O(N^3)</annotation></semantics></math>:
+work that grows with the <em>cube</em> of the cell count. Second, this
+is the inner loop — the optimiser needs the score at every candidate
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>θ</mi><annotation encoding="application/x-tex">\theta</annotation></semantics></math>
+it tries, typically hundreds of evaluations. Because the kernel is
+separable, both quantities instead come exactly from eigendecompositions
+of the two <em>small</em> kernels, at
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>O</mi><mo stretchy="false" form="prefix">(</mo><msup><mi>n</mi><mn>3</mn></msup><mo>+</mo><msubsup><mi>n</mi><mi>t</mi><mn>3</mn></msubsup><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">O(n^3 + n_t^3)</annotation></semantics></math>
 cost instead of
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>O</mi><mo minsize="120%" maxsize="120%" stretchy="true" form="prefix">(</mo><mo stretchy="false" form="prefix">(</mo><mi>n</mi><mspace width="0.167em"></mspace><msub><mi>n</mi><mi>t</mi></msub><msup><mo stretchy="false" form="postfix">)</mo><mn>3</mn></msup><mo minsize="120%" maxsize="120%" stretchy="true" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">O\big((n\,n_t)^3\big)</annotation></semantics></math>.
 How that works is its own short story: see <a href="kronecker.html"><em>The Kronecker trick</em></a>.</p>
-</div>
-<div class="section level3">
-<h3 id="handling-the-gaps-em-refinement">Handling the gaps: EM refinement<a class="anchor" aria-label="anchor" href="#handling-the-gaps-em-refinement"></a>
-</h3>
-<p>Filling the missing weeks with a flat per-site mean makes the field
-look as if the signal dies in every gap, which biases the length-scales
-downward (the seasonal and long-run scales suffer most). Setting
-<code>refine = TRUE</code> removes that bias: the fit fills each gap
-with the GP’s <em>own</em> conditional mean and refits a handful of
-times.</p>
-<div class="intuition">
-<p>This loop is exactly the <strong>EM algorithm</strong> for a fit with
-missing data, alternating two steps:</p>
-<ul>
-<li>
-<strong>E-step.</strong> With the current hyperparameters, replace
-each missing week by its expected value under the model — the GP
-<strong>conditional mean</strong> given the weeks we <em>did</em>
-observe (the same conditional-mean solve <code><a href="../reference/gp_predict.html">gp_predict()</a></code>
-performs; “kriging”, in geostatistics jargon).</li>
-<li>
-<strong>M-step.</strong> Treat that completed grid as if it were
-fully observed and re-maximise the fast (Kronecker) marginal likelihood
-to get updated hyperparameters.</li>
-</ul>
-<p>Each pass feeds the next, and two or three are enough to converge —
-landing on essentially the estimate we would have got with <em>no</em>
-gaps at all. Crucially, the expensive conditional-mean solve runs only
-once per pass, never inside the optimiser, so the whole correction stays
-cheap. (It removes the bias the <em>gaps</em> cause; the residual
-plug-in attenuation listed in the caveats — from conditioning on a noisy
-field rather than integrating it out — is a separate matter it does not
-fix.)</p>
-</div>
 </div>
 <div class="section level3">
 <h3 id="the-worked-example-fit-and-check">The worked example: fit and check<a class="anchor" aria-label="anchor" href="#the-worked-example-fit-and-check"></a>
@@ -440,8 +463,8 @@ time points are never subsampled). Prediction cost is dominated by the
 interval draws, which parallelise — see <a href="parallel.html"><em>Running predictions in parallel</em></a>.</p>
 </div>
 <p>The clearest check is to draw the <strong>fitted</strong> kernels
-(blue) on top of the <strong>true</strong> ones (navy, dashed). If the
-method worked, they overlap.</p>
+(teal) on top of the <strong>true</strong> ones (deep green, dashed). If
+the method worked, they overlap.</p>
 <p><img src="walkthrough_files/figure-html/kernel-check-1.png" class="r-plt" alt="" width="1050" style="display: block; margin: auto;"><img src="walkthrough_files/figure-html/kernel-check-2.png" class="r-plt" alt="" width="1050" style="display: block; margin: auto;"></p>
 </div>
 </div>
@@ -554,7 +577,12 @@ rate. An honest interval includes both. The dispersion
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>r</mi><annotation encoding="application/x-tex">r</annotation></semantics></math>
 — how overdispersed the counts are — is the one quantity this quick
 method does not estimate from the likelihood, so it is recovered by
-method of moments from the observed counts.</p>
+method of moments from the observed counts. (If it seems the observation
+noise has now been modelled twice — once as the nugget, once as
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>r</mi><annotation encoding="application/x-tex">r</annotation></semantics></math>
+— it has not: the two feed different terms of the variance above. The
+short companion note <a href="noise.html"><em>The nugget and the
+dispersion</em></a> explains how they relate.)</p>
 </div>
 </div>
 <div class="section level3">
@@ -582,9 +610,9 @@ interval (<code>lower</code>, <code>upper</code>). The dispersion
 <span><span class="co">#&gt; 6  1 6 10.47211 4.366146 21.44362</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/attr.html" class="external-link">attr</a></span><span class="op">(</span><span class="va">pred</span>, <span class="st">"r"</span><span class="op">)</span>       <span class="co"># the NB dispersion used for the interval (estimated)</span></span>
 <span><span class="co">#&gt; [1] 13.02461</span></span></code></pre></div>
-<p>The blue line is the predicted mean rate and the blue band the 95%
-prediction interval. It should track the navy true-mean line and cover
-the points — including the magenta held-out weeks it never saw.</p>
+<p>The teal line is the predicted mean rate and the teal band the 95%
+prediction interval. It should track the deep-green true-mean line and
+cover the points — including the rose held-out weeks it never saw.</p>
 <p><img src="walkthrough_files/figure-html/predict-plot-1.png" class="r-plt" alt="" width="1050" style="display: block; margin: auto;"></p>
 <p>At scale, the draws behind the interval can run across CPU cores: see
 the short companion article <a href="parallel.html"><em>Running
@@ -622,24 +650,36 @@ below).</p>
 shortcuts that make it quick also limit it:</p>
 <ul>
 <li>
-<strong>Plug-in, not Bayesian.</strong> We condition on a single
-noisy estimate of the latent field rather than integrating it out. This
-<em>attenuates</em> the length-scales (<code>periodic_scale</code> and
+<strong>Plug-in, not Bayesian.</strong> A full Bayesian treatment
+would average the score over every latent field consistent with the
+counts; we condition on a single noisy estimate instead and treat it as
+data. Because that estimate carries observation noise, some of the noise
+gets read as real short-range structure, which <em>attenuates</em> the
+length-scales (<code>periodic_scale</code> and
 <code>long_term_scale</code> tend to come out a little low). The nugget
-mitigates this but does not remove it.</li>
+absorbs most of this — it gives the noise somewhere else to go — but not
+all of it.</li>
 <li>
 <strong><code>log(1 + y)</code></strong> is a crude stand-in for the
-latent log-rate, and is poorest at very low counts.</li>
+latent log-rate. It is poorest at very low counts, where the
+<code>+1</code> dominates (the step from 0 to 1 case is huge on this
+scale) and where Poisson-level noise is strongly asymmetric after the
+log — so sites with sparse counts contribute a distorted signal.</li>
 <li>
-<strong>Per-site scaling</strong> folds all per-site variance into a
-single global
+<strong>Per-site scaling</strong> puts every site on the same
+footing so one global
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msup><mi>σ</mi><mn>2</mn></msup><annotation encoding="application/x-tex">\sigma^2</annotation></semantics></math>
-and amplifies noise at low-count sites.</li>
+can serve them all — but the scale factor is itself estimated from that
+site’s data, noisily when a site has few observed weeks, and a site
+whose true variability differs from the rest is forced to look the
+same.</li>
 <li>
 <strong>One homoscedastic nugget.</strong> Real count noise is
-heteroscedastic (it grows with the rate); we summarise it with a single
-ratio
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>η</mi><annotation encoding="application/x-tex">\eta</annotation></semantics></math>.</li>
+heteroscedastic — a high-count week is noisier in absolute terms than a
+low-count one — but the model summarises all of it with the single ratio
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>η</mi><annotation encoding="application/x-tex">\eta</annotation></semantics></math>.
+The effect is mild over-smoothing where counts are high and
+under-smoothing where they are low.</li>
 <li>
 <strong>Missing cells.</strong> With <code>refine = TRUE</code>
 (used above) the fit fills the gaps with the GP conditional mean and
@@ -650,11 +690,19 @@ cells only, so its interval widens over gaps either way.)</li>
 <li>
 <strong>The dispersion
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>r</mi><annotation encoding="application/x-tex">r</annotation></semantics></math></strong>
-is recovered by a rough method of moments, so the <em>width</em> of the
-count prediction interval inherits that error.</li>
+is recovered by a rough method of moments rather than estimated in the
+likelihood, and moment estimators are sensitive to outliers and to
+misfit in the mean. Errors in
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>r</mi><annotation encoding="application/x-tex">r</annotation></semantics></math>
+change the <em>width</em> of the count prediction interval (too-small
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>r</mi><annotation encoding="application/x-tex">r</annotation></semantics></math>
+widens it, too-large narrows it), not the predicted rate.</li>
 <li>
 <strong>A point estimate.</strong> We report the maximiser, with no
-uncertainty on the hyperparameters themselves.</li>
+uncertainty on the hyperparameters themselves — the prediction interval
+treats them as known. With plenty of sites and weeks this matters little
+(the hyperparameters are well pinned down); with short series or few
+sites the interval is somewhat narrower than it should be.</li>
 </ul>
 </div>
 <p>For a quick, honest summary of the spatial and temporal correlation
