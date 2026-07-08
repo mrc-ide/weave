@@ -412,8 +412,8 @@ The **nugget** \( \eta \) is the important addition: a slice of pure noise the
 model may attribute to observation error rather than signal. Without it the
 kernel would have to explain the noisy plug-in field with smoothness alone,
 badly distorting the length-scales. (The nugget and the Negative-Binomial
-dispersion of part 3 are two views of the same count scatter — how they
-relate, and why that is not double counting, is explained there.)
+dispersion of part 3 are two views of the same count scatter — see
+[*The nugget and the dispersion*](noise.html).)
 :::
 
 Evaluating \( \log|K| \) and \( g^\top K^{-1} g \) sounds hopeless, for two
@@ -610,31 +610,10 @@ reasons: we are unsure of the underlying rate, **and** counts scatter around
 any given rate. An honest interval includes both. The dispersion \( r \) — how
 overdispersed the counts are — is the one quantity this quick method does not
 estimate from the likelihood, so it is recovered by method of moments from the
-observed counts.
-:::
-
-::: {.intuition}
-**Haven't we counted the observation noise twice?** The nugget (part 2) and
-the dispersion \( r \) describe the same physical fact — counts scatter
-around their rate — but on different scales and with different jobs. The
-nugget is that scatter as seen on the log scale: one Gaussian variance for
-every cell, used while *learning* — it stops the kernels explaining noise
-with smoothness, and it tells the smoother how much to de-weight each
-observed week. The Negative-Binomial is the same scatter on the natural
-count scale, heteroscedastic as real counts are, and it is used exactly
-once: to add the spread of a future count around its rate when the interval
-is assembled. There is no double counting, because the two feed different
-terms of the law of total variance above: noisy observations limit how well
-we can know \( \lambda \) (the nugget's contribution, inside the rate
-uncertainty), while counts scatter around \( \lambda \) even if it were
-known exactly (the dispersion's contribution).
-
-The two are quantitatively linked, too. On the log scale, Negative-Binomial
-noise has approximate variance \( 1/\lambda + 1/r \) — nearly constant once
-counts are moderately large. That is exactly why a single homoscedastic
-nugget is a reasonable stand-in during estimation, and why the approximation
-frays at very low counts, where the \( 1/\lambda \) term takes over (see the
-caveats below).
+observed counts. (If it seems the observation noise has now been modelled
+twice — once as the nugget, once as \( r \) — it has not: the two feed
+different terms of the variance above. The short companion note
+[*The nugget and the dispersion*](noise.html) explains how they relate.)
 :::
 
 ### The worked example: predict, then check the coverage
