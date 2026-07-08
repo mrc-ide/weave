@@ -93,6 +93,8 @@ prediction interval.
 - [Using weave with your own data](https://mrc-ide.github.io/weave/articles/data-preparation.html)
   — preparing raw data with `data_process()`, encoding time correctly, and
   predicting beyond the observed weeks.
+- [The Kronecker trick](https://mrc-ide.github.io/weave/articles/kronecker.html)
+  — why fitting and prediction stay fast and exact at scale.
 - [Running predictions in parallel](https://mrc-ide.github.io/weave/articles/parallel.html)
   — one line of setup to spread the prediction draws across CPU cores;
   identical results.
